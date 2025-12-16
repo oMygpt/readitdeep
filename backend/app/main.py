@@ -38,10 +38,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     print(f"🚀 {settings.app_name} starting...")
     
     # 初始化数据库表
-    # from app.core.database import engine
-    # from app.models import Base
-    # async with engine.begin() as conn:
-    #    await conn.run_sync(Base.metadata.create_all)
+    from app.core.database import init_db
+    await init_db()
     
     yield
     

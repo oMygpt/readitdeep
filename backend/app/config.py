@@ -23,13 +23,12 @@ class Settings(BaseSettings):
     app_name: str = "Read it DEEP"
     debug: bool = False
     secret_key: str = "change-me-in-production"
-    cors_origins: str = "http://localhost:5173"
+    cors_origins: str = "*"
     
-    # 数据库 (Supabase)
-    database_url: str = "postgresql+asyncpg://postgres:password@localhost:5432/readitdeep"
+    # 数据库 (SQLite 本地开发 / PostgreSQL 生产)
+    database_url: str = "sqlite"  # 使用 sqlite 自动创建本地数据库
     supabase_url: str = ""
     supabase_anon_key: str = ""
-    redis_url: str = "redis://localhost:6379/0"
     
     # LLM 配置
     llm_base_url: str = "http://localhost:8000/v1"

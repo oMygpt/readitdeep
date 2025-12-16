@@ -63,5 +63,18 @@ class JSONStore:
             self._data[key].update(updates)
             self._save()
 
+    def get_by_user(self, user_id: str) -> list:
+        """获取指定用户的所有论文"""
+        return [
+            p for p in self._data.values() 
+            if p.get("user_id") == user_id
+        ]
+
+    def get_all_or_by_user(self, user_id: str | None = None) -> list:
+        """获取所有论文或按用户过滤 (管理员可查看全部)"""
+        if user_id:
+            return self.get_by_user(user_id)
+        return list(self._data.values())
+
 # Global instance
 store = JSONStore()

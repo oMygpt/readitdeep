@@ -2,7 +2,7 @@
  * Read it DEEP - 知识库页面 (Redesigned with List View & Tags)
  */
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -21,7 +21,9 @@ import {
     ChevronRight,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { libraryApi, papersApi } from '../lib/api';
+import { libraryApi, papersApi, monitorApi } from '../lib/api';
+import UserMenu from '../components/UserMenu';
+import CategoryTagEditor from '../components/CategoryTagEditor';
 
 export default function LibraryPage() {
     const navigate = useNavigate();
@@ -32,15 +34,38 @@ export default function LibraryPage() {
     const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [editingPaper, setEditingPaper] = useState<{ id: string; category?: string; tags: string[] } | null>(null);
+    const [paperStatuses, setPaperStatuses] = useState<Record<string, { status: string; message: string }>>({});
 
     // Polling for updates
     const { data: libraryData, isLoading } = useQuery({
         queryKey: ['library', search],
         queryFn: () => libraryApi.list({ search: search || undefined }),
-        refetchInterval: 5000,
+        refetchInterval: 3000,
     });
 
     const papers = libraryData?.items || [];
+
+    // 轮询处理中的论文状态
+    useEffect(() => {
+        const processingPapers = papers.filter(p =>
+            ['uploading', 'parsing', 'indexing', 'embedding', 'analyzing', 'classifying'].includes(p.status)
+        );
+
+        if (processingPapers.length > 0) {
+            processingPapers.forEach(async (paper) => {
+                try {
+                    const status = await monitorApi.getStatus(paper.id);
+                    setPaperStatuses(prev => ({
+                        ...prev,
+                        [paper.id]: { status: status.status, message: status.message }
+                    }));
+                } catch (e) {
+                    console.error('Failed to get status', e);
+                }
+            });
+        }
+    }, [papers]);
 
     // Delete Mutation
     const deleteMutation = useMutation({
@@ -275,6 +300,7 @@ export default function LibraryPage() {
                                 accept=".pdf,.docx,.tex"
                                 onChange={handleFileChange}
                             />
+                            <UserMenu />
                         </div>
                     </div>
 
@@ -333,9 +359,10 @@ export default function LibraryPage() {
 
                             {/* Paper Rows */}
                             {filteredPapers.map((paper) => {
-                                const isProcessing = ['uploading', 'parsing', 'indexing'].includes(paper.status);
+                                const isProcessing = ['uploading', 'parsing', 'indexing', 'embedding', 'analyzing', 'classifying'].includes(paper.status);
                                 const isFailed = paper.status === 'failed';
-                                const isCompleted = paper.status === 'completed';
+                                const isCompleted = paper.status === 'completed' || paper.status === 'analyzed';
+                                const statusInfo = paperStatuses[paper.id];
 
                                 return (
                                     <div
@@ -358,8 +385,14 @@ export default function LibraryPage() {
                                             </div>
                                         </div>
 
-                                        {/* Category */}
-                                        <div className="col-span-2">
+                                        {/* Category - 点击可编辑 */}
+                                        <div
+                                            className="col-span-2 cursor-pointer hover:opacity-80"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (isCompleted) setEditingPaper({ id: paper.id, category: paper.category, tags: paper.tags || [] });
+                                            }}
+                                        >
                                             <span className="px-2 py-1 bg-slate-100 text-slate-600 text-xs rounded-full">
                                                 {paper.category || 'Uncategorized'}
                                             </span>
@@ -383,9 +416,14 @@ export default function LibraryPage() {
                                         {/* Status */}
                                         <div className="col-span-1">
                                             {isProcessing && (
-                                                <span className="flex items-center gap-1 text-xs text-yellow-600">
-                                                    <Loader2 className="w-3 h-3 animate-spin" />
-                                                </span>
+                                                <div className="flex flex-col">
+                                                    <span className="flex items-center gap-1 text-xs text-yellow-600">
+                                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                                    </span>
+                                                    <span className="text-[10px] text-yellow-600 truncate max-w-[100px]" title={statusInfo?.message}>
+                                                        {statusInfo?.message || '处理中...'}
+                                                    </span>
+                                                </div>
                                             )}
                                             {isFailed && (
                                                 <span className="flex items-center gap-1 text-xs text-red-600">
@@ -506,6 +544,17 @@ export default function LibraryPage() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Category/Tags Editor Modal */}
+            {editingPaper && (
+                <CategoryTagEditor
+                    paperId={editingPaper.id}
+                    currentCategory={editingPaper.category}
+                    currentTags={editingPaper.tags}
+                    onClose={() => setEditingPaper(null)}
+                    onSaved={() => queryClient.invalidateQueries({ queryKey: ['library'] })}
+                />
             )}
         </div>
     );

@@ -22,6 +22,7 @@ import {
     ExternalLink,
     FileText,
     Save,
+    PanelRightClose,
 } from 'lucide-react';
 import { api } from '../lib/api';
 
@@ -40,6 +41,7 @@ export interface WorkbenchItem {
 interface WorkbenchProps {
     paperId: string;
     paperTitle: string;
+    onClose?: () => void;
 }
 
 // Smart Note Card with expandable reflection
@@ -190,15 +192,15 @@ function MethodCard({ item, onRemove }: { item: WorkbenchItem; onRemove: () => v
 
             {isExpanded && analysis && (
                 <div className="px-3 pb-3 space-y-2 border-t border-indigo-100 mt-0 pt-3">
-                    {analysis.pseudocode && (
+                    {Boolean(analysis.pseudocode) && (
                         <div>
                             <div className="text-xs text-indigo-500 mb-1">伪代码</div>
                             <pre className="bg-slate-900 text-green-400 p-3 rounded-lg text-xs overflow-x-auto">
-                                {String(analysis.pseudocode)}
+                                {String(analysis.pseudocode as string)}
                             </pre>
                         </div>
                     )}
-                    {analysis.reviewer_comments && (
+                    {Boolean(analysis.reviewer_comments) && (
                         <div>
                             <div className="text-xs text-indigo-500 mb-1">审稿视角</div>
                             <div className="bg-white rounded-lg p-2 text-xs space-y-1">
@@ -326,13 +328,13 @@ function DropZone({
 }
 
 // Main Enhanced Workbench Component
-export default function Workbench({ paperId, paperTitle }: WorkbenchProps) {
+export default function Workbench({ paperId, paperTitle, onClose }: WorkbenchProps) {
     const [methodItems, setMethodItems] = useState<WorkbenchItem[]>([]);
     const [assetItems, setAssetItems] = useState<WorkbenchItem[]>([]);
     const [noteItems, setNoteItems] = useState<WorkbenchItem[]>([]);
     const [isAnalyzingMethod, setIsAnalyzingMethod] = useState(false);
     const [isAnalyzingAsset, setIsAnalyzingAsset] = useState(false);
-    const [isLoading, setIsLoading] = useState(true);
+    const [_isLoading, setIsLoading] = useState(true);
 
     // Load existing workbench items for this paper on mount
     useEffect(() => {
@@ -454,20 +456,28 @@ export default function Workbench({ paperId, paperTitle }: WorkbenchProps) {
     return (
         <div className="h-full flex flex-col bg-slate-100/50">
             {/* Header */}
-            <div className="px-4 py-3 bg-white border-b border-slate-200 flex items-center justify-between">
+            <div className="px-4 py-3 bg-white border-b border-slate-200 flex items-center justify-between flex-shrink-0">
                 <div className="flex items-center gap-2">
                     <Sparkles className="w-5 h-5 text-purple-600" />
                     <h2 className="font-bold text-slate-800">智能工作台</h2>
+                    {totalItems > 0 && (
+                        <span className="ml-1 px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full">
+                            {totalItems}
+                        </span>
+                    )}
                 </div>
-                {totalItems > 0 && (
-                    <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full">
-                        {totalItems} 项
-                    </span>
+                {onClose && (
+                    <button
+                        onClick={onClose}
+                        className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                    >
+                        <PanelRightClose className="w-4 h-4" />
+                    </button>
                 )}
             </div>
 
             {/* Help Text */}
-            <div className="px-4 py-2 bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-slate-200">
+            <div className="px-4 py-2 bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-slate-200 flex-shrink-0">
                 <p className="text-xs text-indigo-600">
                     💡 选中论文中的文本，拖入对应区域进行智能分析
                 </p>

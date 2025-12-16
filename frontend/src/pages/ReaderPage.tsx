@@ -30,6 +30,7 @@ import AnalysisPanel from '../components/AnalysisPanel';
 import PaperGraph from '../components/PaperGraph';
 import Workbench from '../components/Workbench';
 import ExploreOverview from '../components/ExploreOverview';
+import SmartSelectionPopup from '../components/SmartSelectionPopup';
 
 import 'katex/dist/katex.min.css';
 
@@ -51,6 +52,10 @@ export default function ReaderPage() {
     const [viewMode, setViewMode] = useState<'overview' | 'read'>('overview'); // Explore vs Read mode
     const mainContentRef = useRef<HTMLElement>(null);
 
+    // Smart Selection State
+    const [selectedText, setSelectedText] = useState<string>('');
+    const [selectionPosition, setSelectionPosition] = useState<{ x: number; y: number } | null>(null);
+
     const { data: paper, isLoading: isPaperLoading } = useQuery({
         queryKey: ['paper', paperId],
         queryFn: () => papersApi.get(paperId!),
@@ -60,7 +65,7 @@ export default function ReaderPage() {
     const { data: contentData, isLoading: isContentLoading, error } = useQuery({
         queryKey: ['paper-content', paperId],
         queryFn: () => papersApi.getContent(paperId!),
-        enabled: !!paperId && paper?.status === 'completed',
+        enabled: !!paperId && (paper?.status === 'completed' || paper?.status === 'analyzed'),
     });
 
     // Check for existing translation on load
@@ -121,7 +126,7 @@ export default function ReaderPage() {
 
 
     // Use translated content if available and toggled, otherwise original
-    const content = (isTranslated && translatedContent) ? translatedContent : (contentData?.content || '');
+    const content = (isTranslated && translatedContent) ? translatedContent : (contentData?.markdown || '');
 
     // Extract references logic
     const parsedReferences = useMemo(() => {
@@ -173,6 +178,21 @@ export default function ReaderPage() {
             // Identify where the Body starts (after the abstract block)
             const abstractEndIndex = (abstractMatch.index || 0) + abstractMatch[0].length;
 
+            // HEURISTIC SAFETY CHECK:
+            // If the "Abstract" we found is more than 30% of the entire content, 
+            // it's likely the regex matched the entire document. Abort extraction.
+            if (abstractEndIndex > remainingContent.length * 0.3) {
+                console.warn("Abstract extraction matched > 30% of content. Aborting to preserve body.");
+                // Treat as failed extraction -> Fallback to raw content
+                return {
+                    extractedAbstract: null,
+                    extractedTitle: null,
+                    extractedAuthors: [],
+                    extractedAffiliations: [],
+                    cleanBodyContent: content
+                };
+            }
+
             // Front Matter is everything BEFORE the abstract
             const frontMatterBlob = remainingContent.substring(0, abstractMatch.index).trim();
             const lines = frontMatterBlob.split('\n').map((l: string) => l.trim()).filter((l: string) => l);
@@ -199,7 +219,15 @@ export default function ReaderPage() {
             // Clean Body: Remove Front Matter AND Abstract
             remainingContent = remainingContent.substring(abstractEndIndex).trim();
 
+            console.log("DEBUG: Abstract Found");
+            console.log("Match Index:", abstractMatch.index);
+            console.log("Match Length:", abstractMatch[0].length);
+            console.log("Abstract Content:", abstract);
+            console.log("Remaining Length:", remainingContent.length);
+
         } else {
+            console.log("DEBUG: Initial content length:", content.length);
+            console.log("DEBUG: No Abstract Match Found - Proceeding to Title Strip");
             // 2. Fallback: No Abstract Found -> Manually Strip Title
             // If the content starts with a Header 1, treat it as Title and remove it
             const titleMatch = remainingContent.match(/^\s*(#+)\s+(.*?)(\r?\n|$)/);
@@ -207,11 +235,38 @@ export default function ReaderPage() {
                 title = titleMatch[2].trim();
                 // Remove the title line from body
                 remainingContent = remainingContent.replace(/^\s*(#+)\s+(.*?)(\r?\n|$)/, '').trim();
+                console.log("DEBUG: Title Stripped, Remaining Length:", remainingContent.length);
 
                 // Try to identify and remove Authors immediately following title
                 // Heuristic: If next lines are short and don't look like headings/body, strip them
                 // For now, let's minimally strip the title to solve the main duplication complaint.
+            } else {
+                console.log("DEBUG: No Title Match either.");
             }
+        }
+
+        // Safety Check: If body is suspiciously empty, fallback to raw content
+        // UPDATED: Check if extraction resulted in empty body OR if we just want to be safe
+        if (!remainingContent || remainingContent.length < 100) {
+            console.warn("Body extraction failed or too short, falling back to full content.");
+            // Try to just strip the title if possible
+            const titleMatch = content.match(/^\s*(#+)\s+(.*?)(\r?\n|$)/);
+            if (titleMatch) {
+                return {
+                    extractedAbstract: abstract || null, // Keep abstract if found
+                    extractedTitle: title || titleMatch[2].trim(),
+                    extractedAuthors: authors,
+                    extractedAffiliations: affiliations,
+                    cleanBodyContent: content.replace(/^\s*(#+)\s+(.*?)(\r?\n|$)/, '').trim()
+                };
+            }
+            return {
+                extractedAbstract: abstract || null,
+                extractedTitle: title || null,
+                extractedAuthors: authors,
+                extractedAffiliations: affiliations,
+                cleanBodyContent: content
+            };
         }
 
         return {
@@ -223,46 +278,56 @@ export default function ReaderPage() {
         };
     }, [content]);
 
+    // USE BACKEND SUMMARY IF EXTRACTION FAILS
+    const finalAbstract = extractedAbstract || paper?.summary;
+
 
     // Process content for citations (applied to the CLEAN body content)
     const processedContent = useMemo(() => {
-        if (!cleanBodyContent) return '';
+        // Safety: If cleanBodyContent is empty, return simple message or empty string
+        if (!cleanBodyContent) return '*(No content to display)*';
+
         let tempContent = cleanBodyContent;
 
-        // Replace anchors - Reference entries at start of line: [1] Author...
-        tempContent = tempContent.replace(/(^|\n)\s*\[(\d+)\]/g, (_match: string, prefix: string, id: string) => {
-            return `${prefix}<span id="ref-${id}" class="reference-anchor text-slate-400 font-mono text-sm">[${id}]</span>`;
-        });
+        try {
+            // Replace anchors - Reference entries at start of line: [1] Author...
+            tempContent = tempContent.replace(/(^|\n)\s*\[(\d+)\]/g, (_match: string, prefix: string, id: string) => {
+                return `${prefix}<span id="ref-${id}" class="reference-anchor text-slate-400 font-mono text-sm">[${id}]</span>`;
+            });
 
-        // Use placeholders to protect anchors
-        const placeholders: { token: string; replacement: string }[] = [];
-        tempContent = tempContent.replace(/<span id="ref-(\d+)"[^>]*>\[\1\]<\/span>/g, (match: string) => {
-            const token = `__REF_ANCHOR_PROTECTED_${placeholders.length}__`;
-            placeholders.push({ token, replacement: match });
-            return token;
-        });
+            // Use placeholders to protect anchors
+            const placeholders: { token: string; replacement: string }[] = [];
+            tempContent = tempContent.replace(/<span id="ref-(\d+)"[^>]*>\[\1\]<\/span>/g, (match: string) => {
+                const token = `__REF_ANCHOR_PROTECTED_${placeholders.length}__`;
+                placeholders.push({ token, replacement: match });
+                return token;
+            });
 
-        // Replace LaTeX superscript citations: $^{1;2;3}$ or $^{1,2,3}$ or $^{1}$
-        tempContent = tempContent.replace(/\$\^{([0-9;,\s]+)}\$/g, (_match: string, ids: string) => {
-            // Split by ; or , and create clickable links for each
-            const idList = ids.split(/[;,]/).map(s => s.trim()).filter(s => s);
-            const links = idList.map(id =>
-                `<span class="citation-ref text-indigo-600 hover:underline cursor-pointer font-bold" data-ref-id="${id}">${id}</span>`
-            ).join(';');
-            return `<sup class="citation-sup">[${links}]</sup>`;
-        });
+            // Replace LaTeX superscript citations: $^{1;2;3}$ or $^{1,2,3}$ or $^{1}$
+            tempContent = tempContent.replace(/\$\^{([0-9;,\s]+)}\$/g, (_match: string, ids: string) => {
+                // Split by ; or , and create clickable links for each
+                const idList = ids.split(/[;,]/).map(s => s.trim()).filter(s => s);
+                const links = idList.map(id =>
+                    `<span class="citation-ref text-indigo-600 hover:underline cursor-pointer font-bold" data-ref-id="${id}">${id}</span>`
+                ).join(';');
+                return `<sup class="citation-sup">[${links}]</sup>`;
+            });
 
-        // Replace inline citations - Standard [1] format
-        tempContent = tempContent.replace(/\[(\d+)\]/g, (_match: string, id: string) => {
-            return `<sup class="citation-sup"><span class="citation-ref text-indigo-600 hover:underline cursor-pointer font-bold" data-ref-id="${id}">[${id}]</span></sup>`;
-        });
+            // Replace inline citations - Standard [1] format
+            tempContent = tempContent.replace(/\[(\d+)\]/g, (_match: string, id: string) => {
+                return `<sup class="citation-sup"><span class="citation-ref text-indigo-600 hover:underline cursor-pointer font-bold" data-ref-id="${id}">[${id}]</span></sup>`;
+            });
 
-        // Restore anchors
-        placeholders.forEach((p) => {
-            tempContent = tempContent.replace(p.token, p.replacement);
-        });
+            // Restore anchors
+            placeholders.forEach((p) => {
+                tempContent = tempContent.replace(p.token, p.replacement);
+            });
+        } catch (e) {
+            console.error("Content processing failed", e);
+            return cleanBodyContent; // Fallback to raw content
+        }
 
-        return tempContent;
+        return tempContent || cleanBodyContent;
     }, [cleanBodyContent]);
 
     const handleMouseOver = (e: React.MouseEvent) => {
@@ -356,6 +421,41 @@ export default function ReaderPage() {
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
+
+    // Text Selection Detection for Smart Popup
+    useEffect(() => {
+        const handleMouseUp = (e: MouseEvent) => {
+            // Don't trigger if clicking inside the popup
+            if ((e.target as HTMLElement).closest('.smart-selection-popup')) return;
+
+            const selection = window.getSelection();
+            const text = selection?.toString().trim();
+
+            if (text && text.length > 10) {
+                const range = selection?.getRangeAt(0);
+                const rect = range?.getBoundingClientRect();
+                if (rect) {
+                    setSelectedText(text);
+                    setSelectionPosition({
+                        x: rect.left + rect.width / 2,
+                        y: rect.top,
+                    });
+                }
+            } else {
+                // Delay clearing to allow clicking popup buttons
+                setTimeout(() => {
+                    const popupExists = document.querySelector('.smart-selection-popup');
+                    if (!popupExists) {
+                        setSelectedText('');
+                        setSelectionPosition(null);
+                    }
+                }, 100);
+            }
+        };
+
+        document.addEventListener('mouseup', handleMouseUp);
+        return () => document.removeEventListener('mouseup', handleMouseUp);
     }, []);
 
     const isLoading = isPaperLoading || isContentLoading;
@@ -478,17 +578,15 @@ export default function ReaderPage() {
             // Standard ReaditDeep (Zen) Style
             return `
                 ${commonStyles}
-                .markdown-content { font-family: 'Times New Roman', 'Songti SC', 'SimSun', 'PingFang SC', 'Microsoft YaHei', serif; color: #111827; font-style: normal; }
-                .markdown-content h1 { font-family: 'Times New Roman', 'Songti SC', 'SimSun', serif; font-size: 2.25rem; font-weight: bold; text-align: center; margin-bottom: 2rem; line-height: 1.25; }
-                .markdown-content h2 { font-family: 'Times New Roman', 'Songti SC', 'SimSun', serif; font-size: 1.25rem; font-weight: bold; margin-top: 2rem; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em; }
-                .markdown-content h3 { font-family: 'Times New Roman', 'Songti SC', 'SimSun', serif; font-size: 1.1rem; font-weight: bold; margin-top: 1.5rem; margin-bottom: 0.75rem; }
-                .markdown-content p { font-size: ${fontSize}rem; line-height: 1.8; text-align: justify; text-justify: inter-ideograph; word-break: break-word; margin-bottom: 1.2rem; }
-                .markdown-content li { font-size: ${fontSize}rem; line-height: 1.8; }
-                .markdown-content ul, .markdown-content ol { font-size: ${fontSize}rem; line-height: 1.8; }
-                .paper-header { text-align: center; }
-                .paper-header h1 { font-family: 'Times New Roman', 'Songti SC', 'SimSun', serif; font-weight: bold; }
-                .abstract-box { font-family: 'Times New Roman', 'Songti SC', 'SimSun', serif; font-size: 1.05rem; font-style: normal; border-top: 2px solid #f8fafc; border-bottom: 2px solid #f8fafc; padding: 1.5rem; background: rgba(248,250,252,0.3); border-radius: 0.5rem; }
-                .abstract-label { font-weight: bold; text-transform: uppercase; font-size: 0.75rem; color: #94a3b8; letter-spacing: 0.1em; display: block; text-align: center; margin-bottom: 0.5rem; font-style: normal; }
+                .markdown-content { font-family: 'Merriweather', 'Source Serif 4', 'Times New Roman', serif; color: #334155; font-style: normal; }
+                .markdown-content h1 { font-family: 'Merriweather', 'Source Serif 4', serif; font-size: 2.25rem; font-weight: 700; text-align: center; margin-bottom: 2.5rem; line-height: 1.3; color: #1e293b; }
+                .markdown-content h2 { font-family: 'Inter', sans-serif; font-size: 1.5rem; font-weight: 600; margin-top: 3rem; margin-bottom: 1.5rem; color: #1e293b; letter-spacing: -0.025em; }
+                .markdown-content h3 { font-family: 'Inter', sans-serif; font-size: 1.25rem; font-weight: 600; margin-top: 2rem; margin-bottom: 1rem; color: #334155; }
+                .markdown-content p { font-size: ${fontSize}rem; line-height: 1.8; text-align: justify; margin-bottom: 1.5rem; color: #334155; }
+                .markdown-content li { font-size: ${fontSize}rem; line-height: 1.8; margin-bottom: 0.5rem; }
+                .paper-header h1 { font-family: 'Merriweather', 'Source Serif 4', serif; font-weight: 700; letter-spacing: -0.025em; }
+                .abstract-box { position: relative; padding: 2rem; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 3rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05); }
+                .abstract-label { font-family: 'Inter', sans-serif; font-weight: 600; font-size: 0.875rem; color: #64748b; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 1rem; display: block; }
             `;
         }
     };
@@ -547,80 +645,87 @@ export default function ReaderPage() {
                     </button>
 
                     {/* Appearance Settings "Aa" */}
-                    <div className="relative">
-                        <button
-                            onClick={() => setShowSettings(!showSettings)}
-                            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${showSettings ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
-                        >
-                            <Type className="w-4 h-4" />
-                            <span>Aa</span>
-                        </button>
+                    <div className="flex items-center gap-2">
+                        {/* Settings Group */}
+                        <div className="flex items-center p-1 bg-slate-100/50 rounded-lg border border-slate-200/50">
+                            {/* Font Settings */}
+                            <div className="relative">
+                                <button
+                                    onClick={() => setShowSettings(!showSettings)}
+                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${showSettings ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'}`}
+                                    title="阅读设置"
+                                >
+                                    <Type className="w-4 h-4" />
+                                </button>
 
-                        {/* Settings Popover */}
-                        {showSettings && (
-                            <div className="absolute top-full right-0 mt-2 w-72 bg-white rounded-xl shadow-xl border border-slate-100 p-4 z-50 animate-in fade-in zoom-in-95 duration-200">
-                                {/* Format Selector */}
-                                <div className="mb-4">
-                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Paper Format</label>
-                                    <div className="flex bg-slate-100 p-1 rounded-lg">
-                                        {['standard', 'acm', 'lncs'].map((fmt) => (
-                                            <button
-                                                key={fmt}
-                                                onClick={() => setPaperFormat(fmt as any)}
-                                                className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${paperFormat === fmt ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                                            >
-                                                {fmt}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
+                                {/* Settings Popover */}
+                                {showSettings && (
+                                    <div className="absolute top-full right-0 mt-3 w-72 bg-white rounded-xl shadow-xl border border-slate-100 p-4 z-50 animate-in fade-in zoom-in-95 duration-200">
+                                        {/* Format Selector */}
+                                        <div className="mb-4">
+                                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Paper Format</label>
+                                            <div className="flex bg-slate-100 p-1 rounded-lg">
+                                                {['standard', 'acm', 'lncs'].map((fmt) => (
+                                                    <button
+                                                        key={fmt}
+                                                        onClick={() => setPaperFormat(fmt as any)}
+                                                        className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${paperFormat === fmt ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                                    >
+                                                        {fmt}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
 
-                                {/* Font Size Controls */}
-                                <div>
-                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Font Size</label>
-                                    <div className="flex items-center justify-between bg-slate-50 rounded-lg p-2 border border-slate-100">
-                                        <button
-                                            onClick={() => setFontSize(prev => Math.max(0.8, prev - 0.1))}
-                                            className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-md transition-colors"
-                                        >
-                                            <span className="text-xs font-serif font-bold">A-</span>
-                                        </button>
-                                        <span className="text-xs font-medium text-slate-600">{Math.round(fontSize * 16)}px</span>
-                                        <button
-                                            onClick={() => setFontSize(prev => Math.min(2.0, prev + 0.1))}
-                                            className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-md transition-colors"
-                                        >
-                                            <span className="text-lg font-serif font-bold">A+</span>
-                                        </button>
+                                        {/* Font Size Controls */}
+                                        <div>
+                                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Font Size</label>
+                                            <div className="flex items-center justify-between bg-slate-50 rounded-lg p-2 border border-slate-100">
+                                                <button
+                                                    onClick={() => setFontSize(prev => Math.max(0.8, prev - 0.1))}
+                                                    className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-md transition-colors"
+                                                >
+                                                    <span className="text-xs font-serif font-bold">A-</span>
+                                                </button>
+                                                <span className="text-xs font-medium text-slate-600">{Math.round(fontSize * 16)}px</span>
+                                                <button
+                                                    onClick={() => setFontSize(prev => Math.min(2.0, prev + 0.1))}
+                                                    className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-md transition-colors"
+                                                >
+                                                    <span className="text-lg font-serif font-bold">A+</span>
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
+                                )}
                             </div>
-                        )}
+
+                            <div className="w-px h-4 bg-slate-300 mx-1"></div>
+
+                            {/* Zen Mode Toggle */}
+                            <button
+                                onClick={() => setIsZen(!isZen)}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${isZen ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'}`}
+                                title={isZen ? "退出禅模式" : "进入禅模式"}
+                            >
+                                {isZen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                            </button>
+                        </div>
+
+                        {/* Workbench Toggle (Primary) */}
+                        <button
+                            onClick={() => setShowRightSidebar(!showRightSidebar)}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm ml-2 ${showRightSidebar
+                                ? 'bg-purple-600 text-white shadow-purple-200 hover:bg-purple-700'
+                                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-900'
+                                }`}
+                            title="智能工作台"
+                        >
+                            <Sparkles className={`w-4 h-4 ${showRightSidebar ? 'text-purple-100' : 'text-purple-600'}`} />
+                            <span className="hidden sm:inline">工作台</span>
+                            {showRightSidebar ? <PanelRightClose className="w-4 h-4 opacity-70" /> : <PanelRight className="w-4 h-4 opacity-70" />}
+                        </button>
                     </div>
-
-                    <div className="w-px h-6 bg-slate-200 mx-1"></div>
-
-                    {/* Workbench Toggle */}
-                    <button
-                        onClick={() => setShowRightSidebar(!showRightSidebar)}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${showRightSidebar ? 'bg-purple-50 text-purple-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
-                        title="智能工作台"
-                    >
-                        <Sparkles className="w-4 h-4" />
-                        <span className="hidden sm:inline">工作台</span>
-                        {showRightSidebar ? <PanelRightClose className="w-4 h-4" /> : <PanelRight className="w-4 h-4" />}
-                    </button>
-
-                    <div className="w-px h-6 bg-slate-200 mx-1"></div>
-
-                    {/* Zen Mode (Primary) */}
-                    <button
-                        onClick={() => setIsZen(!isZen)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-all ${isZen ? 'bg-indigo-600 text-white shadow-indigo-200 hover:bg-indigo-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-900'}`}
-                    >
-                        {isZen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                        <span>{isZen ? 'Exit Zen' : 'Zen Mode'}</span>
-                    </button>
                 </div>
             </header>
 
@@ -756,11 +861,11 @@ export default function ReaderPage() {
                             </div>
 
                             {/* Abstract */}
-                            {extractedAbstract && (
+                            {finalAbstract && (
                                 <div className="mb-14 px-4 sm:px-8 abstract-box">
                                     <span className="abstract-label text-indigo-900/80">Abstract — </span>
                                     <span className="font-serif text-[1rem] leading-8 text-slate-800 text-justify inline">
-                                        {extractedAbstract}
+                                        {finalAbstract}
                                     </span>
                                 </div>
                             )}
@@ -804,7 +909,11 @@ export default function ReaderPage() {
                 {!isZen && (
                     <aside className={`${showRightSidebar ? 'w-80' : 'w-0'} border-l border-slate-200/60 bg-slate-50 overflow-hidden transition-all duration-300 flex-shrink-0`}>
                         {showRightSidebar && paperId && paper && (
-                            <Workbench paperId={paperId} paperTitle={paper.title || '论文'} />
+                            <Workbench
+                                paperId={paperId}
+                                paperTitle={paper.title || '论文'}
+                                onClose={() => setShowRightSidebar(false)}
+                            />
                         )}
                     </aside>
                 )}
@@ -838,6 +947,21 @@ export default function ReaderPage() {
                         {getReferenceText(hoveredCitation.id)}
                     </div>
                 </div>
+            )}
+
+            {/* Smart Selection Popup */}
+            {selectedText && selectionPosition && paperId && (
+                <SmartSelectionPopup
+                    text={selectedText}
+                    position={selectionPosition}
+                    paperId={paperId}
+                    paperTitle={paper?.title || paper?.filename || ''}
+                    fullContent={content}
+                    onClose={() => {
+                        setSelectedText('');
+                        setSelectionPosition(null);
+                    }}
+                />
             )}
         </div>
     );

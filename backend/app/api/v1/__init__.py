@@ -4,10 +4,17 @@ Read it DEEP - API v1 路由
 
 from fastapi import APIRouter
 
-from app.api.v1 import papers, library, monitor, analysis, graph, classification, translate, workbench
+from app.api.v1 import papers, library, monitor, analysis, graph, classification, translate, workbench, auth, admin
 
 router = APIRouter()
 
+# Auth (公开端点)
+router.include_router(auth.router, prefix="/auth", tags=["Auth"])
+
+# Admin (仅管理员)
+router.include_router(admin.router, prefix="/admin", tags=["Admin"])
+
+# Papers 相关
 router.include_router(papers.router, prefix="/papers", tags=["Papers"])
 router.include_router(library.router, prefix="/library", tags=["Library"])
 router.include_router(monitor.router, prefix="/monitor", tags=["Monitor"])
@@ -18,3 +25,4 @@ router.include_router(classification.tags_router, prefix="/library", tags=["Tags
 router.include_router(translate.router, prefix="/papers", tags=["Translation"])
 router.include_router(workbench.router, prefix="/workbench", tags=["Workbench"])
 router.include_router(workbench.paper_workbench_router, prefix="/papers", tags=["Paper Workbench"])
+

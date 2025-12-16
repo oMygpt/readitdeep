@@ -33,19 +33,27 @@ class TaskStatus(BaseModel):
 
 # 状态到进度的映射
 STATUS_PROGRESS = {
-    "uploading": 10,
-    "parsing": 50,
-    "indexing": 80,
+    "uploading": 5,
+    "parsing": 20,
+    "indexing": 40,
+    "embedding": 55,
+    "analyzing": 70,
+    "classifying": 85,
+    "analyzed": 95,
     "completed": 100,
     "failed": 0,
 }
 
 STATUS_MESSAGE = {
     "uploading": "文件上传中...",
-    "parsing": "正在解析 PDF (Mineru API)...",
-    "indexing": "正在建立索引...",
-    "completed": "解析完成，可以开始阅读",
-    "failed": "解析失败",
+    "parsing": "正在解析 PDF 文本...",
+    "indexing": "处理图片和引用...",
+    "embedding": "生成向量索引...",
+    "analyzing": "智能分析内容...",
+    "classifying": "自动分类中...",
+    "analyzed": "分析完成，整理结果...",
+    "completed": "✓ 分析完成，可以打开阅读",
+    "failed": "处理失败",
 }
 
 
