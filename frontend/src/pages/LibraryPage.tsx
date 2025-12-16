@@ -30,6 +30,7 @@ export default function LibraryPage() {
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [selectedTag, setSelectedTag] = useState<string | null>(null);
     const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+    const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Polling for updates
@@ -107,10 +108,16 @@ export default function LibraryPage() {
         }
     };
 
-    const handleDelete = async (e: React.MouseEvent, id: string) => {
+    const handleDeleteClick = (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
-        if (window.confirm('Are you sure you want to delete this paper?')) {
-            await deleteMutation.mutateAsync(id);
+        e.preventDefault();
+        setDeleteConfirmId(id);
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (deleteConfirmId) {
+            await deleteMutation.mutateAsync(deleteConfirmId);
+            setDeleteConfirmId(null);
         }
     };
 
@@ -185,8 +192,8 @@ export default function LibraryPage() {
                                 key={tag}
                                 onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
                                 className={`px-2 py-1 text-xs rounded-full transition-colors ${selectedTag === tag
-                                        ? 'bg-purple-600 text-white'
-                                        : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                                    ? 'bg-purple-600 text-white'
+                                    : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
                                     }`}
                             >
                                 {tag} ({count})
@@ -398,7 +405,7 @@ export default function LibraryPage() {
                                                 <ChevronRight className="w-4 h-4 text-slate-400" />
                                             )}
                                             <button
-                                                onClick={(e) => handleDelete(e, paper.id)}
+                                                onClick={(e) => handleDeleteClick(e, paper.id)}
                                                 className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
                                                 title="Delete"
                                             >
@@ -462,7 +469,7 @@ export default function LibraryPage() {
                                             {isProcessing && <Loader2 className="w-4 h-4 animate-spin text-yellow-500" />}
                                             {isFailed && <AlertCircle className="w-4 h-4 text-red-500" />}
                                             <button
-                                                onClick={(e) => handleDelete(e, paper.id)}
+                                                onClick={(e) => handleDeleteClick(e, paper.id)}
                                                 className="p-1 text-slate-400 hover:text-red-600 rounded"
                                             >
                                                 <Trash2 className="w-4 h-4" />
@@ -475,6 +482,31 @@ export default function LibraryPage() {
                     )}
                 </div>
             </main>
+
+            {/* Delete Confirmation Modal */}
+            {deleteConfirmId && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setDeleteConfirmId(null)}>
+                    <div className="bg-white rounded-xl shadow-2xl p-6 max-w-sm mx-4" onClick={(e) => e.stopPropagation()}>
+                        <h3 className="text-lg font-semibold text-slate-800 mb-2">确认删除</h3>
+                        <p className="text-slate-600 mb-6">确定要删除这篇论文吗？此操作无法撤销。</p>
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                onClick={() => setDeleteConfirmId(null)}
+                                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                            >
+                                取消
+                            </button>
+                            <button
+                                onClick={handleDeleteConfirm}
+                                disabled={deleteMutation.isPending}
+                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                            >
+                                {deleteMutation.isPending ? '删除中...' : '确认删除'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
