@@ -1,0 +1,166 @@
+{
+  "items": {
+    "wb-1d8b4206": {
+      "id": "wb-1d8b4206",
+      "type": "note",
+      "title": "📌  The effect of LLM use on two ...",
+      "description": "人类学习的过程",
+      "source_paper_id": "1daa7fa3-52d8-4ad3-bad2-545c83a3c45e",
+      "zone": "notes",
+      "created_at": "2025-12-16T02:23:09.458503",
+      "data": {
+        "original_text": " The effect of LLM use on two foundational aspects of learning – understanding and retaining information – remains critically underexplored. Knowledge stored in long-term memory is a fundamental element of cognition, forming the basis of nearly all human activity [16] . Thus, understanding the effects of LLMs on these foundations is urgently required to guide how such tools are integrated into schools, as policymakers and educators on the front-line are grappling with many unknowns. This study presents one of the first large-scale quantitative investigation into how reading comprehension and retention are affected by the use of LLMs",
+        "location": "",
+        "is_title_note": false,
+        "reflection": "人类学习的过程",
+        "reflection_updated_at": "2025-12-16T02:23:34.544645",
+        "created_at": "2025-12-16T02:23:09.458220"
+      }
+    },
+    "wb-390fa354": {
+      "id": "wb-390fa354",
+      "type": "method",
+      "title": "基于认知策略的阅读理解增强方法",
+      "description": "通过整合McNamara和Chi提出的认知监控和主动学习策略，构建系统的阅读理解增强流程，重点包括理解监控、文本解析和知识整合三个核心环节",
+      "source_paper_id": "1daa7fa3-52d8-4ad3-bad2-545c83a3c45e",
+      "zone": "methods",
+      "created_at": "2025-12-16T02:24:44.142948",
+      "data": {
+        "analysis": {
+          "method_name": "基于认知策略的阅读理解增强方法",
+          "method_type": "流程",
+          "core_idea": "通过整合McNamara和Chi提出的认知监控和主动学习策略，构建系统的阅读理解增强流程，重点包括理解监控、文本解析和知识整合三个核心环节",
+          "innovation_points": [
+            "将多种认知策略系统化整合为可操作的阅读流程",
+            "强调主动学习策略在知识编码和存储中的作用"
+          ],
+          "implementation_steps": [
+            "实施理解监控策略（如生成问题评估理解程度）",
+            "应用文本聚焦策略（如释义、拆分复杂句子、建立概念联系）",
+            "执行主动学习策略（如选择、重复以激活先验知识）"
+          ],
+          "key_formulas": [],
+          "reviewer_comments": {
+            "strengths": [
+              "理论基础扎实，引用权威研究支持",
+              "策略分类清晰，便于实际操作"
+            ],
+            "weaknesses": [
+              "缺乏具体实施细节和量化指标",
+              "未说明不同策略的适用场景和优先级"
+            ],
+            "questions": [
+              "这些策略在不同阅读材料类型（如科技文献vs文学）中的效果是否有差异？",
+              "如何评估每种策略对理解效果的具体贡献？"
+            ],
+            "suggestions": [
+              "建议增加策略选择的标准和评估指标",
+              "可考虑开发相应的评估工具来量化策略效果"
+            ]
+          },
+          "reproducibility_score": 6,
+          "pseudocode": "# 阅读策略执行流程\n1. 初始化阅读任务和目标\n2. 循环执行：\n   - 监控理解程度（生成自测问题）\n   - 应用文本解析策略（释义、拆分句子）\n   - 实施主动学习（选择重点、重复关键概念）\n3. 评估理解效果并调整策略"
+        },
+        "original_text": "There are several reading strategies and learning activities that can enhance comprehension and retention as outlined by McNamara [35] and Chi [36] . Throughout the reading process, monitoring comprehension is particularly crucial, and includes strategies such as generating questions to gauge one's understanding [35] . Text-focused strategies involve interpreting the meaning of words, sentences and ideas (e.g., paraphrasing, breaking up long and complex sentence into manageable chunks, making bridging inferences to link different concepts) [35] . Strategies such as paraphrasing, selecting, and repeating are also considered active learning strategies, and these can activate prior knowledge and support the encoding, storing and assimilation of new knowledge [36] . ",
+        "location": "",
+        "analyzed_at": "2025-12-16T02:24:44.142874"
+      }
+    },
+    "wb-b399bb3b": {
+      "id": "wb-b399bb3b",
+      "type": "note",
+      "title": "📌 We compared the impact of LLM ...",
+      "description": "笔记的作用依旧是实现实时思维训练的过程。",
+      "source_paper_id": "1daa7fa3-52d8-4ad3-bad2-545c83a3c45e",
+      "zone": "notes",
+      "created_at": "2025-12-16T02:27:16.752266",
+      "data": {
+        "original_text": "We compared the impact of LLM (reference condition, used by all students) to the impact of Notes (used by students in Group 1) and LLM+Notes (used by students in Group 2) on students' literal retention, comprehension, and free recall. Traditional note-taking led to the best performance across all measures, followed by LLM+Notes, while using LLM alone resulted in the lowest scores (see Supplementary Table 5 for descriptive statistics).",
+        "location": "",
+        "is_title_note": false,
+        "reflection": "笔记的作用依旧是实现实时思维训练的过程。",
+        "reflection_updated_at": "2025-12-16T02:27:48.875404",
+        "created_at": "2025-12-16T02:27:16.752217"
+      }
+    },
+    "wb-eb682852": {
+      "id": "wb-eb682852",
+      "type": "method",
+      "title": "随机对照实验设计",
+      "description": "通过随机分组比较不同学习条件（LLM、传统笔记、LLM+笔记）对学生学习效果的影响，采用预注册排除标准确保样本质量",
+      "source_paper_id": "1daa7fa3-52d8-4ad3-bad2-545c83a3c45e",
+      "zone": "methods",
+      "created_at": "2025-12-16T02:27:17.009826",
+      "data": {
+        "analysis": {
+          "method_name": "随机对照实验设计",
+          "method_type": "流程",
+          "core_idea": "通过随机分组比较不同学习条件（LLM、传统笔记、LLM+笔记）对学生学习效果的影响，采用预注册排除标准确保样本质量",
+          "innovation_points": [
+            "结合LLM与传统学习方法进行对比实验",
+            "采用预注册排除标准增强研究严谨性"
+          ],
+          "implementation_steps": [
+            "招募344名学生作为初始样本",
+            "应用预注册排除标准筛选有效样本",
+            "随机分为两组：Group 1（LLM vs 笔记）和Group 2（LLM vs LLM+笔记）",
+            "收集学生背景特征和学习习惯数据",
+            "实施不同学习条件干预并测量学习效果"
+          ],
+          "key_formulas": [],
+          "reviewer_comments": {
+            "strengths": [
+              "随机分组设计有效控制混杂变量",
+              "样本量较大（344人）增强统计效力",
+              "预注册排除标准提高方法透明度"
+            ],
+            "weaknesses": [
+              "性别比例不平衡可能影响结果泛化性",
+              "社会经济背景多样性不足（仅5.2%弱势群体）",
+              "LLM使用经验差异可能构成混淆因素"
+            ],
+            "questions": [
+              "随机分组的具体实施流程是什么？",
+              "如何确保不同组别间的干预实施一致性？",
+              "预注册排除标准的具体内容是什么？"
+            ],
+            "suggestions": [
+              "增加样本的社会经济多样性",
+              "对LLM使用经验进行更严格的匹配控制",
+              "提供随机化过程的详细操作说明"
+            ]
+          },
+          "reproducibility_score": 7,
+          "pseudocode": "# 实验流程伪代码\n1. 初始化: 招募学生样本(n=344)\n2. 筛选: 应用预注册排除标准\n3. 分组: 随机分配至Group1(184人)和Group2(160人)\n4. 干预: 实施不同学习条件\n5. 测量: 收集学习效果数据\n6. 分析: 比较组间差异"
+        },
+        "original_text": "Our study investigated the effects of using an LLM on student learning outcomes compared to traditional note-taking in a sample of 344 students (after applying pre-registered exclusion criteria, see Methods for more information). Group 1 (LLM vs Notes conditions) had a final sample of 184 students and Group 2 (LLM vs LLM+Notes conditions) of 160 students. Among the students there were slightly more males than females, most were English native speakers, a small number of students \n(\n5.2\n%\n)\n(5.2%) received free school meals indicating socioeconomic disadvantage, and about half were taking History GCSEs (see Supplementary Table 3 for all student characteristics). Both groups showed similar prior familiarity with the three learning conditions (LLM, Notes, LLM+Notes). About half of the students regularly took notes and most reported limited prior use of LLM for learning (see Supplementary Table 4 for detailed frequencies).",
+        "location": "",
+        "analyzed_at": "2025-12-16T02:27:17.009772"
+      }
+    }
+  },
+  "global_workbench": {
+    "methods": [
+      "wb-390fa354",
+      "wb-eb682852"
+    ],
+    "datasets": [],
+    "notes": [
+      "wb-1d8b4206",
+      "wb-b399bb3b"
+    ]
+  },
+  "paper_workbenches": {
+    "1daa7fa3-52d8-4ad3-bad2-545c83a3c45e": {
+      "methods": [
+        "wb-390fa354",
+        "wb-eb682852"
+      ],
+      "datasets": [],
+      "notes": [
+        "wb-1d8b4206",
+        "wb-b399bb3b"
+      ]
+    }
+  }
+}
