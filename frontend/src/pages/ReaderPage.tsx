@@ -29,6 +29,7 @@ import type { TextLocation } from '../lib/api';
 import AnalysisPanel from '../components/AnalysisPanel';
 import PaperGraph from '../components/PaperGraph';
 import Workbench from '../components/Workbench';
+import ExploreOverview from '../components/ExploreOverview';
 
 import 'katex/dist/katex.min.css';
 
@@ -47,6 +48,7 @@ export default function ReaderPage() {
     const [showLeftSidebar, setShowLeftSidebar] = useState(true); // Left sidebar visibility
     const [showRightSidebar, setShowRightSidebar] = useState(false); // Right sidebar (Workbench) visibility
     const [sidebarTab, setSidebarTab] = useState<'analysis' | 'graph'>('analysis'); // Sidebar tab
+    const [viewMode, setViewMode] = useState<'overview' | 'read'>('overview'); // Explore vs Read mode
     const mainContentRef = useRef<HTMLElement>(null);
 
     const { data: paper, isLoading: isPaperLoading } = useQuery({
@@ -492,6 +494,18 @@ export default function ReaderPage() {
     };
 
 
+
+    // Explore Overview Mode (show first before reading)
+    if (viewMode === 'overview' && paper) {
+        return (
+            <ExploreOverview
+                paperId={paperId!}
+                paperTitle={paper.title || paper.filename}
+                onStartReading={() => setViewMode('read')}
+                onBack={() => navigate('/')}
+            />
+        );
+    }
 
     return (
         <div className="flex flex-col h-screen bg-[#F7F8FA] text-slate-800 font-sans transition-colors duration-500 overflow-hidden relative">

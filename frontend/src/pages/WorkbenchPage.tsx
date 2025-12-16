@@ -88,7 +88,7 @@ function ItemCard({
                     <div className="flex items-center justify-between">
                         {item.source_paper_id && (
                             <Link
-                                to={`/reader/${item.source_paper_id}`}
+                                to={`/read/${item.source_paper_id}`}
                                 className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800"
                             >
                                 <ExternalLink className="w-3 h-3" />

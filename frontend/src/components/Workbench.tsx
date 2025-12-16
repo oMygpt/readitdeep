@@ -8,7 +8,7 @@
  * - 智能笔记：原文 + 心得 + 位置 + 可展开卡片
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
     FlaskConical,
     Database,
@@ -332,6 +332,30 @@ export default function Workbench({ paperId, paperTitle }: WorkbenchProps) {
     const [noteItems, setNoteItems] = useState<WorkbenchItem[]>([]);
     const [isAnalyzingMethod, setIsAnalyzingMethod] = useState(false);
     const [isAnalyzingAsset, setIsAnalyzingAsset] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+
+    // Load existing workbench items for this paper on mount
+    useEffect(() => {
+        const loadWorkbenchItems = async () => {
+            if (!paperId) {
+                setIsLoading(false);
+                return;
+            }
+            try {
+                const { data } = await api.get(`/papers/${paperId}/workbench`);
+                if (data) {
+                    setMethodItems(data.methods || []);
+                    setAssetItems(data.datasets || []);
+                    setNoteItems(data.notes || []);
+                }
+            } catch (error) {
+                console.error('Failed to load workbench items:', error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        loadWorkbenchItems();
+    }, [paperId]);
 
     // Handle method drop - call LLM analysis
     const handleMethodDrop = useCallback(async (text: string) => {
