@@ -102,9 +102,10 @@ export default function ExploreOverview({
                                 <div className="p-2 bg-blue-100 rounded-lg">
                                     <Network className="w-5 h-5 text-blue-600" />
                                 </div>
-                                <h2 className="text-lg font-bold text-slate-800">论文关系图谱</h2>
+                                <h2 className="text-lg font-bold text-slate-800">论文关系图谱 <span className="text-xs font-normal text-slate-400">v0.1</span></h2>
                             </div>
-                            <div className="h-[400px]">
+                            {/* Height adapts: min 300px, grows based on content */}
+                            <div className="min-h-[300px]">
                                 <PaperGraph paperId={paperId} />
                             </div>
                         </section>

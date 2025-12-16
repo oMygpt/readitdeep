@@ -188,6 +188,7 @@ export interface PaperNode {
     citation_count?: number;
     is_local: boolean;
     external_id?: string;
+    s2_url?: string;  // Semantic Scholar URL
 }
 
 export interface PaperEdge {
@@ -215,8 +216,16 @@ export const graphApi = {
         include_references?: boolean;
         include_recommendations?: boolean;
         limit?: number;
+        force_refresh?: boolean;
     }): Promise<PaperGraphData> => {
         const { data } = await api.get(`/papers/${paperId}/graph`, { params: options });
+        return data;
+    },
+
+    expand: async (paperId: string, nodeExternalId: string, limit?: number): Promise<PaperGraphData> => {
+        const { data } = await api.get(`/papers/${paperId}/graph/expand/${encodeURIComponent(nodeExternalId)}`, {
+            params: { limit: limit || 5 }
+        });
         return data;
     },
 };
