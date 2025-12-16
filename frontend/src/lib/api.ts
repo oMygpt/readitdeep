@@ -4,6 +4,8 @@
 
 import axios from 'axios';
 
+const TOKEN_KEY = 'readitdeep_token';
+
 export const api = axios.create({
     baseURL: '/api/v1',
     timeout: 30000,
@@ -12,19 +14,33 @@ export const api = axios.create({
     },
 });
 
-// 请求拦截器
+// 请求拦截器：添加认证 token
 api.interceptors.request.use(
     (config) => {
-        // TODO: 添加认证 token
+        const token = localStorage.getItem(TOKEN_KEY);
+        console.log('[DEBUG] Interceptor URL:', config.url, 'Token:', token ? 'Found' : 'Missing');
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
         return config;
     },
     (error) => Promise.reject(error)
 );
 
-// 响应拦截器
+// 响应拦截器：处理 401 未授权
 api.interceptors.response.use(
     (response) => response,
     (error) => {
+        console.log('[DEBUG] API Error Status:', error.response?.status, 'URL:', error.config?.url);
+        if (error.response?.status === 401) {
+            // Token 无效，清除并跳转登录
+            localStorage.removeItem(TOKEN_KEY);
+            localStorage.removeItem('readitdeep_refresh_token');
+            // 如果不在登录页，跳转
+            if (window.location.pathname !== '/login') {
+                window.location.href = '/login';
+            }
+        }
         console.error('API Error:', error.response?.data || error.message);
         return Promise.reject(error);
     }
@@ -36,11 +52,12 @@ export interface Paper {
     filename: string;
     title?: string;
     category?: string;
-    status: 'uploading' | 'parsing' | 'indexing' | 'completed' | 'failed';
+    status: 'uploading' | 'parsing' | 'indexing' | 'completed' | 'failed' | 'analyzed';
     created_at: string;
     updated_at?: string;
     markdown_content?: string;
     translated_content?: string;
+    summary?: string;
     // Classification fields
     tags?: string[];
     suggested_tags?: string[];
@@ -273,6 +290,10 @@ export const classificationApi = {
     removeTag: async (paperId: string, tag: string): Promise<void> => {
         await api.delete(`/papers/${paperId}/tags/${encodeURIComponent(tag)}`);
     },
+
+    updateCategory: async (paperId: string, category: string): Promise<void> => {
+        await api.put(`/papers/${paperId}/category`, { category });
+    },
 };
 
 // Translation API Types
@@ -296,5 +317,239 @@ export const translationApi = {
     getTranslation: async (paperId: string): Promise<TranslationResponse> => {
         const { data } = await api.get(`/papers/${paperId}/translation`);
         return data;
+    },
+};
+
+// ==================== Auth API ====================
+
+export interface User {
+    id: string;
+    email: string;
+    username?: string;
+    role: 'admin' | 'user';
+    is_active: boolean;
+    created_at?: string;
+    last_login?: string;
+}
+
+export interface TokenResponse {
+    access_token: string;
+    refresh_token: string;
+    token_type: string;
+    expires_in: number;
+    user: User;
+}
+
+export interface UserConfigResponse {
+    // 系统模式
+    llm_mode: string;
+    translation_mode: string;
+    mineru_mode: string;
+    smart_analysis_mode: string;
+
+    // 系统共享 Key 状态
+    system_has_llm_key: boolean;
+    system_has_translation_key: boolean;
+    system_has_mineru_key: boolean;
+
+    // 主 LLM (用户配置)
+    llm_base_url: string;
+    llm_model: string;
+    llm_api_key_set: boolean;
+
+    // 翻译 LLM
+    translation_base_url: string;
+    translation_model: string;
+    translation_api_key_set: boolean;
+
+    // MinerU
+    mineru_api_url: string;
+    mineru_api_key_set: boolean;
+
+    // 智能分析 - 每功能独立
+    smart_math_base_url: string;
+    smart_math_model: string;
+    smart_math_api_key_set: boolean;
+
+    smart_feynman_base_url: string;
+    smart_feynman_model: string;
+    smart_feynman_api_key_set: boolean;
+
+    smart_deep_base_url: string;
+    smart_deep_model: string;
+    smart_deep_api_key_set: boolean;
+
+    smart_chat_base_url: string;
+    smart_chat_model: string;
+    smart_chat_api_key_set: boolean;
+}
+
+export interface UserConfigUpdate {
+    // 主 LLM
+    llm_base_url?: string;
+    llm_model?: string;
+    llm_api_key?: string;
+
+    // 翻译 LLM
+    translation_base_url?: string;
+    translation_model?: string;
+    translation_api_key?: string;
+
+    // MinerU
+    mineru_api_url?: string;
+    mineru_api_key?: string;
+
+    // 智能分析模式
+    smart_analysis_mode?: string;
+
+    // 智能分析 - 每功能独立配置
+    smart_math_base_url?: string;
+    smart_math_model?: string;
+    smart_math_api_key?: string;
+
+    smart_feynman_base_url?: string;
+    smart_feynman_model?: string;
+    smart_feynman_api_key?: string;
+
+    smart_deep_base_url?: string;
+    smart_deep_model?: string;
+    smart_deep_api_key?: string;
+
+    smart_chat_base_url?: string;
+    smart_chat_model?: string;
+    smart_chat_api_key?: string;
+}
+
+export const authApi = {
+    login: async (email: string, password: string): Promise<TokenResponse> => {
+        const { data } = await api.post('/auth/login', { email, password });
+        return data;
+    },
+
+    refresh: async (refreshToken: string): Promise<TokenResponse> => {
+        const { data } = await api.post('/auth/refresh', {}, {
+            headers: { Authorization: `Bearer ${refreshToken}` }
+        });
+        return data;
+    },
+
+    me: async (): Promise<User> => {
+        const { data } = await api.get('/auth/me');
+        return data;
+    },
+
+    changePassword: async (oldPassword: string, newPassword: string): Promise<void> => {
+        await api.post('/auth/change-password', {
+            old_password: oldPassword,
+            new_password: newPassword
+        });
+    },
+
+    getUserConfig: async (): Promise<UserConfigResponse> => {
+        const { data } = await api.get('/auth/config');
+        return data;
+    },
+
+    updateUserConfig: async (config: UserConfigUpdate): Promise<UserConfigResponse> => {
+        const { data } = await api.put('/auth/config', config);
+        return data;
+    },
+};
+
+// ==================== Admin API ====================
+
+export interface SystemConfig {
+    // 主 LLM
+    llm_mode: string;
+    llm_base_url: string;
+    llm_model: string;
+    llm_api_key_set: boolean;
+
+    // 翻译 LLM
+    translation_mode: string;
+    translation_base_url: string;
+    translation_model: string;
+    translation_api_key_set: boolean;
+
+    // MinerU
+    mineru_mode: string;
+    mineru_api_url: string;
+    mineru_api_key_set: boolean;
+    mineru_self_hosted_url?: string;
+
+    // Embedding
+    embedding_base_url: string;
+    embedding_model: string;
+    embedding_api_key_set: boolean;
+
+    // 智能分析
+    smart_analysis_mode: string;
+
+    // Math 解析
+    smart_math_base_url: string;
+    smart_math_model: string;
+    smart_math_api_key_set: boolean;
+
+    // 费曼教学
+    smart_feynman_base_url: string;
+    smart_feynman_model: string;
+    smart_feynman_api_key_set: boolean;
+
+    // 深度研究
+    smart_deep_base_url: string;
+    smart_deep_model: string;
+    smart_deep_api_key_set: boolean;
+
+    // Chat with PDF
+    smart_chat_base_url: string;
+    smart_chat_model: string;
+    smart_chat_api_key_set: boolean;
+}
+
+export interface UserListResponse {
+    items: User[];
+    total: number;
+}
+
+export const adminApi = {
+    // 系统配置
+    getConfig: async (): Promise<SystemConfig> => {
+        const { data } = await api.get('/admin/config');
+        return data;
+    },
+
+    updateConfig: async (config: Record<string, unknown>): Promise<void> => {
+        await api.put('/admin/config', config);
+    },
+
+    // 用户管理
+    listUsers: async (skip = 0, limit = 50): Promise<UserListResponse> => {
+        const { data } = await api.get('/admin/users', { params: { skip, limit } });
+        return data;
+    },
+
+    createUser: async (userData: { email: string; password: string; username?: string; role?: string }): Promise<User> => {
+        const { data } = await api.post('/admin/users', userData);
+        return data;
+    },
+
+    getUser: async (userId: string): Promise<User> => {
+        const { data } = await api.get(`/admin/users/${userId}`);
+        return data;
+    },
+
+    updateUser: async (userId: string, userData: { username?: string; role?: string; is_active?: boolean }): Promise<User> => {
+        const { data } = await api.put(`/admin/users/${userId}`, userData);
+        return data;
+    },
+
+    deleteUser: async (userId: string): Promise<void> => {
+        await api.delete(`/admin/users/${userId}`);
+    },
+
+    resetPassword: async (userId: string, newPassword: string): Promise<void> => {
+        await api.post(`/admin/users/${userId}/reset-password`, null, {
+            params: { new_password: newPassword }
+        });
     },
 };

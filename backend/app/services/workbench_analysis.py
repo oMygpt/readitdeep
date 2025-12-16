@@ -23,14 +23,28 @@ from app.core.workbench_store import workbench_store
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-# LLM
-llm = ChatOpenAI(
-    base_url=settings.llm_base_url,
-    api_key=settings.llm_api_key or "dummy",
-    model=settings.llm_model,
-    temperature=0.3,
-)
 
+# 移除全局 LLM 初始化
+# llm = ChatOpenAI(...) 
+
+from app.core.store import store
+from app.core.config_manager import ConfigManager
+from app.core.database import async_session_maker, get_db
+
+async def get_llm_for_paper(paper_id: str):
+    """根据论文归属获取配置好的 LLM 实例"""
+    paper = store.get(paper_id)
+    user_id = paper.get("user_id") if paper else None
+    
+    async with async_session_maker() as db:
+        config = await ConfigManager.get_effective_config(db, user_id)
+        
+    return ChatOpenAI(
+        base_url=config.get("llm_base_url") or settings.llm_base_url,
+        api_key=config.get("llm_api_key") or settings.llm_api_key or "dummy",
+        model=config.get("llm_model") or settings.llm_model,
+        temperature=0.3,
+    )
 
 async def analyze_method(
     text: str,
@@ -43,6 +57,8 @@ async def analyze_method(
     
     提炼研究方法，生成伪代码，以审稿视角分析
     """
+    llm = await get_llm_for_paper(paper_id)
+    
     loader = get_prompt_loader()
     prompt_file = loader.get_prompt("workbench_method")
     
@@ -69,10 +85,17 @@ async def analyze_method(
         # 尝试解析 JSON
         json_match = re.search(r'```json\s*(.*?)\s*```', content, re.DOTALL)
         if json_match:
-            analysis = json.loads(json_match.group(1))
+            try:
+                analysis = json.loads(json_match.group(1))
+            except json.JSONDecodeError:
+                analysis = {"error": "JSON parse failed", "raw": content} 
         else:
             # 尝试直接解析
-            analysis = json.loads(content)
+            try:
+                analysis = json.loads(content)
+            except json.JSONDecodeError:
+                # 假如返回的不是JSON，尝试封装
+                analysis = {"method_name": "Analysis Result", "core_idea": content[:200], "full_text": content}
         
         # 保存到工作台
         item = workbench_store.add_item(
@@ -114,6 +137,8 @@ async def analyze_asset(
     
     识别 GitHub/Huggingface/数据集等可复用资源
     """
+    llm = await get_llm_for_paper(paper_id)
+    
     loader = get_prompt_loader()
     prompt_file = loader.get_prompt("workbench_asset")
     
@@ -139,9 +164,15 @@ async def analyze_asset(
         # 解析 JSON
         json_match = re.search(r'```json\s*(.*?)\s*```', content, re.DOTALL)
         if json_match:
-            analysis = json.loads(json_match.group(1))
+            try:
+                analysis = json.loads(json_match.group(1))
+            except json.JSONDecodeError:
+                analysis = {"assets": []}
         else:
-            analysis = json.loads(content)
+            try:
+                analysis = json.loads(content)
+            except json.JSONDecodeError:
+                analysis = {"assets": []}
         
         # 为每个识别到的资产创建条目
         created_items = []

@@ -285,3 +285,42 @@ async def update_reflection_endpoint(item_id: str, request: UpdateReflectionRequ
     if not result["success"]:
         raise HTTPException(status_code=404, detail=result.get("error", "更新失败"))
     return result
+
+
+# ============ Smart Analysis Endpoints ============
+
+from app.services.smart_analysis import smart_analyze
+
+
+class SmartAnalyzeRequest(BaseModel):
+    """智能分析请求"""
+    text: str
+    paper_id: str
+    paper_title: str
+    action_type: str  # 'math' | 'feynman' | 'deep' | 'chat'
+    context: Optional[str] = None  # 周围上下文 (用于 chat)
+    chat_history: Optional[List[Dict[str, str]]] = None  # 聊天历史
+    user_message: Optional[str] = None  # 用户消息 (用于 chat)
+
+
+@router.post("/analyze/smart")
+async def smart_analyze_endpoint(request: SmartAnalyzeRequest):
+    """
+    智能分析选中文本
+    
+    支持类型:
+    - math: 公式解析
+    - feynman: 费曼教学法讲解
+    - deep: 深度研究分析
+    - chat: Chat with PDF 对话
+    """
+    result = await smart_analyze(
+        text=request.text,
+        paper_id=request.paper_id,
+        paper_title=request.paper_title,
+        action_type=request.action_type,
+        context=request.context,
+        chat_history=request.chat_history,
+        user_message=request.user_message,
+    )
+    return result

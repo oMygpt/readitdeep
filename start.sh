@@ -39,11 +39,11 @@ cd backend
 
 # 使用 uv 同步依赖 (自动创建虚拟环境)
 echo "  Syncing dependencies with uv..."
-# uv sync 2>/dev/null || uv pip install -e . 2>/dev/null || true
+uv sync 2>/dev/null || uv pip install -e . 2>/dev/null || true
 
 # 启动 uvicorn (使用 uv run)
 # 使用 --no-sync 跳过网络检查
-uv run --no-sync uvicorn app.main:app --reload --host 0.0.0.0 --port 8080 &
+uv run --no-sync uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 &
 BACKEND_PID=$!
 echo "  Backend PID: $BACKEND_PID"
 
@@ -74,8 +74,8 @@ echo ""
 echo -e "${GREEN}✅ Read it DEEP 已启动!${NC}"
 echo ""
 echo "  📖 Frontend: http://localhost:5173"
-echo "  🔧 Backend:  http://localhost:8080"
-echo "  📚 API Docs: http://localhost:8080/docs"
+echo "  🔧 Backend:  http://localhost:8000"
+echo "  📚 API Docs: http://localhost:8000/docs"
 echo ""
 echo "使用 ./stop.sh 停止服务"
 echo ""

@@ -1,13 +1,14 @@
 """
 Read it DEEP - Paper 数据模型
+
+支持 SQLite 和 PostgreSQL
 """
 
 from datetime import datetime
 from typing import Optional
 import uuid
 
-from sqlalchemy import String, Text, DateTime, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import String, Text, DateTime, func, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -17,11 +18,20 @@ class Paper(Base):
     """论文模型"""
     __tablename__ = "papers"
     
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+    id: Mapped[str] = mapped_column(
+        String(36),
         primary_key=True,
-        default=uuid.uuid4,
+        default=lambda: str(uuid.uuid4()),
     )
+    
+    # 用户关联 (多用户隔离)
+    user_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,  # 暂时可空，兼容现有数据
+        index=True,
+    )
+    
     filename: Mapped[str] = mapped_column(String(500), nullable=False)
     file_path: Mapped[Optional[str]] = mapped_column(String(1000))
     

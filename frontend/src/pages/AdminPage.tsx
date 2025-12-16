@@ -1,0 +1,871 @@
+/**
+ * Read it DEEP - 管理员设置页面
+ * 
+ * 细粒度 API 配置:
+ * - 主 LLM
+ * - 翻译 LLM
+ * - Embedding (全局只读)
+ * - MinerU
+ * - 智能分析 (继承/独立配置)
+ */
+
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { adminApi, type SystemConfig, type User as AdminUser } from '../lib/api';
+import {
+    Settings,
+    Users,
+    Shield,
+    Key,
+    Server,
+    Languages,
+    Brain,
+    ArrowLeft,
+    Save,
+    Plus,
+    Trash2,
+    UserCog,
+    Loader2,
+    CheckCircle,
+    XCircle,
+    Eye,
+    EyeOff,
+    Lock,
+    Sparkles,
+    FileText,
+    ChevronDown,
+    ChevronRight,
+} from 'lucide-react';
+
+type Tab = 'config' | 'users';
+
+// 配置卡片组件
+interface ConfigCardProps {
+    title: string;
+    icon: React.ReactNode;
+    iconBg: string;
+    description: string;
+    children: React.ReactNode;
+}
+
+function ConfigCard({ title, icon, iconBg, description, children }: ConfigCardProps) {
+    return (
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+            <div className="flex items-center gap-3 mb-4">
+                <div className={`w-10 h-10 ${iconBg} rounded-lg flex items-center justify-center`}>
+                    {icon}
+                </div>
+                <div>
+                    <h3 className="font-semibold text-slate-900">{title}</h3>
+                    <p className="text-sm text-slate-500">{description}</p>
+                </div>
+            </div>
+            <div className="space-y-4">{children}</div>
+        </div>
+    );
+}
+
+// API 密钥输入组件
+interface ApiKeyInputProps {
+    label: string;
+    value: string;
+    isSet?: boolean;
+    onChange: (value: string) => void;
+    showKey: boolean;
+    onToggleShow: () => void;
+}
+
+function ApiKeyInput({ label, value, isSet, onChange, showKey, onToggleShow }: ApiKeyInputProps) {
+    return (
+        <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+                {label} {isSet && <span className="text-green-600">(已设置)</span>}
+            </label>
+            <div className="relative">
+                <input
+                    type={showKey ? 'text' : 'password'}
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
+                    placeholder="留空保持不变"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 pr-10"
+                />
+                <button
+                    type="button"
+                    onClick={onToggleShow}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                    {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+            </div>
+        </div>
+    );
+}
+
+// 模式选择组件
+interface ModeSelectProps {
+    value: string;
+    onChange: (value: string) => void;
+    options: { value: string; label: string }[];
+}
+
+function ModeSelect({ value, onChange, options }: ModeSelectProps) {
+    return (
+        <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">配置模式</label>
+            <select
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+            >
+                {options.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+            </select>
+        </div>
+    );
+}
+
+export default function AdminPage() {
+    const navigate = useNavigate();
+    const { user } = useAuth();
+    const [activeTab, setActiveTab] = useState<Tab>('config');
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
+    const [saveMessage, setSaveMessage] = useState('');
+
+    // 配置表单
+    const [configForm, setConfigForm] = useState({
+        // 主 LLM
+        llm_mode: 'shared',
+        llm_base_url: '',
+        llm_model: '',
+        llm_api_key: '',
+        // 翻译 LLM
+        translation_mode: 'shared',
+        translation_base_url: '',
+        translation_model: '',
+        translation_api_key: '',
+        // MinerU
+        mineru_mode: 'shared',
+        mineru_api_url: '',
+        mineru_api_key: '',
+        mineru_self_hosted_url: '',
+        // Embedding
+        embedding_base_url: '',
+        embedding_model: '',
+        embedding_api_key: '',
+        // 智能分析
+        smart_analysis_mode: 'inherit',
+        // Math
+        smart_math_base_url: '',
+        smart_math_model: '',
+        smart_math_api_key: '',
+        // Feynman
+        smart_feynman_base_url: '',
+        smart_feynman_model: '',
+        smart_feynman_api_key: '',
+        // Deep
+        smart_deep_base_url: '',
+        smart_deep_model: '',
+        smart_deep_api_key: '',
+        // Chat
+        smart_chat_base_url: '',
+        smart_chat_model: '',
+        smart_chat_api_key: '',
+    });
+
+    const [config, setConfig] = useState<SystemConfig | null>(null);
+    const [showApiKeys, setShowApiKeys] = useState<Record<string, boolean>>({});
+    const [expandSmartAnalysis, setExpandSmartAnalysis] = useState(false);
+
+    // 用户列表
+    const [users, setUsers] = useState<AdminUser[]>([]);
+    const [totalUsers, setTotalUsers] = useState(0);
+    const [showCreateUser, setShowCreateUser] = useState(false);
+    const [newUser, setNewUser] = useState({ email: '', password: '', username: '', role: 'user' });
+    const [deleteConfirmUser, setDeleteConfirmUser] = useState<AdminUser | null>(null);
+    const [resetPasswordUser, setResetPasswordUser] = useState<AdminUser | null>(null);
+    const [newPassword, setNewPassword] = useState('');
+
+    // 权限检查
+    useEffect(() => {
+        if (user && user.role !== 'admin') {
+            navigate('/library');
+        }
+    }, [user, navigate]);
+
+    // 加载数据
+    useEffect(() => {
+        if (user?.role === 'admin') {
+            loadData();
+        }
+    }, [user, activeTab]);
+
+    const loadData = async () => {
+        setIsLoading(true);
+        try {
+            if (activeTab === 'config') {
+                const configData = await adminApi.getConfig();
+                setConfig(configData);
+                setConfigForm({
+                    llm_mode: configData.llm_mode || 'shared',
+                    llm_base_url: configData.llm_base_url || '',
+                    llm_model: configData.llm_model || '',
+                    llm_api_key: '',
+                    translation_mode: configData.translation_mode || 'shared',
+                    translation_base_url: configData.translation_base_url || '',
+                    translation_model: configData.translation_model || '',
+                    translation_api_key: '',
+                    mineru_mode: configData.mineru_mode || 'shared',
+                    mineru_api_url: configData.mineru_api_url || '',
+                    mineru_api_key: '',
+                    mineru_self_hosted_url: configData.mineru_self_hosted_url || '',
+                    embedding_base_url: configData.embedding_base_url || '',
+                    embedding_model: configData.embedding_model || '',
+                    embedding_api_key: '',
+                    smart_analysis_mode: configData.smart_analysis_mode || 'inherit',
+                    smart_math_base_url: configData.smart_math_base_url || '',
+                    smart_math_model: configData.smart_math_model || '',
+                    smart_math_api_key: '',
+                    smart_feynman_base_url: configData.smart_feynman_base_url || '',
+                    smart_feynman_model: configData.smart_feynman_model || '',
+                    smart_feynman_api_key: '',
+                    smart_deep_base_url: configData.smart_deep_base_url || '',
+                    smart_deep_model: configData.smart_deep_model || '',
+                    smart_deep_api_key: '',
+                    smart_chat_base_url: configData.smart_chat_base_url || '',
+                    smart_chat_model: configData.smart_chat_model || '',
+                    smart_chat_api_key: '',
+                });
+            } else {
+                const usersData = await adminApi.listUsers();
+                setUsers(usersData.items);
+                setTotalUsers(usersData.total);
+            }
+        } catch (error) {
+            console.error('Failed to load data:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleSaveConfig = async () => {
+        setIsSaving(true);
+        setSaveMessage('');
+        try {
+            const updates: Record<string, unknown> = {};
+            Object.entries(configForm).forEach(([key, value]) => {
+                if (value !== '' && value !== undefined) {
+                    updates[key] = value;
+                }
+            });
+            await adminApi.updateConfig(updates);
+            setSaveMessage('配置已保存');
+            await loadData();
+        } catch (error) {
+            setSaveMessage('保存失败');
+            console.error('Failed to save config:', error);
+        } finally {
+            setIsSaving(false);
+            setTimeout(() => setSaveMessage(''), 3000);
+        }
+    };
+
+    const handleCreateUser = async () => {
+        try {
+            await adminApi.createUser(newUser);
+            setShowCreateUser(false);
+            setNewUser({ email: '', password: '', username: '', role: 'user' });
+            await loadData();
+        } catch (error) {
+            console.error('Failed to create user:', error);
+        }
+    };
+
+    const handleDeleteUser = async (userId: string) => {
+        try {
+            await adminApi.deleteUser(userId);
+            setDeleteConfirmUser(null);
+            await loadData();
+        } catch (error) {
+            console.error('Failed to delete user:', error);
+        }
+    };
+
+    const handleResetPassword = async () => {
+        if (!resetPasswordUser || !newPassword) return;
+        try {
+            await adminApi.resetPassword(resetPasswordUser.id, newPassword);
+            setResetPasswordUser(null);
+            setNewPassword('');
+            alert('密码已重置');
+        } catch (error) {
+            console.error('Failed to reset password:', error);
+        }
+    };
+
+    const handleToggleUserActive = async (userId: string, currentActive: boolean) => {
+        try {
+            await adminApi.updateUser(userId, { is_active: !currentActive });
+            await loadData();
+        } catch (error) {
+            console.error('Failed to update user:', error);
+        }
+    };
+
+    const toggleShowKey = (key: string) => {
+        setShowApiKeys({ ...showApiKeys, [key]: !showApiKeys[key] });
+    };
+
+    if (!user || user.role !== 'admin') {
+        return null;
+    }
+
+    return (
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+            {/* Header */}
+            <div className="bg-white border-b border-slate-200 sticky top-0 z-10">
+                <div className="max-w-6xl mx-auto px-4 py-4">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                            <button
+                                onClick={() => navigate('/library')}
+                                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                            >
+                                <ArrowLeft className="w-5 h-5" />
+                            </button>
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-blue-600 rounded-xl flex items-center justify-center">
+                                    <Settings className="w-5 h-5 text-white" />
+                                </div>
+                                <div>
+                                    <h1 className="text-xl font-bold text-slate-900">管理员设置</h1>
+                                    <p className="text-sm text-slate-500">系统配置与用户管理</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Tabs */}
+            <div className="max-w-6xl mx-auto px-4 py-6">
+                <div className="flex gap-2 mb-6">
+                    <button
+                        onClick={() => setActiveTab('config')}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${activeTab === 'config'
+                            ? 'bg-purple-600 text-white'
+                            : 'bg-white text-slate-700 hover:bg-slate-50'
+                            }`}
+                    >
+                        <Server className="w-4 h-4" />
+                        系统配置
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('users')}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${activeTab === 'users'
+                            ? 'bg-purple-600 text-white'
+                            : 'bg-white text-slate-700 hover:bg-slate-50'
+                            }`}
+                    >
+                        <Users className="w-4 h-4" />
+                        用户管理 ({totalUsers})
+                    </button>
+                </div>
+
+                {isLoading ? (
+                    <div className="flex items-center justify-center py-20">
+                        <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+                    </div>
+                ) : activeTab === 'config' ? (
+                    <div className="space-y-6">
+                        {/* 主 LLM 配置 */}
+                        <ConfigCard
+                            title="主 LLM 配置"
+                            icon={<Brain className="w-5 h-5 text-blue-600" />}
+                            iconBg="bg-blue-100"
+                            description="核心大语言模型 API 设置"
+                        >
+                            <ModeSelect
+                                value={configForm.llm_mode}
+                                onChange={(v) => setConfigForm({ ...configForm, llm_mode: v })}
+                                options={[
+                                    { value: 'shared', label: '全局共享 - 所有用户使用系统配置' },
+                                    { value: 'user_defined', label: '允许用户自定义 - 用户可提供自己的配置' },
+                                ]}
+                            />
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Base URL</label>
+                                    <input
+                                        type="text"
+                                        value={configForm.llm_base_url}
+                                        onChange={(e) => setConfigForm({ ...configForm, llm_base_url: e.target.value })}
+                                        placeholder="http://localhost:8000/v1"
+                                        className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">模型</label>
+                                    <input
+                                        type="text"
+                                        value={configForm.llm_model}
+                                        onChange={(e) => setConfigForm({ ...configForm, llm_model: e.target.value })}
+                                        placeholder="qwen2.5-72b"
+                                        className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                    />
+                                </div>
+                            </div>
+                            <ApiKeyInput
+                                label="API Key"
+                                value={configForm.llm_api_key}
+                                isSet={config?.llm_api_key_set}
+                                onChange={(v) => setConfigForm({ ...configForm, llm_api_key: v })}
+                                showKey={showApiKeys.llm || false}
+                                onToggleShow={() => toggleShowKey('llm')}
+                            />
+                        </ConfigCard>
+
+                        {/* 翻译 LLM 配置 */}
+                        <ConfigCard
+                            title="翻译 LLM 配置"
+                            icon={<Languages className="w-5 h-5 text-green-600" />}
+                            iconBg="bg-green-100"
+                            description="论文翻译服务（留空则使用主 LLM）"
+                        >
+                            <ModeSelect
+                                value={configForm.translation_mode}
+                                onChange={(v) => setConfigForm({ ...configForm, translation_mode: v })}
+                                options={[
+                                    { value: 'shared', label: '全局共享' },
+                                    { value: 'user_defined', label: '允许用户自定义' },
+                                    { value: 'disabled', label: '禁用翻译功能' },
+                                ]}
+                            />
+                            {configForm.translation_mode !== 'disabled' && (
+                                <>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">Base URL</label>
+                                            <input
+                                                type="text"
+                                                value={configForm.translation_base_url}
+                                                onChange={(e) => setConfigForm({ ...configForm, translation_base_url: e.target.value })}
+                                                placeholder="留空使用主 LLM"
+                                                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">模型</label>
+                                            <input
+                                                type="text"
+                                                value={configForm.translation_model}
+                                                onChange={(e) => setConfigForm({ ...configForm, translation_model: e.target.value })}
+                                                placeholder="留空使用主 LLM"
+                                                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                            />
+                                        </div>
+                                    </div>
+                                    <ApiKeyInput
+                                        label="API Key"
+                                        value={configForm.translation_api_key}
+                                        isSet={config?.translation_api_key_set}
+                                        onChange={(v) => setConfigForm({ ...configForm, translation_api_key: v })}
+                                        showKey={showApiKeys.translation || false}
+                                        onToggleShow={() => toggleShowKey('translation')}
+                                    />
+                                </>
+                            )}
+                        </ConfigCard>
+
+                        {/* MinerU 配置 */}
+                        <ConfigCard
+                            title="MinerU 配置"
+                            icon={<FileText className="w-5 h-5 text-orange-600" />}
+                            iconBg="bg-orange-100"
+                            description="PDF 解析服务"
+                        >
+                            <ModeSelect
+                                value={configForm.mineru_mode}
+                                onChange={(v) => setConfigForm({ ...configForm, mineru_mode: v })}
+                                options={[
+                                    { value: 'shared', label: '全局共享' },
+                                    { value: 'user_defined', label: '允许用户自定义' },
+                                    { value: 'self_hosted', label: '使用自部署服务' },
+                                ]}
+                            />
+                            {configForm.mineru_mode === 'self_hosted' ? (
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">自部署 URL</label>
+                                    <input
+                                        type="text"
+                                        value={configForm.mineru_self_hosted_url}
+                                        onChange={(e) => setConfigForm({ ...configForm, mineru_self_hosted_url: e.target.value })}
+                                        placeholder="http://your-mineru-service:8080"
+                                        className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                    />
+                                </div>
+                            ) : (
+                                <>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">API URL</label>
+                                        <input
+                                            type="text"
+                                            value={configForm.mineru_api_url}
+                                            onChange={(e) => setConfigForm({ ...configForm, mineru_api_url: e.target.value })}
+                                            placeholder="https://mineru.net/api/v4"
+                                            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                        />
+                                    </div>
+                                    <ApiKeyInput
+                                        label="API Key"
+                                        value={configForm.mineru_api_key}
+                                        isSet={config?.mineru_api_key_set}
+                                        onChange={(v) => setConfigForm({ ...configForm, mineru_api_key: v })}
+                                        showKey={showApiKeys.mineru || false}
+                                        onToggleShow={() => toggleShowKey('mineru')}
+                                    />
+                                </>
+                            )}
+                        </ConfigCard>
+
+                        {/* Embedding 配置 (全局只读) */}
+                        <ConfigCard
+                            title="Embedding 配置"
+                            icon={<Key className="w-5 h-5 text-purple-600" />}
+                            iconBg="bg-purple-100"
+                            description="向量嵌入服务（全局固定，用户不可修改）"
+                        >
+                            <div className="bg-slate-50 rounded-lg p-3 text-sm text-slate-600">
+                                ⚠️ Embedding 配置为全局固定，所有用户共享，不支持用户自定义
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Base URL</label>
+                                    <input
+                                        type="text"
+                                        value={configForm.embedding_base_url}
+                                        onChange={(e) => setConfigForm({ ...configForm, embedding_base_url: e.target.value })}
+                                        placeholder="http://localhost:8000/v1"
+                                        className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">模型</label>
+                                    <input
+                                        type="text"
+                                        value={configForm.embedding_model}
+                                        onChange={(e) => setConfigForm({ ...configForm, embedding_model: e.target.value })}
+                                        placeholder="bge-m3"
+                                        className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                    />
+                                </div>
+                            </div>
+                        </ConfigCard>
+
+                        {/* 智能分析配置 */}
+                        <ConfigCard
+                            title="智能分析配置"
+                            icon={<Sparkles className="w-5 h-5 text-indigo-600" />}
+                            iconBg="bg-indigo-100"
+                            description="Math 解析、费曼教学、深度研究、Chat with PDF"
+                        >
+                            <div className="flex items-center gap-4">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="smart_mode"
+                                        checked={configForm.smart_analysis_mode === 'inherit'}
+                                        onChange={() => setConfigForm({ ...configForm, smart_analysis_mode: 'inherit' })}
+                                        className="w-4 h-4 text-purple-600"
+                                    />
+                                    <span className="text-sm text-slate-700">继承主 LLM 配置</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="smart_mode"
+                                        checked={configForm.smart_analysis_mode === 'custom'}
+                                        onChange={() => setConfigForm({ ...configForm, smart_analysis_mode: 'custom' })}
+                                        className="w-4 h-4 text-purple-600"
+                                    />
+                                    <span className="text-sm text-slate-700">独立配置每个功能</span>
+                                </label>
+                            </div>
+
+                            {configForm.smart_analysis_mode === 'custom' && (
+                                <div className="space-y-4 mt-4 pt-4 border-t border-slate-200">
+                                    <button
+                                        onClick={() => setExpandSmartAnalysis(!expandSmartAnalysis)}
+                                        className="flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-purple-600"
+                                    >
+                                        {expandSmartAnalysis ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                                        展开独立配置
+                                    </button>
+
+                                    {expandSmartAnalysis && (
+                                        <div className="space-y-6">
+                                            {/* Math 解析 */}
+                                            <div className="bg-slate-50 rounded-lg p-4">
+                                                <h4 className="font-medium text-slate-800 mb-3">📐 Math 解析</h4>
+                                                <div className="grid grid-cols-3 gap-3">
+                                                    <input
+                                                        type="text"
+                                                        value={configForm.smart_math_base_url}
+                                                        onChange={(e) => setConfigForm({ ...configForm, smart_math_base_url: e.target.value })}
+                                                        placeholder="Base URL"
+                                                        className="px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        value={configForm.smart_math_model}
+                                                        onChange={(e) => setConfigForm({ ...configForm, smart_math_model: e.target.value })}
+                                                        placeholder="Model"
+                                                        className="px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                                                    />
+                                                    <input
+                                                        type="password"
+                                                        value={configForm.smart_math_api_key}
+                                                        onChange={(e) => setConfigForm({ ...configForm, smart_math_api_key: e.target.value })}
+                                                        placeholder="API Key"
+                                                        className="px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* 费曼教学 */}
+                                            <div className="bg-slate-50 rounded-lg p-4">
+                                                <h4 className="font-medium text-slate-800 mb-3">🎓 费曼教学</h4>
+                                                <div className="grid grid-cols-3 gap-3">
+                                                    <input
+                                                        type="text"
+                                                        value={configForm.smart_feynman_base_url}
+                                                        onChange={(e) => setConfigForm({ ...configForm, smart_feynman_base_url: e.target.value })}
+                                                        placeholder="Base URL"
+                                                        className="px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        value={configForm.smart_feynman_model}
+                                                        onChange={(e) => setConfigForm({ ...configForm, smart_feynman_model: e.target.value })}
+                                                        placeholder="Model"
+                                                        className="px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                                                    />
+                                                    <input
+                                                        type="password"
+                                                        value={configForm.smart_feynman_api_key}
+                                                        onChange={(e) => setConfigForm({ ...configForm, smart_feynman_api_key: e.target.value })}
+                                                        placeholder="API Key"
+                                                        className="px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* 深度研究 */}
+                                            <div className="bg-slate-50 rounded-lg p-4">
+                                                <h4 className="font-medium text-slate-800 mb-3">🔬 深度研究</h4>
+                                                <div className="grid grid-cols-3 gap-3">
+                                                    <input
+                                                        type="text"
+                                                        value={configForm.smart_deep_base_url}
+                                                        onChange={(e) => setConfigForm({ ...configForm, smart_deep_base_url: e.target.value })}
+                                                        placeholder="Base URL"
+                                                        className="px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        value={configForm.smart_deep_model}
+                                                        onChange={(e) => setConfigForm({ ...configForm, smart_deep_model: e.target.value })}
+                                                        placeholder="Model"
+                                                        className="px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                                                    />
+                                                    <input
+                                                        type="password"
+                                                        value={configForm.smart_deep_api_key}
+                                                        onChange={(e) => setConfigForm({ ...configForm, smart_deep_api_key: e.target.value })}
+                                                        placeholder="API Key"
+                                                        className="px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Chat with PDF */}
+                                            <div className="bg-slate-50 rounded-lg p-4">
+                                                <h4 className="font-medium text-slate-800 mb-3">💬 Chat with PDF</h4>
+                                                <div className="grid grid-cols-3 gap-3">
+                                                    <input
+                                                        type="text"
+                                                        value={configForm.smart_chat_base_url}
+                                                        onChange={(e) => setConfigForm({ ...configForm, smart_chat_base_url: e.target.value })}
+                                                        placeholder="Base URL"
+                                                        className="px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        value={configForm.smart_chat_model}
+                                                        onChange={(e) => setConfigForm({ ...configForm, smart_chat_model: e.target.value })}
+                                                        placeholder="Model"
+                                                        className="px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                                                    />
+                                                    <input
+                                                        type="password"
+                                                        value={configForm.smart_chat_api_key}
+                                                        onChange={(e) => setConfigForm({ ...configForm, smart_chat_api_key: e.target.value })}
+                                                        placeholder="API Key"
+                                                        className="px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </ConfigCard>
+
+                        {/* 保存按钮 */}
+                        <div className="flex items-center gap-4">
+                            <button
+                                onClick={handleSaveConfig}
+                                disabled={isSaving}
+                                className="flex items-center gap-2 px-6 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors"
+                            >
+                                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                保存配置
+                            </button>
+                            {saveMessage && (
+                                <span className={`text-sm ${saveMessage.includes('失败') ? 'text-red-600' : 'text-green-600'}`}>
+                                    {saveMessage}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                ) : (
+                    /* 用户管理 */
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-center">
+                            <h3 className="font-semibold text-slate-900">用户列表</h3>
+                            <button
+                                onClick={() => setShowCreateUser(true)}
+                                className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                            >
+                                <Plus className="w-4 h-4" />
+                                创建用户
+                            </button>
+                        </div>
+
+                        {showCreateUser && (
+                            <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+                                <h4 className="font-medium text-slate-900 mb-4">创建新用户</h4>
+                                <div className="grid grid-cols-2 gap-4 mb-4">
+                                    <input type="email" placeholder="邮箱" value={newUser.email}
+                                        onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                                        className="px-3 py-2 border border-slate-200 rounded-lg" />
+                                    <input type="password" placeholder="密码" value={newUser.password}
+                                        onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                                        className="px-3 py-2 border border-slate-200 rounded-lg" />
+                                    <input type="text" placeholder="用户名 (可选)" value={newUser.username}
+                                        onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
+                                        className="px-3 py-2 border border-slate-200 rounded-lg" />
+                                    <select value={newUser.role} onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+                                        className="px-3 py-2 border border-slate-200 rounded-lg">
+                                        <option value="user">普通用户</option>
+                                        <option value="admin">管理员</option>
+                                    </select>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={handleCreateUser} className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">创建</button>
+                                    <button onClick={() => setShowCreateUser(false)} className="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300">取消</button>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                            <table className="w-full">
+                                <thead className="bg-slate-50 border-b border-slate-200">
+                                    <tr>
+                                        <th className="text-left px-4 py-3 text-sm font-medium text-slate-600">用户</th>
+                                        <th className="text-left px-4 py-3 text-sm font-medium text-slate-600">角色</th>
+                                        <th className="text-left px-4 py-3 text-sm font-medium text-slate-600">状态</th>
+                                        <th className="text-left px-4 py-3 text-sm font-medium text-slate-600">创建时间</th>
+                                        <th className="text-right px-4 py-3 text-sm font-medium text-slate-600">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {users.map((u) => (
+                                        <tr key={u.id} className="border-b border-slate-100 last:border-0">
+                                            <td className="px-4 py-3">
+                                                <div className="font-medium text-slate-900">{u.username || u.email.split('@')[0]}</div>
+                                                <div className="text-sm text-slate-500">{u.email}</div>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'}`}>
+                                                    {u.role === 'admin' ? <Shield className="w-3 h-3" /> : <UserCog className="w-3 h-3" />}
+                                                    {u.role === 'admin' ? '管理员' : '用户'}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <button onClick={() => handleToggleUserActive(u.id, u.is_active)} disabled={u.id === user?.id}
+                                                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${u.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'} ${u.id === user?.id ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:opacity-80'}`}>
+                                                    {u.is_active ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                                                    {u.is_active ? '正常' : '已禁用'}
+                                                </button>
+                                            </td>
+                                            <td className="px-4 py-3 text-sm text-slate-500">
+                                                {u.created_at ? new Date(u.created_at).toLocaleDateString() : '-'}
+                                            </td>
+                                            <td className="px-4 py-3 text-right">
+                                                <div className="flex items-center justify-end gap-1">
+                                                    {u.id !== user?.id && (
+                                                        <>
+                                                            <button onClick={() => setResetPasswordUser(u)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="重置密码">
+                                                                <Lock className="w-4 h-4" />
+                                                            </button>
+                                                            <button onClick={() => setDeleteConfirmUser(u)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="删除用户">
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* 删除确认弹窗 */}
+            {deleteConfirmUser && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                    <div className="bg-white rounded-xl p-6 shadow-xl max-w-md w-full mx-4">
+                        <h3 className="text-lg font-semibold text-slate-900 mb-2">确认删除</h3>
+                        <p className="text-slate-600 mb-4">确定要删除用户 <strong>{deleteConfirmUser.email}</strong> 吗？</p>
+                        <div className="flex justify-end gap-3">
+                            <button onClick={() => setDeleteConfirmUser(null)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">取消</button>
+                            <button onClick={() => handleDeleteUser(deleteConfirmUser.id)} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">确认删除</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 密码重置弹窗 */}
+            {resetPasswordUser && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                    <div className="bg-white rounded-xl p-6 shadow-xl max-w-md w-full mx-4">
+                        <h3 className="text-lg font-semibold text-slate-900 mb-2">重置密码</h3>
+                        <p className="text-slate-600 mb-4">为用户 <strong>{resetPasswordUser.email}</strong> 设置新密码</p>
+                        <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
+                            placeholder="输入新密码" className="w-full px-3 py-2 border border-slate-200 rounded-lg mb-4" />
+                        <div className="flex justify-end gap-3">
+                            <button onClick={() => { setResetPasswordUser(null); setNewPassword(''); }} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">取消</button>
+                            <button onClick={handleResetPassword} disabled={!newPassword} className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50">确认重置</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}

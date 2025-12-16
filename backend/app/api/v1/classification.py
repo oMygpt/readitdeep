@@ -169,6 +169,30 @@ async def delete_paper_tag(paper_id: str, tag: str):
 tags_router = APIRouter()
 
 
+class UpdateCategoryRequest(BaseModel):
+    category: str
+
+
+class CategoryStatsResponse(BaseModel):
+    name: str
+    count: int
+
+
+@router.put("/{paper_id}/category")
+async def update_paper_category(paper_id: str, request: UpdateCategoryRequest):
+    """
+    更新论文分类
+    """
+    paper = store.get(paper_id)
+    if not paper:
+        raise HTTPException(status_code=404, detail="论文不存在")
+    
+    paper["category"] = request.category
+    store.set(paper_id, paper)
+    
+    return {"success": True, "category": request.category}
+
+
 @tags_router.get("/tags", response_model=List[TagStatsResponse])
 async def get_library_tags():
     """
@@ -176,3 +200,21 @@ async def get_library_tags():
     """
     tags = get_all_tags()
     return [TagStatsResponse(**t) for t in tags]
+
+
+@tags_router.get("/categories", response_model=List[CategoryStatsResponse])
+async def get_library_categories():
+    """
+    获取所有分类及其使用统计
+    """
+    all_papers = store.get_all()
+    category_counts = {}
+    
+    for paper in all_papers:
+        cat = paper.get("category") or "Uncategorized"
+        category_counts[cat] = category_counts.get(cat, 0) + 1
+    
+    return [
+        CategoryStatsResponse(name=name, count=count)
+        for name, count in sorted(category_counts.items(), key=lambda x: -x[1])
+    ]

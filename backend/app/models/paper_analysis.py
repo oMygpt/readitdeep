@@ -2,15 +2,15 @@
 Read it DEEP - PaperAnalysis 数据模型
 
 存储 LangGraph 多智能体分析结果
+支持 SQLite 和 PostgreSQL
 """
 
 from datetime import datetime
 from typing import Optional
 import uuid
 
-from sqlalchemy import String, Text, DateTime, ForeignKey, func
-from sqlalchemy.dialects.postgresql import UUID, JSONB
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import String, Text, DateTime, ForeignKey, func, JSON
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
 
@@ -19,13 +19,13 @@ class PaperAnalysis(Base):
     """论文分析结果模型"""
     __tablename__ = "paper_analysis"
     
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+    id: Mapped[str] = mapped_column(
+        String(36),
         primary_key=True,
-        default=uuid.uuid4,
+        default=lambda: str(uuid.uuid4()),
     )
-    paper_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+    paper_id: Mapped[str] = mapped_column(
+        String(36),
         ForeignKey("papers.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
@@ -33,10 +33,10 @@ class PaperAnalysis(Base):
     
     # 分析结果
     summary: Mapped[Optional[str]] = mapped_column(Text)
-    methods: Mapped[Optional[dict]] = mapped_column(JSONB, default=list)
-    datasets: Mapped[Optional[dict]] = mapped_column(JSONB, default=list)
-    code_refs: Mapped[Optional[dict]] = mapped_column(JSONB, default=list)
-    structure: Mapped[Optional[dict]] = mapped_column(JSONB)
+    methods: Mapped[Optional[dict]] = mapped_column(JSON, default=list)
+    datasets: Mapped[Optional[dict]] = mapped_column(JSON, default=list)
+    code_refs: Mapped[Optional[dict]] = mapped_column(JSON, default=list)
+    structure: Mapped[Optional[dict]] = mapped_column(JSON)
     
     # 状态
     status: Mapped[str] = mapped_column(
