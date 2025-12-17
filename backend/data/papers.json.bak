@@ -41672,6 +41672,1610 @@
       }
     ],
     "tags_confirmed": true,
-    "category": "CS教育"
+    "category": "CS教育",
+    "s2_graph": {
+      "citations": [
+        {
+          "external_id": "CorpusId:283635611",
+          "title": "DeepSeek-R1-assisted design and maintenance of concrete-filled steel tubular structures through automated modeling code generation",
+          "authors": [
+            "Xiao-Guang Zhou",
+            "Chao Hou"
+          ],
+          "year": 2026,
+          "venue": "Engineering applications of artificial intelligence",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283897212",
+          "title": "SIGMA: An AI-Empowered Training Stack on Early-Life Hardware",
+          "authors": [
+            "L. Qu",
+            "Lianhai Ren",
+            "Peng Cheng",
+            "Rui Gao",
+            "Ruizhe Wang",
+            "Tianyu Chen",
+            "Xiao Liu",
+            "Xingjian Zhang",
+            "Yeyun Gong",
+            "Yifan Xiong",
+            "Yucheng Ding",
+            "Yuting Jiang",
+            "Zheng-Wen Lin",
+            "Zhongxin Guo",
+            "Ziyue Yang"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:280860499",
+          "title": "Fast and Controllable Bias-Guided Jailbreak Attack on Large Language Models",
+          "authors": [
+            "Zizi Kang",
+            "H. Xia",
+            "Rui Zhang",
+            "Xiaoxue Song",
+            "Le Li",
+            "Chunqiang Hu"
+          ],
+          "year": 2025,
+          "venue": "IEEE Internet of Things Journal",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283896079",
+          "title": "ReFusion: A Diffusion Large Language Model with Parallel Autoregressive Decoding",
+          "authors": [
+            "Jia-Nan Li",
+            "Jian Guan",
+            "Wei Wu",
+            "Chongxuan Li"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283895778",
+          "title": "Socratic Students: Teaching Language Models to Learn by Asking Questions",
+          "authors": [
+            "Rajeev Bhatt Ambati",
+            "Tianyi Niu",
+            "Aashu Singh",
+            "Shlok Mishra",
+            "Shashank Srivastava",
+            "Snigdha Chaturvedi"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283897144",
+          "title": "AutoTool: Dynamic Tool Selection and Integration for Agentic Reasoning",
+          "authors": [
+            "Jiaru Zou",
+            "Ling Yang",
+            "Yunzhe Qi",
+            "Sirui Chen",
+            "Mengting Ai",
+            "Ke Shen",
+            "Jingrui He",
+            "Mengdi Wang"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283895994",
+          "title": "Scaling Laws for Code: Every Programming Language Matters",
+          "authors": [
+            "Jian Yang",
+            "Shawn Guo",
+            "Lin Jing",
+            "Wei Zhang",
+            "Aishan Liu",
+            "Chuan Hao",
+            "Zhoujun Li",
+            "Wayne Xin Zhao",
+            "Xianglong Liu",
+            "Weifeng Lv",
+            "Bryan Dai"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283896626",
+          "title": "neuralFOMO: Can LLMs Handle Being Second Best? Measuring Envy-Like Preferences in Multi-Agent Settings",
+          "authors": [
+            "Ojas Pungalia",
+            "Rashi Upadhyay",
+            "Abhishek Mishra",
+            "H. Abhiram",
+            "Tejasvi Alladi",
+            "Sujan Yenuganti",
+            "Dhruv Kumar"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283896665",
+          "title": "NL2Repo-Bench: Towards Long-Horizon Repository Generation Evaluation of Coding Agents",
+          "authors": [
+            "Jingzhe Ding",
+            "Shengda Long",
+            "Changxin Pu",
+            "Huan Zhou",
+            "Hongwan Gao",
+            "Xiang Gao",
+            "Chao He",
+            "Yue Hou",
+            "Fei Hu",
+            "Zhaojian Li",
+            "Weiran Shi",
+            "Zaiyuan Wang",
+            "Daoguang Zan",
+            "Chenchen Zhang",
+            "Xiaoxu Zhang",
+            "Qizhi Chen",
+            "Xianfu Cheng",
+            "Bo Deng",
+            "Qingshui Gu",
+            "Kaihui Hua",
+            "Juntao Lin",
+            "Pai Liu",
+            "Mingchen Li",
+            "Xuanguang Pan",
+            "Zifan Peng",
+            "Yujia Qin",
+            "Yong Shan",
+            "Zhewen Tan",
+            "Weihao Xie",
+            "Zihan Wang",
+            "Yishuo Yuan",
+            "Jiayu Zhang",
+            "Enduo Zhao",
+            "Yunfei Zhao",
+            "He Zhu",
+            "Chenyang Zou",
+            "Ming Ding",
+            "Jianpeng Jiao",
+            "Jiaheng Liu",
+            "Minghao Liu",
+            "Qiangcai Liu",
+            "Chongyao Tao",
+            "Jian Yang",
+            "Tong Yang",
+            "Zhaoxiang Zhang",
+            "Xinjie Chen",
+            "Wenhao Huang",
+            "Ge Zhang"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283897135",
+          "title": "Citation-Grounded Code Comprehension: Preventing LLM Hallucination Through Hybrid Retrieval and Graph-Augmented Context",
+          "authors": [
+            "Jahidul Arafat"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283896851",
+          "title": "Market-Bench: Evaluating Large Language Models on Introductory Quantitative Trading and Market Dynamics",
+          "authors": [
+            "Abhay Srivastava",
+            "Sam Jung",
+            "Spencer Mateega"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283897177",
+          "title": "Training Versatile Coding Agents in Synthetic Environments",
+          "authors": [
+            "Yiqi Zhu",
+            "Apurva Gandhi",
+            "Graham Neubig"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283738094",
+          "title": "Language models for the analysis of and interaction with climate change documents",
+          "authors": [
+            "Elena Volkanovska"
+          ],
+          "year": 2025,
+          "venue": "Environmental Data Science",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283883329",
+          "title": "AutoFSM: A Multi-agent Framework for FSM Code Generation with IR and SystemC-Based Testing",
+          "authors": [
+            "Qiuming Luo",
+            "Yanming Lei",
+            "Kunzhong Wu",
+            "Yixuan Cao",
+            "Chengjian Liu"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283883635",
+          "title": "AdaSD: Adaptive Speculative Decoding for Efficient Language Model Inference",
+          "authors": [
+            "Kuan-Wei Lu",
+            "Ding-Yong Hong",
+            "Pangfeng Liu"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283883443",
+          "title": "Towards Privacy-Preserving Code Generation: Differentially Private Code Language Models",
+          "authors": [
+            "Melih Catal",
+            "Pooja Rani",
+            "Harald C. Gall"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283883336",
+          "title": "A-LAMP: Agentic LLM-Based Framework for Automated MDP Modeling and Policy Generation",
+          "authors": [
+            "Hong Je-Gal",
+            "Chan-Bin Yi",
+            "Hyun-Suk Lee"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283883832",
+          "title": "Theoretical Foundations of GPU-Native Compilation for Rapid Code Iteration",
+          "authors": [
+            "Adilet Metinov",
+            "Gulida M. Kudakeeva",
+            "G. Kabaeva"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283883503",
+          "title": "Progress over Points: Reframing LM Benchmarks Around Scientific Objectives",
+          "authors": [
+            "Alwin Jin",
+            "Sean M. Hendryx",
+            "Vaskar Nath"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283883414",
+          "title": "REMODEL-LLM: Transforming C code to Java using LLMs",
+          "authors": [
+            "Aryan Gupta",
+            "Y. R. Reddy"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283737023",
+          "title": "PACIFIC: a framework for generating benchmarks to check Precise Automatically Checked Instruction Following In Code",
+          "authors": [
+            "Itay Dreyfuss",
+            "Antonio Abu Nassar",
+            "Samuel Ackerman",
+            "Axel Ben David",
+            "Rami Katan",
+            "Orna Raz",
+            "Marcel Zalmanovici"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283737082",
+          "title": "ESS: An Offload-Centric Latent-Cache Management Architecture for DeepSeek-V3.2-Exp",
+          "authors": [
+            "Xinhang Chen",
+            "Chao Zhang",
+            "Jiahuan He",
+            "Wei Liu",
+            "Jianming Zhang",
+            "Wenlong Zhou",
+            "Xiao Li",
+            "Pai Zeng",
+            "Shiyong Li",
+            "Yuanpan Qian",
+            "Dong Li",
+            "Zhaogeng Li"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283737329",
+          "title": "Design Space Exploration of DMA based Finer-Grain Compute Communication Overlap",
+          "authors": [
+            "Shagnik Pal",
+            "Shaizeen Aga",
+            "Suchita Pati",
+            "Mahzabeen Islam",
+            "L. John"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283737095",
+          "title": "Long-horizon Reasoning Agent for Olympiad-Level Mathematical Problem Solving",
+          "authors": [
+            "Songyang Gao",
+            "Yuzhe Gu",
+            "Zijian Wu",
+            "Lingkai Kong",
+            "Wenwei Zhang",
+            "Zhongrui Cai",
+            "Fan Zheng",
+            "Tianyou Ma",
+            "Junhao Shen",
+            "Haiteng Zhao",
+            "Duanyang Zhang",
+            "Huilun Zhang",
+            "Kuikun Liu",
+            "Chengqi Lyu",
+            "Yanhui Duan",
+            "Chiyu Chen",
+            "Ningsheng Ma",
+            "Jianfei Gao",
+            "Han Lyu",
+            "Dahua Lin",
+            "Kai Chen"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283737655",
+          "title": "ATLAS: Automated Toolkit for Large-Scale Verified Code Synthesis",
+          "authors": [
+            "Mantas Baksys",
+            "Stefan Zetzsche",
+            "Olivier Bouissou",
+            "Remi Delmas",
+            "Soonho Kong"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283737679",
+          "title": "Scaling Behavior of Discrete Diffusion Language Models",
+          "authors": [
+            "Dimitri von Rutte",
+            "J. Fluri",
+            "Omead Brandon Pooladzandi",
+            "Bernhard Scholkopf",
+            "Thomas Hofmann",
+            "Antonio Orvieto"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283737640",
+          "title": "Confucius Code Agent: An Open-sourced AI Software Engineer at Industrial Scale",
+          "authors": [
+            "Zhaodong Wang",
+            "Zhenting Qi",
+            "Sherman Wong",
+            "Nathan Hu",
+            "Samuel Lin",
+            "Jun Ge",
+            "Erwin Gao",
+            "Yining Yang",
+            "Ben Maurer",
+            "Wenlin Chen",
+            "David Recordon",
+            "Yilun Du",
+            "Minlan Yu",
+            "Ying Zhang"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283737582",
+          "title": "Zero-shot 3D Map Generation with LLM Agents: A Dual-Agent Architecture for Procedural Content Generation",
+          "authors": [
+            "Lim Chien Her",
+            "Ming Yan",
+            "Yunshu Bai",
+            "Ruihao Li",
+            "Hao Zhang"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283851547",
+          "title": "The extended hollowed mind: why foundational knowledge is indispensable in the age of AI",
+          "authors": [
+            "Christian R. Klein",
+            "Reinhard Klein"
+          ],
+          "year": 2025,
+          "venue": "Frontiers in Artificial Intelligence",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283806020",
+          "title": "Retail QA Automation Framework for LLM-Generated UX: Testing Conversational Commerce Interfaces for Compliance, Clarity, and Consistency",
+          "authors": [
+            "Mohnish Neelapu"
+          ],
+          "year": 2025,
+          "venue": "International Journal of Innovative Research in Engineering &amp; Multidisciplinary Physical Sciences",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283721921",
+          "title": "Understanding Chain-of-Thought Effectiveness in Code Generation: An Empirical and Information-Theoretic Analysis",
+          "authors": [
+            "Naizhu Jin",
+            "Zhong Li",
+            "Guang Yang",
+            "Tian Zhang",
+            "Qingkai Zeng"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283721915",
+          "title": "Efficient MoE Serving in the Memory-Bound Regime: Balance Activated Experts, Not Tokens",
+          "authors": [
+            "Yanpeng Yu",
+            "Haiyue Ma",
+            "Krish Agarwal",
+            "Nicolai Oswald",
+            "Qijing Huang",
+            "Hugo Linsenmaier",
+            "Chunhui Mei",
+            "Ritchie Zhao",
+            "Ritika Borkar",
+            "B. Rouhani",
+            "David Nellans",
+            "Ronny Krashinsky",
+            "Anurag Khandelwal"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283722209",
+          "title": "Training-free Context-adaptive Attention for Efficient Long Context Modeling",
+          "authors": [
+            "Zeng You",
+            "Yaofo Chen",
+            "Shuhai Zhang",
+            "Zhijie Qiu",
+            "Tingyu Wu",
+            "Yingjian Li",
+            "Yaowei Wang",
+            "Mingkui Tan"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283721922",
+          "title": "Chasing Shadows: Pitfalls in LLM Security Research",
+          "authors": [
+            "Jonathan Evertz",
+            "Niklas Risse",
+            "Nicolai Neuer",
+            "Andreas Muller",
+            "Philipp Normann",
+            "Gaetano Sapia",
+            "Srishti Gupta",
+            "David Pape",
+            "Soumya Shaw",
+            "Devansh Srivastav",
+            "Christian Wressnegger",
+            "Erwin Quiring",
+            "Thorsten Eisenhofer",
+            "Daniel Arp",
+            "Lea Schonherr"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283712193",
+          "title": "Towards a Science of Scaling Agent Systems",
+          "authors": [
+            "Y. Kim",
+            "Ken Gu",
+            "Chanwoo Park",
+            "Chunjong Park",
+            "Samuel Schmidgall",
+            "A. Heydari",
+            "Yao Yan",
+            "Zhihan Zhang",
+            "Yuchen Zhuang",
+            "Mark Malhotra",
+            "Paul Pu Liang",
+            "Hae Won Park",
+            "Yuzhe Yang",
+            "Xuhai Xu",
+            "Yi-qing Du",
+            "Shwetak Patel",
+            "Tim Althoff",
+            "D. McDuff",
+            "Xin Liu"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283711379",
+          "title": "Revisiting the Scaling Properties of Downstream Metrics in Large Language Model Training",
+          "authors": [
+            "Jakub Krajewski",
+            "Amitis Shidani",
+            "Dan Busbridge",
+            "Sam Wiseman",
+            "Jason Ramapuram"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283711310",
+          "title": "Multicalibration for LLM-based Code Generation",
+          "authors": [
+            "Viola Campos",
+            "Robin Kuschnereit",
+            "A. Ulges"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283711612",
+          "title": "Token Sugar: Making Source Code Sweeter for LLMs through Token-Efficient Shorthand",
+          "authors": [
+            "Zhensu Sun",
+            "Chengran Yang",
+            "Xiaoning Du",
+            "Zhou Yang",
+            "Li Li",
+            "David Lo"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 1
+        },
+        {
+          "external_id": "CorpusId:283712228",
+          "title": "Secure or Suspect? Investigating Package Hallucinations of Shell Command in Original and Quantized LLMs",
+          "authors": [
+            "Md Nazmul Haque",
+            "Elizabeth Lin",
+            "Lawrence Arkoh",
+            "Biruk Tadesse",
+            "Bowen Xu"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283711727",
+          "title": "Autonomous Issue Resolver: Towards Zero-Touch Code Maintenance",
+          "authors": [
+            "Aliaksei Kaliutau"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283712208",
+          "title": "From Accuracy to Impact: The Impact-Driven AI Framework (IDAIF) for Aligning Engineering Architecture with Theory of Change",
+          "authors": [
+            "Yong-Woon Kim"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283711605",
+          "title": "Towards Foundation Models with Native Multi-Agent Intelligence",
+          "authors": [
+            "Shuyue Hu",
+            "Haoyang Yan",
+            "Yiqun Zhang",
+            "Yang Chen",
+            "Dongzhan Zhou",
+            "Lei Bai"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283711639",
+          "title": "SimpleDevQA: Benchmarking Large Language Models on Development Knowledge QA",
+          "authors": [
+            "Jing Zhang",
+            "Lianghong Guo",
+            "Yanlin Wang",
+            "Mingwei Liu",
+            "Jiachi Chen",
+            "Yuchi Ma",
+            "Ensheng Shi",
+            "T. Zhuo",
+            "Hongyu Zhang",
+            "Zibin Zheng"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283692990",
+          "title": "Persian-Phi: Efficient Cross-Lingual Adaptation of Compact LLMs via Curriculum Learning",
+          "authors": [
+            "Amir Mohammad Akhlaghi",
+            "Amirhossein Shabani",
+            "Mostafa Abdolmaleki",
+            "S. R. Kheradpisheh"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283694336",
+          "title": "ReasonBENCH: Benchmarking the (In)Stability of LLM Reasoning",
+          "authors": [
+            "Nearchos Potamitis",
+            "L. Klein",
+            "Akhil Arora"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283693749",
+          "title": "Do LLMs Trust the Code They Write?",
+          "authors": [
+            "Francisco Ribeiro",
+            "Claudio Spiess",
+            "P. Devanbu",
+            "Sarah Nadi"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283693513",
+          "title": "VulnLLM-R: Specialized Reasoning LLM with Agent Scaffold for Vulnerability Detection",
+          "authors": [
+            "Yuzhou Nie",
+            "Hongwei Li",
+            "Chengquan Guo",
+            "Ruizhe Jiang",
+            "Zhun Wang",
+            "Bo Li",
+            "D. Song",
+            "Wenbo Guo"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283694461",
+          "title": "PCMind-2.1-Kaiyuan-2B Technical Report",
+          "authors": [
+            "Kairong Luo",
+            "Zhenbo Sun",
+            "Xinyu Shi",
+            "Shengqi Chen",
+            "Bowen Yu",
+            "Yunyi Chen",
+            "Chenyi Dang",
+            "Hengtao Tao",
+            "Hui Wang",
+            "Fangming Liu",
+            "Kaifeng Lyu",
+            "Wenguang Chen"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283693420",
+          "title": "AutoICE: Automatically Synthesizing Verifiable C Code via LLM-driven Evolution",
+          "authors": [
+            "Weilin Luo",
+            "Xueyi Liang",
+            "Haotian Deng",
+            "Yanan Liu",
+            "Hai Wan"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        },
+        {
+          "external_id": "CorpusId:283693399",
+          "title": "Bridging Code Graphs and Large Language Models for Better Code Understanding",
+          "authors": [
+            "Zeqi Chen",
+            "Zhaoyang Chu",
+            "Yi Gui",
+            "Feng Guo",
+            "Yao Wan",
+            "Chuan Shi"
+          ],
+          "year": 2025,
+          "venue": "",
+          "citation_count": 0
+        }
+      ],
+      "citations_fetched_at": "2025-12-17T15:45:57.342966",
+      "references": [
+        {
+          "external_id": "CorpusId:247309683",
+          "title": "Atlas of AI: power, politics, and the planetary costs of artificial intelligence.",
+          "authors": [
+            "Muhammed Can"
+          ],
+          "year": 2022,
+          "venue": "International Affairs",
+          "citation_count": 649
+        },
+        {
+          "external_id": "CorpusId:235436185",
+          "title": "BEiT: BERT Pre-Training of Image Transformers",
+          "authors": [
+            "Hangbo Bao",
+            "Li Dong",
+            "Furu Wei"
+          ],
+          "year": 2021,
+          "venue": "International Conference on Learning Representations",
+          "citation_count": 3326
+        },
+        {
+          "external_id": "CorpusId:235352775",
+          "title": "MERLOT: Multimodal Neural Script Knowledge Models",
+          "authors": [
+            "Rowan Zellers",
+            "Ximing Lu",
+            "Jack Hessel",
+            "Youngjae Yu",
+            "J. S. Park",
+            "Jize Cao",
+            "Ali Farhadi",
+            "Yejin Choi"
+          ],
+          "year": 2021,
+          "venue": "Neural Information Processing Systems",
+          "citation_count": 423
+        },
+        {
+          "external_id": "CorpusId:234790100",
+          "title": "Measuring Coding Challenge Competence With APPS",
+          "authors": [
+            "Dan Hendrycks",
+            "Steven Basart",
+            "Saurav Kadavath",
+            "Mantas Mazeika",
+            "Akul Arora",
+            "Ethan Guo",
+            "Collin Burns",
+            "Samir Puranik",
+            "Horace He",
+            "D. Song",
+            "J. Steinhardt"
+          ],
+          "year": 2021,
+          "venue": "NeurIPS Datasets and Benchmarks",
+          "citation_count": 872
+        },
+        {
+          "external_id": "CorpusId:234778104",
+          "title": "Women’s Participation in Open Source Software: A Survey of the Literature",
+          "authors": [
+            "Bianca Trinkenreich",
+            "I. Wiese",
+            "A. Sarma",
+            "M. Gerosa",
+            "Igor Steinmacher"
+          ],
+          "year": 2021,
+          "venue": "ACM Transactions on Software Engineering and Methodology",
+          "citation_count": 82
+        },
+        {
+          "external_id": "CorpusId:233324338",
+          "title": "Carbon Emissions and Large Neural Network Training",
+          "authors": [
+            "David A. Patterson",
+            "Joseph Gonzalez",
+            "Quoc V. Le",
+            "Chen Liang",
+            "Lluís-Miquel Munguía",
+            "D. Rothchild",
+            "David R. So",
+            "Maud Texier",
+            "J. Dean"
+          ],
+          "year": 2021,
+          "venue": "arXiv.org",
+          "citation_count": 866
+        },
+        {
+          "external_id": "CorpusId:233289653",
+          "title": "Generating bug-fixes using pretrained transformers",
+          "authors": [
+            "Dawn Drain",
+            "Chen Wu",
+            "Alexey Svyatkovskiy",
+            "Neel Sundaresan"
+          ],
+          "year": 2021,
+          "venue": "MAPS@PLDI",
+          "citation_count": 55
+        },
+        {
+          "external_id": "CorpusId:232404883",
+          "title": "Alignment of Language Agents",
+          "authors": [
+            "Zachary Kenton",
+            "Tom Everitt",
+            "Laura Weidinger",
+            "Iason Gabriel",
+            "Vladimir Mikulik",
+            "G. Irving"
+          ],
+          "year": 2021,
+          "venue": "arXiv.org",
+          "citation_count": 200
+        },
+        {
+          "external_id": "CorpusId:245758737",
+          "title": "GPT-Neo: Large Scale Autoregressive Language Modeling with Mesh-Tensorflow",
+          "authors": [
+            "Sid Black",
+            "Leo Gao",
+            "Phil Wang",
+            "Connor Leahy",
+            "Stella Biderman"
+          ],
+          "year": 2021,
+          "venue": "",
+          "citation_count": 879
+        },
+        {
+          "external_id": "CorpusId:262580630",
+          "title": "On the Dangers of Stochastic Parrots: Can Language Models Be Too Big? 🦜",
+          "authors": [
+            "Emily M. Bender",
+            "Timnit Gebru",
+            "Angelina McMillan-Major",
+            "Shmargaret Shmitchell"
+          ],
+          "year": 2021,
+          "venue": "Conference on Fairness, Accountability and Transparency",
+          "citation_count": 5857
+        },
+        {
+          "external_id": "CorpusId:231591445",
+          "title": "Learning Transferable Visual Models From Natural Language Supervision",
+          "authors": [
+            "Alec Radford",
+            "Jong Wook Kim",
+            "Chris Hallacy",
+            "A. Ramesh",
+            "Gabriel Goh",
+            "Sandhini Agarwal",
+            "Girish Sastry",
+            "Amanda Askell",
+            "Pamela Mishkin",
+            "Jack Clark",
+            "Gretchen Krueger",
+            "I. Sutskever"
+          ],
+          "year": 2021,
+          "venue": "International Conference on Machine Learning",
+          "citation_count": 39878
+        },
+        {
+          "external_id": "CorpusId:232035663",
+          "title": "Zero-Shot Text-to-Image Generation",
+          "authors": [
+            "A. Ramesh",
+            "Mikhail Pavlov",
+            "Gabriel Goh",
+            "Scott Gray",
+            "Chelsea Voss",
+            "Alec Radford",
+            "Mark Chen",
+            "I. Sutskever"
+          ],
+          "year": 2021,
+          "venue": "International Conference on Machine Learning",
+          "citation_count": 5870
+        },
+        {
+          "external_id": "CorpusId:231979430",
+          "title": "Calibrate Before Use: Improving Few-Shot Performance of Language Models",
+          "authors": [
+            "Tony Zhao",
+            "Eric Wallace",
+            "Shi Feng",
+            "D. Klein",
+            "Sameer Singh"
+          ],
+          "year": 2021,
+          "venue": "International Conference on Machine Learning",
+          "citation_count": 1646
+        },
+        {
+          "external_id": "CorpusId:231855531",
+          "title": "CodeXGLUE: A Machine Learning Benchmark Dataset for Code Understanding and Generation",
+          "authors": [
+            "Shuai Lu",
+            "Daya Guo",
+            "Shuo Ren",
+            "Junjie Huang",
+            "Alexey Svyatkovskiy",
+            "Ambrosio Blanco",
+            "Colin B. Clement",
+            "Dawn Drain",
+            "Daxin Jiang",
+            "Duyu Tang",
+            "Ge Li",
+            "Lidong Zhou",
+            "Linjun Shou",
+            "Long Zhou",
+            "Michele Tufano",
+            "Ming Gong",
+            "Ming Zhou",
+            "Nan Duan",
+            "Neel Sundaresan",
+            "Shao Kun Deng",
+            "Shengyu Fu",
+            "Shujie Liu"
+          ],
+          "year": 2021,
+          "venue": "NeurIPS Datasets and Benchmarks",
+          "citation_count": 1335
+        },
+        {
+          "external_id": "CorpusId:231718679",
+          "title": "In-IDE Code Generation from Natural Language: Promise and Challenges",
+          "authors": [
+            "Frank F. Xu",
+            "Bogdan Vasilescu",
+            "Graham Neubig"
+          ],
+          "year": 2021,
+          "venue": "ACM Transactions on Software Engineering and Methodology",
+          "citation_count": 164
+        },
+        {
+          "external_id": "CorpusId:231603388",
+          "title": "Persistent Anti-Muslim Bias in Large Language Models",
+          "authors": [
+            "Abubakar Abid",
+            "Maheen Farooqi",
+            "James Y. Zou"
+          ],
+          "year": 2021,
+          "venue": "AAAI/ACM Conference on AI, Ethics, and Society",
+          "citation_count": 635
+        },
+        {
+          "external_id": "CorpusId:230435736",
+          "title": "The Pile: An 800GB Dataset of Diverse Text for Language Modeling",
+          "authors": [
+            "Leo Gao",
+            "Stella Biderman",
+            "Sid Black",
+            "Laurence Golding",
+            "Travis Hoppe",
+            "Charles Foster",
+            "Jason Phang",
+            "Horace He",
+            "Anish Thite",
+            "Noa Nabeshima",
+            "Shawn Presser",
+            "Connor Leahy"
+          ],
+          "year": 2020,
+          "venue": "arXiv.org",
+          "citation_count": 2499
+        },
+        {
+          "external_id": "CorpusId:229934464",
+          "title": "Dataset Security for Machine Learning: Data Poisoning, Backdoor Attacks, and Defenses",
+          "authors": [
+            "Micah Goldblum",
+            "Dimitris Tsipras",
+            "Chulin Xie",
+            "Xinyun Chen",
+            "Avi Schwarzschild",
+            "D. Song",
+            "A. Ma̧dry",
+            "Bo Li",
+            "T. Goldstein"
+          ],
+          "year": 2020,
+          "venue": "IEEE Transactions on Pattern Analysis and Machine Intelligence",
+          "citation_count": 340
+        },
+        {
+          "external_id": "CorpusId:229156229",
+          "title": "Extracting Training Data from Large Language Models",
+          "authors": [
+            "Nicholas Carlini",
+            "Florian Tramèr",
+            "Eric Wallace",
+            "Matthew Jagielski",
+            "Ariel Herbert-Voss",
+            "Katherine Lee",
+            "Adam Roberts",
+            "Tom B. Brown",
+            "D. Song",
+            "Ú. Erlingsson",
+            "Alina Oprea",
+            "Colin Raffel"
+          ],
+          "year": 2020,
+          "venue": "USENIX Security Symposium",
+          "citation_count": 2410
+        },
+        {
+          "external_id": "CorpusId:226282019",
+          "title": "Learning Autocompletion from Real-World Datasets",
+          "authors": [
+            "Gareth Ari Aye",
+            "Seohyun Kim",
+            "Hongyu Li"
+          ],
+          "year": 2020,
+          "venue": "2021 IEEE/ACM 43rd International Conference on Software Engineering: Software Engineering in Practice (ICSE-SEIP)",
+          "citation_count": 36
+        },
+        {
+          "external_id": "CorpusId:222178041",
+          "title": "PyMT5: Multi-mode Translation of Natural Language and Python Code with Transformers",
+          "authors": [
+            "Colin B. Clement",
+            "Dawn Drain",
+            "Jonathan Timcheck",
+            "Alexey Svyatkovskiy",
+            "Neel Sundaresan"
+          ],
+          "year": 2020,
+          "venue": "Conference on Empirical Methods in Natural Language Processing",
+          "citation_count": 161
+        },
+        {
+          "external_id": "CorpusId:221836101",
+          "title": "CodeBLEU: a Method for Automatic Evaluation of Code Synthesis",
+          "authors": [
+            "Shuo Ren",
+            "Daya Guo",
+            "Shuai Lu",
+            "Long Zhou",
+            "Shujie Liu",
+            "Duyu Tang",
+            "M. Zhou",
+            "Ambrosio Blanco",
+            "Shuai Ma"
+          ],
+          "year": 2020,
+          "venue": "arXiv.org",
+          "citation_count": 705
+        },
+        {
+          "external_id": "CorpusId:235165921",
+          "title": "Unit Test Case Generation with Transformers",
+          "authors": [
+            "Michele Tufano",
+            "Dawn Drain",
+            "Alexey Svyatkovskiy",
+            "Shao Kun Deng",
+            "Neel Sundaresan"
+          ],
+          "year": 2020,
+          "venue": "arXiv.org",
+          "citation_count": 234
+        },
+        {
+          "external_id": "CorpusId:221665105",
+          "title": "Learning to summarize from human feedback",
+          "authors": [
+            "Nisan Stiennon",
+            "Long Ouyang",
+            "Jeff Wu",
+            "Daniel M. Ziegler",
+            "Ryan J. Lowe",
+            "Chelsea Voss",
+            "Alec Radford",
+            "Dario Amodei",
+            "Paul Christiano"
+          ],
+          "year": 2020,
+          "venue": "Neural Information Processing Systems",
+          "citation_count": 2669
+        },
+        {
+          "external_id": "CorpusId:219781060",
+          "title": "Generative Pretraining From Pixels",
+          "authors": [
+            "Mark Chen",
+            "Alec Radford",
+            "Jeff Wu",
+            "Heewoo Jun",
+            "Prafulla Dhariwal",
+            "D. Luan",
+            "I. Sutskever"
+          ],
+          "year": 2020,
+          "venue": "International Conference on Machine Learning",
+          "citation_count": 1689
+        },
+        {
+          "external_id": "CorpusId:220425360",
+          "title": "Contrastive Code Representation Learning",
+          "authors": [
+            "Paras Jain",
+            "Ajay Jain",
+            "Tianjun Zhang",
+            "P. Abbeel",
+            "Joseph E. Gonzalez",
+            "Ion Stoica"
+          ],
+          "year": 2020,
+          "venue": "Conference on Empirical Methods in Natural Language Processing",
+          "citation_count": 167
+        },
+        {
+          "external_id": "CorpusId:220363858",
+          "title": "You Autocomplete Me: Poisoning Vulnerabilities in Neural Code Completion",
+          "authors": [
+            "R. Schuster",
+            "Congzheng Song",
+            "Eran Tromer",
+            "Vitaly Shmatikov"
+          ],
+          "year": 2020,
+          "venue": "USENIX Security Symposium",
+          "citation_count": 180
+        },
+        {
+          "external_id": "CorpusId:219966759",
+          "title": "wav2vec 2.0: A Framework for Self-Supervised Learning of Speech Representations",
+          "authors": [
+            "Alexei Baevski",
+            "Henry Zhou",
+            "Abdel-rahman Mohamed",
+            "Michael Auli"
+          ],
+          "year": 2020,
+          "venue": "Neural Information Processing Systems",
+          "citation_count": 7213
+        },
+        {
+          "external_id": "CorpusId:219531210",
+          "title": "DeBERTa: Decoding-enhanced BERT with Disentangled Attention",
+          "authors": [
+            "Pengcheng He",
+            "Xiaodong Liu",
+            "Jianfeng Gao",
+            "Weizhu Chen"
+          ],
+          "year": 2020,
+          "venue": "International Conference on Learning Representations",
+          "citation_count": 3308
+        },
+        {
+          "external_id": "CorpusId:219401607",
+          "title": "Unsupervised Translation of Programming Languages",
+          "authors": [
+            "M. Lachaux",
+            "Baptiste Rozière",
+            "Lowik Chanussot",
+            "Guillaume Lample"
+          ],
+          "year": 2020,
+          "venue": "Neural Information Processing Systems",
+          "citation_count": 492
+        },
+        {
+          "external_id": "CorpusId:218971783",
+          "title": "Language Models are Few-Shot Learners",
+          "authors": [
+            "Tom B. Brown",
+            "Benjamin Mann",
+            "Nick Ryder",
+            "Melanie Subbiah",
+            "J. Kaplan",
+            "Prafulla Dhariwal",
+            "Arvind Neelakantan",
+            "Pranav Shyam",
+            "Girish Sastry",
+            "Amanda Askell",
+            "Sandhini Agarwal",
+            "Ariel Herbert-Voss",
+            "Gretchen Krueger",
+            "T. Henighan",
+            "R. Child",
+            "A. Ramesh",
+            "Daniel M. Ziegler",
+            "Jeff Wu",
+            "Clemens Winter",
+            "Christopher Hesse",
+            "Mark Chen",
+            "Eric Sigler",
+            "Ma-teusz Litwin",
+            "Scott Gray",
+            "Benjamin Chess",
+            "Jack Clark",
+            "Christopher Berner",
+            "Sam McCandlish",
+            "Alec Radford",
+            "I. Sutskever",
+            "Dario Amodei"
+          ],
+          "year": 2020,
+          "venue": "Neural Information Processing Systems",
+          "citation_count": 51131
+        },
+        {
+          "external_id": "CorpusId:218971825",
+          "title": "Language (Technology) is Power: A Critical Survey of “Bias” in NLP",
+          "authors": [
+            "Su Lin Blodgett",
+            "Solon Barocas",
+            "Hal Daum'e",
+            "Hanna M. Wallach"
+          ],
+          "year": 2020,
+          "venue": "Annual Meeting of the Association for Computational Linguistics",
+          "citation_count": 1463
+        },
+        {
+          "external_id": "CorpusId:219124374",
+          "title": "SourceFinder: Finding Malware Source-Code from Publicly Available Repositories",
+          "authors": [
+            "Md Omar Faruk Rokon",
+            "Risul Islam",
+            "Ahmad Darki",
+            "E. Papalexakis",
+            "M. Faloutsos"
+          ],
+          "year": 2020,
+          "venue": "International Symposium on Recent Advances in Intrusion Detection",
+          "citation_count": 67
+        },
+        {
+          "external_id": "CorpusId:218684574",
+          "title": "Backstabber’s Knife Collection: A Review of Open Source Software Supply Chain Attacks",
+          "authors": [
+            "Marc Ohm",
+            "H. Plate",
+            "Arnold Sykosch",
+            "M. Meier"
+          ],
+          "year": 2020,
+          "venue": "International Conference on Detection of intrusions and malware, and vulnerability assessment",
+          "citation_count": 241
+        },
+        {
+          "external_id": "CorpusId:218470180",
+          "title": "Jukebox: A Generative Model for Music",
+          "authors": [
+            "Prafulla Dhariwal",
+            "Heewoo Jun",
+            "Christine Payne",
+            "Jong Wook Kim",
+            "Alec Radford",
+            "I. Sutskever"
+          ],
+          "year": 2020,
+          "venue": "arXiv.org",
+          "citation_count": 889
+        },
+        {
+          "external_id": "CorpusId:211554280",
+          "title": "Recalibrating global data center energy-use estimates",
+          "authors": [
+            "E. Masanet",
+            "Arman Shehabi",
+            "Nuoa Lei",
+            "S. Smith",
+            "J. Koomey"
+          ],
+          "year": 2020,
+          "venue": "Science",
+          "citation_count": 920
+        },
+        {
+          "external_id": "CorpusId:211171605",
+          "title": "CodeBERT: A Pre-Trained Model for Programming and Natural Languages",
+          "authors": [
+            "Zhangyin Feng",
+            "Daya Guo",
+            "Duyu Tang",
+            "Nan Duan",
+            "Xiaocheng Feng",
+            "Ming Gong",
+            "Linjun Shou",
+            "Bing Qin",
+            "Ting Liu",
+            "Daxin Jiang",
+            "Ming Zhou"
+          ],
+          "year": 2020,
+          "venue": "Findings",
+          "citation_count": 3285
+        },
+        {
+          "external_id": "CorpusId:226096901",
+          "title": "5分で分かる!? 有名論文ナナメ読み：Jacob Devlin et al. : BERT : Pre-training of Deep Bidirectional Transformers for Language Understanding",
+          "authors": [
+            "知秀 柴田"
+          ],
+          "year": 2020,
+          "venue": "",
+          "citation_count": 12704
+        },
+        {
+          "external_id": "CorpusId:210861095",
+          "title": "Scaling Laws for Neural Language Models",
+          "authors": [
+            "J. Kaplan",
+            "Sam McCandlish",
+            "T. Henighan",
+            "Tom B. Brown",
+            "Benjamin Chess",
+            "R. Child",
+            "Scott Gray",
+            "Alec Radford",
+            "Jeff Wu",
+            "Dario Amodei"
+          ],
+          "year": 2020,
+          "venue": "arXiv.org",
+          "citation_count": 6430
+        },
+        {
+          "external_id": "CorpusId:208613572",
+          "title": "What distinguishes great software engineers?",
+          "authors": [
+            "P. Li",
+            "Amy J. Ko",
+            "Andrew Begel"
+          ],
+          "year": 2019,
+          "venue": "Empirical Software Engineering",
+          "citation_count": 41
+        },
+        {
+          "external_id": "CorpusId:204838007",
+          "title": "Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer",
+          "authors": [
+            "Colin Raffel",
+            "Noam Shazeer",
+            "Adam Roberts",
+            "Katherine Lee",
+            "Sharan Narang",
+            "Michael Matena",
+            "Yanqi Zhou",
+            "Wei Li",
+            "Peter J. Liu"
+          ],
+          "year": 2019,
+          "venue": "Journal of machine learning research",
+          "citation_count": 23386
+        },
+        {
+          "external_id": "CorpusId:108777959",
+          "title": "Unified rational protein engineering with sequence-based deep representation learning",
+          "authors": [
+            "E. C. Alley",
+            "Grigory Khimulya",
+            "Surojit Biswas",
+            "Mohammed Alquraishi",
+            "G. Church"
+          ],
+          "year": 2019,
+          "venue": "Nature Methods",
+          "citation_count": 982
+        },
+        {
+          "external_id": "CorpusId:202712680",
+          "title": "CodeSearchNet Challenge: Evaluating the State of Semantic Code Search",
+          "authors": [
+            "Hamel Husain",
+            "Hongqiu Wu",
+            "Tiferet Gazit",
+            "Miltiadis Allamanis",
+            "Marc Brockschmidt"
+          ],
+          "year": 2019,
+          "venue": "arXiv.org",
+          "citation_count": 1244
+        },
+        {
+          "external_id": "CorpusId:202573071",
+          "title": "CTRL: A Conditional Transformer Language Model for Controllable Generation",
+          "authors": [
+            "N. Keskar",
+            "Bryan McCann",
+            "L. Varshney",
+            "Caiming Xiong",
+            "R. Socher"
+          ],
+          "year": 2019,
+          "venue": "arXiv.org",
+          "citation_count": 1350
+        },
+        {
+          "external_id": "CorpusId:203171710",
+          "title": "Automatic programming: The open issue?",
+          "authors": [
+            "M. O’Neill",
+            "L. Spector"
+          ],
+          "year": 2019,
+          "venue": "Genetic Programming and Evolvable Machines",
+          "citation_count": 26
+        },
+        {
+          "external_id": "CorpusId:199453025",
+          "title": "ViLBERT: Pretraining Task-Agnostic Visiolinguistic Representations for Vision-and-Language Tasks",
+          "authors": [
+            "Jiasen Lu",
+            "Dhruv Batra",
+            "Devi Parikh",
+            "Stefan Lee"
+          ],
+          "year": 2019,
+          "venue": "Neural Information Processing Systems",
+          "citation_count": 4148
+        },
+        {
+          "external_id": "CorpusId:198953378",
+          "title": "RoBERTa: A Robustly Optimized BERT Pretraining Approach",
+          "authors": [
+            "Yinhan Liu",
+            "Myle Ott",
+            "Naman Goyal",
+            "Jingfei Du",
+            "Mandar Joshi",
+            "Danqi Chen",
+            "Omer Levy",
+            "M. Lewis",
+            "Luke Zettlemoyer",
+            "Veselin Stoyanov"
+          ],
+          "year": 2019,
+          "venue": "arXiv.org",
+          "citation_count": 27461
+        },
+        {
+          "external_id": "CorpusId:186206968",
+          "title": "SPoC: Search-based Pseudocode to Code",
+          "authors": [
+            "Sumith Kulal",
+            "Panupong Pasupat",
+            "Kartik Chandra",
+            "Mina Lee",
+            "Oded Padon",
+            "A. Aiken",
+            "Percy Liang"
+          ],
+          "year": 2019,
+          "venue": "Neural Information Processing Systems",
+          "citation_count": 276
+        },
+        {
+          "external_id": "CorpusId:239549249",
+          "title": "Protecting Visual Information in Augmented Reality from Malicious Application Developers",
+          "authors": [
+            "Jk Jensen",
+            "Jinhan Hu",
+            "Amir Rahmati",
+            "R. Likamwa"
+          ],
+          "year": 2019,
+          "venue": "WearSys@MobiSys",
+          "citation_count": 166
+        },
+        {
+          "external_id": "CorpusId:170079302",
+          "title": "Learning Compositional Neural Programs with Recursive Tree Search and Planning",
+          "authors": [
+            "Thomas Pierrot",
+            "Guillaume Ligner",
+            "Scott E. Reed",
+            "Olivier Sigaud",
+            "Nicolas Perrin",
+            "Alexandre Laterre",
+            "David Kas",
+            "Karim Beguir",
+            "Nando de Freitas"
+          ],
+          "year": 2019,
+          "venue": "Neural Information Processing Systems",
+          "citation_count": 42
+        }
+      ],
+      "references_fetched_at": "2025-12-17T15:45:58.191443"
+    }
   }
 }

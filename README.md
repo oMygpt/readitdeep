@@ -1,59 +1,83 @@
-# Read it DEEP
+# Read it DEEP Platform Introduction
 
-AI 驱动的深度阅读与知识资产管理平台
+> **"Not just a Reader, but a Cognitive Recorder."**
 
-## 项目结构
+Welcome to **Read it DEEP**, the AI-driven platform designed to transform how you interact with research papers. Move beyond passive reading into active knowledge construction with our "Deep Read" philosophy.
 
-```
-readitdeep/
-├── backend/          # FastAPI 后端
-├── frontend/         # React + Vite 前端
-├── docs/             # 项目文档
-├── PRD.md            # 产品需求文档
-└── implementation_plan.md  # 实施计划
-```
+---
 
-## 快速开始
+## 🌟 Product Overview
 
-### 一键启动
+**Read it DEEP** is a dual-engine platform:
+1.  **Cognitive Recorder**: It tracks your reading path, highlighting, and thought process.
+2.  **Research Asset Factory**: It refines raw papers into structured assets—methods, datasets, and inspirations.
 
-```bash
-# 启动前端和后端
-./start.sh
+Powered by **LangGraph** and state-of-the-art LLMs, we turn your library into a **Dynamic Knowledge Graph**.
 
-# 停止服务
-./stop.sh
-```
+---
 
-启动后访问:
-- 📖 **前端**: http://localhost:5173
-- 🔧 **后端**: http://localhost:8080
-- 📚 **API 文档**: http://localhost:8080/docs
+## 🚀 Feature Demonstration
 
-### 手动启动
+### 1. Smart Ingestion (智能导入)
+*Efficiently bringing knowledge into your system.*
 
-**后端 (使用 uv)**
-```bash
-cd backend
-uv sync              # 安装依赖
-uv run uvicorn app.main:app --reload --port 8080
-```
+The journey begins with our **Smart Ingestion** pipeline.
+- **Drag & Drop**: Simply drag your PDF into the upload area.
+- **Mineru Parsing**: Our integration with Mineru V4 ensures high-fidelity parsing, preserving layout, formulas, and images as Markdown.
+- **Real-time Feedback**: Watch as your paper goes from `Uploading` → `Parsing` → `Indexing`.
 
-**前端**
-```bash
-cd frontend
-npm install
-npm run dev
-```
+### 2. The Library (知识库)
+*Your organized research headquarters.*
 
-## 技术栈
+Once ingested, papers appear in your **Library**.
+- **Auto-Metadata**: We automatically fetch titles, authors, and publication dates.
+- **Visual Cards**: Papers are presented as cards with key details, making retrieval instant.
+- **Search & Filter**: Quickly find papers by keywords or topics.
 
-- **后端**: Python 3.11+, FastAPI, LangGraph, SQLAlchemy
-- **前端**: React 18, Vite, TypeScript, Tailwind CSS
-- **数据库**: PostgreSQL + pgvector
-- **LLM**: vLLM (OpenAI 兼容) / 火山引擎
+### 3. Zen Reader & Deep Read Mode (沉浸式阅读)
+*Focus, connect, and think.*
 
-## 文档
+Clicking "Start Deep Reading" activates our signature **3-Column Layout**:
 
-- [实施计划](./implementation_plan.md)
-- [产品需求](./PRD.md)
+| **Left: Context** | **Center: Content** | **Right: Workbench** |
+| :--- | :--- | :--- |
+| **Knowledge Graph** & **Analysis**<br>See how this paper connects to others. | **Zen Reader**<br>Distraction-free Markdown rendering with interactive citations. | **Smart Workbench**<br>Your active workspace for extracting value. |
+
+- **Interactive Citations**: Hover over a citation `[1]` to see the reference instantly without losing your place.
+- **Translation**: Seamlessly switch between original and translated text with a single click.
+
+### 4. The Smart Workbench (智能工作台)
+*Where information becomes an asset.*
+
+This is the heart of "Deep Reading".
+- **Method Alchemy (方法炼金台)**: Select a method description in the text, and the AI extracts parameters, loss functions, and even generates PyTorch pseudocode.
+- **Data Warehouse (资产仓库)**: Automatically validates dataset URLs and licenses.
+- **Idea Canvas (灵感画板)**: Record your hypotheses and link them directly to the evidence in the text.
+
+### 5. Dynamic Knowledge Graph (动态知识图谱)
+*Visualizing your second brain.*
+
+As you read, the graph evolves.
+- **Citation Links**: See what influenced this paper.
+- **Similarity Connections**: Discover papers in your library with similar concepts, powered by vector embeddings.
+
+---
+
+## 🛠 Technical Highlights
+
+- **Local-First AI**: Powered by local LLMs (vLLM/Ollama compatible) for privacy and speed.
+- **LangGraph Agents**: sophisticated loops for self-correcting extraction and verification.
+- **Vector Database**: `pgvector` integration for semantic search and graph construction.
+- **Modern Stack**: Built with React, Vite, Tailwind, Python FastAPI, and SQLite/PostgreSQL.
+
+---
+
+## 🎬 Experience It
+
+Ready to dive deep?
+1. **Upload** your first paper.
+2. **Open** it in the Reader.
+3. **Activate** the Workbench.
+4. **Build** your Knowledge Graph.
+
+**Read it DEEP** — *Where reading meets thinking.*
