@@ -82,6 +82,7 @@ class SystemConfigResponse(BaseModel):
     translation_base_url: str = ""
     translation_model: str = ""
     translation_api_key_set: bool = False
+    translation_enabled: bool = True
     
     # MinerU
     mineru_mode: str = "shared"
@@ -201,7 +202,9 @@ async def get_system_config(
     
     # 翻译配置
     translation_enabled = await get_config_value(db, "translation_enabled")
-    config.translation_enabled = translation_enabled if translation_enabled is not None else True
+    config.translation_enabled = bool(translation_enabled) if translation_enabled is not None else True
+    config.translation_mode = await get_config_value(db, "translation_mode") or "shared"
+    config.translation_base_url = await get_config_value(db, "translation_base_url") or ""
     config.translation_api_key_set = bool(await get_config_value(db, "translation_api_key"))
     config.translation_model = await get_config_value(db, "translation_model") or ""
     
@@ -513,7 +516,6 @@ async def list_all_papers(
         page_size=page_size,
     )
 
-
 @router.get("/papers/stats")
 async def get_paper_stats(
     admin: User = Depends(get_current_admin),
@@ -535,3 +537,46 @@ async def get_paper_stats(
         stats["by_user"][uid] = stats["by_user"].get(uid, 0) + 1
     
     return stats
+
+
+# ================== Token 用量统计 API ==================
+
+from app.core.token_tracker import token_tracker
+
+
+class TokenStatsResponse(BaseModel):
+    """Token 用量统计响应"""
+    total_tokens: int = 0
+    total_prompt_tokens: int = 0
+    total_completion_tokens: int = 0
+    calls_count: int = 0
+    by_function: dict = {}
+    by_date: dict = {}
+
+
+@router.get("/token-stats", response_model=TokenStatsResponse)
+async def get_token_stats(
+    admin: User = Depends(get_current_admin),
+):
+    """
+    获取 LLM Token 用量统计 (仅管理员)
+    
+    返回:
+    - total_tokens: 总 token 用量
+    - total_prompt_tokens: 输入 token 总量
+    - total_completion_tokens: 输出 token 总量
+    - calls_count: 总调用次数
+    - by_function: 按功能分类统计
+    - by_date: 按日期分类统计
+    """
+    stats = token_tracker.get_stats()
+    return TokenStatsResponse(**stats)
+
+
+@router.post("/token-stats/reset")
+async def reset_token_stats(
+    admin: User = Depends(get_current_admin),
+):
+    """重置 Token 用量统计 (仅管理员)"""
+    token_tracker.reset()
+    return {"message": "Token 统计已重置"}

@@ -12,7 +12,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { adminApi, type SystemConfig, type User as AdminUser } from '../lib/api';
+import { adminApi, type SystemConfig, type User as AdminUser, type TokenStats } from '../lib/api';
 import {
     Settings,
     Users,
@@ -36,6 +36,8 @@ import {
     FileText,
     ChevronDown,
     ChevronRight,
+    BarChart3,
+    RefreshCw,
 } from 'lucide-react';
 
 type Tab = 'config' | 'users';
@@ -188,6 +190,10 @@ export default function AdminPage() {
     const [resetPasswordUser, setResetPasswordUser] = useState<AdminUser | null>(null);
     const [newPassword, setNewPassword] = useState('');
 
+    // Token 统计
+    const [tokenStats, setTokenStats] = useState<TokenStats | null>(null);
+    const [isLoadingTokenStats, setIsLoadingTokenStats] = useState(false);
+
     // 权限检查
     useEffect(() => {
         if (user && user.role !== 'admin') {
@@ -249,6 +255,36 @@ export default function AdminPage() {
             setIsLoading(false);
         }
     };
+
+    const loadTokenStats = async () => {
+        setIsLoadingTokenStats(true);
+        try {
+            const stats = await adminApi.getTokenStats();
+            setTokenStats(stats);
+        } catch (error) {
+            console.error('Failed to load token stats:', error);
+        } finally {
+            setIsLoadingTokenStats(false);
+        }
+    };
+
+    const handleResetTokenStats = async () => {
+        if (!confirm('确定要重置 Token 统计？此操作不可恢复。')) return;
+        try {
+            await adminApi.resetTokenStats();
+            await loadTokenStats();
+        } catch (error) {
+            console.error('Failed to reset token stats:', error);
+        }
+    };
+
+    // 加载 token 统计
+    useEffect(() => {
+        if (user?.role === 'admin' && activeTab === 'config') {
+            loadTokenStats();
+        }
+    }, [user, activeTab]);
+
 
     const handleSaveConfig = async () => {
         setIsSaving(true);
@@ -380,6 +416,92 @@ export default function AdminPage() {
                     </div>
                 ) : activeTab === 'config' ? (
                     <div className="space-y-6">
+                        {/* Token 用量统计 */}
+                        <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+                                        <BarChart3 className="w-5 h-5 text-amber-600" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-semibold text-slate-900">LLM Token 用量统计</h3>
+                                        <p className="text-sm text-slate-500">监控系统 AI 资源消耗</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={loadTokenStats}
+                                        disabled={isLoadingTokenStats}
+                                        className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                                        title="刷新"
+                                    >
+                                        <RefreshCw className={`w-4 h-4 text-slate-500 ${isLoadingTokenStats ? 'animate-spin' : ''}`} />
+                                    </button>
+                                    <button
+                                        onClick={handleResetTokenStats}
+                                        className="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                    >
+                                        重置统计
+                                    </button>
+                                </div>
+                            </div>
+
+                            {isLoadingTokenStats && !tokenStats ? (
+                                <div className="flex items-center justify-center py-8">
+                                    <Loader2 className="w-6 h-6 animate-spin text-amber-600" />
+                                </div>
+                            ) : tokenStats ? (
+                                <div className="space-y-4">
+                                    {/* 总计 */}
+                                    <div className="grid grid-cols-4 gap-4">
+                                        <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg p-4 border border-amber-100">
+                                            <div className="text-2xl font-bold text-amber-700">
+                                                {(tokenStats.total_tokens / 1000).toFixed(1)}K
+                                            </div>
+                                            <div className="text-sm text-amber-600">总 Token</div>
+                                        </div>
+                                        <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
+                                            <div className="text-xl font-bold text-slate-700">
+                                                {(tokenStats.total_prompt_tokens / 1000).toFixed(1)}K
+                                            </div>
+                                            <div className="text-sm text-slate-500">输入 Token</div>
+                                        </div>
+                                        <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
+                                            <div className="text-xl font-bold text-slate-700">
+                                                {(tokenStats.total_completion_tokens / 1000).toFixed(1)}K
+                                            </div>
+                                            <div className="text-sm text-slate-500">输出 Token</div>
+                                        </div>
+                                        <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
+                                            <div className="text-xl font-bold text-slate-700">
+                                                {tokenStats.calls_count}
+                                            </div>
+                                            <div className="text-sm text-slate-500">调用次数</div>
+                                        </div>
+                                    </div>
+
+                                    {/* 按功能分类 */}
+                                    {Object.keys(tokenStats.by_function).length > 0 && (
+                                        <div>
+                                            <h4 className="text-sm font-medium text-slate-600 mb-2">按功能分类</h4>
+                                            <div className="flex flex-wrap gap-2">
+                                                {Object.entries(tokenStats.by_function).map(([func, stats]) => (
+                                                    <div key={func} className="px-3 py-2 bg-slate-100 rounded-lg text-sm">
+                                                        <span className="font-medium text-slate-700">{func}</span>
+                                                        <span className="text-slate-500 ml-2">
+                                                            {(stats.total_tokens / 1000).toFixed(1)}K ({stats.calls_count}次)
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="text-center py-8 text-slate-400">暂无数据</div>
+                            )}
+                        </div>
+
                         {/* 主 LLM 配置 */}
                         <ConfigCard
                             title="主 LLM 配置"

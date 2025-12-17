@@ -13,15 +13,16 @@ Read it DEEP - 智能分析服务
 """
 
 import logging
-from typing import Optional, List, Dict, Any
+from typing import Dict, Any, Optional, List
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from app.config import get_settings
+from app.core.store import store
 from app.core.database import async_session_maker
 from app.core.config_manager import ConfigManager
-from app.core.store import store
+from app.core.token_tracker import get_tracking_callback
 from app.agents.prompt_loader import get_prompt_loader
 
 logger = logging.getLogger(__name__)
@@ -180,8 +181,9 @@ async def smart_analyze(
                 HumanMessage(content=user_prompt),
             ]
         
-        # 调用 LLM
-        response = await llm.ainvoke(messages)
+        # 调用 LLM (带 token 追踪)
+        callback = get_tracking_callback(f"smart_{action_type}")
+        response = await llm.ainvoke(messages, config={"callbacks": [callback]})
         
         return {
             "success": True,
