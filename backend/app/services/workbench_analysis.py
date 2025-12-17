@@ -19,6 +19,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from app.config import get_settings
 from app.agents.prompt_loader import get_prompt_loader
 from app.core.workbench_store import workbench_store
+from app.core.token_tracker import get_tracking_callback
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -76,10 +77,11 @@ async def analyze_method(
         )
     
     try:
+        callback = get_tracking_callback("workbench_method")
         response = await llm.ainvoke([
             SystemMessage(content=system_prompt),
             HumanMessage(content=user_prompt),
-        ])
+        ], config={"callbacks": [callback]})
         
         content = response.content
         
@@ -155,10 +157,11 @@ async def analyze_asset(
         )
     
     try:
+        callback = get_tracking_callback("workbench_asset")
         response = await llm.ainvoke([
             SystemMessage(content=system_prompt),
             HumanMessage(content=user_prompt),
-        ])
+        ], config={"callbacks": [callback]})
         
         content = response.content
         

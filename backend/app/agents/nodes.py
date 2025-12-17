@@ -35,6 +35,7 @@ from app.agents.prompts import (
     get_dataset_prompt,
     get_code_prompt,
 )
+from app.core.token_tracker import get_tracking_callback
 
 settings = get_settings()
 
@@ -106,10 +107,11 @@ async def summary_agent_node(state: PaperAnalysisState) -> dict:
     prompt = prompt_ver.user_prompt_template.format(content=content)
 
     try:
+        callback = get_tracking_callback("agent_summary")
         response = await llm.ainvoke([
             SystemMessage(content=prompt_ver.system_prompt),
             HumanMessage(content=prompt)
-        ])
+        ], config={"callbacks": [callback]})
         
         summary = response.content.strip()
         
@@ -141,10 +143,11 @@ async def method_agent_node(state: PaperAnalysisState) -> dict:
     prompt = prompt_ver.user_prompt_template.format(content=content)
 
     try:
+        callback = get_tracking_callback("agent_method")
         response = await llm.ainvoke([
             SystemMessage(content=prompt_ver.system_prompt),
             HumanMessage(content=prompt)
-        ])
+        ], config={"callbacks": [callback]})
         
         result = parse_json_response(response.content)
         methods_raw = result.get("methods", [])
@@ -187,10 +190,11 @@ async def dataset_agent_node(state: PaperAnalysisState) -> dict:
     prompt = prompt_ver.user_prompt_template.format(content=content)
 
     try:
+        callback = get_tracking_callback("agent_dataset")
         response = await llm.ainvoke([
             SystemMessage(content=prompt_ver.system_prompt),
             HumanMessage(content=prompt)
-        ])
+        ], config={"callbacks": [callback]})
         
         result = parse_json_response(response.content)
         datasets_raw = result.get("datasets", [])
@@ -236,10 +240,11 @@ async def code_agent_node(state: PaperAnalysisState) -> dict:
     prompt = prompt_ver.user_prompt_template.format(content=content)
 
     try:
+        callback = get_tracking_callback("agent_code")
         response = await llm.ainvoke([
             SystemMessage(content=prompt_ver.system_prompt),
             HumanMessage(content=prompt)
-        ])
+        ], config={"callbacks": [callback]})
         
         result = parse_json_response(response.content)
         code_refs_raw = result.get("code_refs", [])

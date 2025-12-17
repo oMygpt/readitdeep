@@ -563,4 +563,32 @@ export const adminApi = {
             params: { new_password: newPassword }
         });
     },
+
+    // Token 用量统计
+    getTokenStats: async (): Promise<TokenStats> => {
+        const { data } = await api.get('/admin/token-stats');
+        return data;
+    },
+
+    resetTokenStats: async (): Promise<void> => {
+        await api.post('/admin/token-stats/reset');
+    },
 };
+
+// Token 统计类型
+export interface TokenStats {
+    total_tokens: number;
+    total_prompt_tokens: number;
+    total_completion_tokens: number;
+    calls_count: number;
+    by_function: Record<string, {
+        total_tokens: number;
+        prompt_tokens: number;
+        completion_tokens: number;
+        calls_count: number;
+    }>;
+    by_date: Record<string, {
+        total_tokens: number;
+        calls_count: number;
+    }>;
+}
