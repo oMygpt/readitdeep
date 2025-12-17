@@ -336,6 +336,14 @@ export default function Workbench({ paperId, paperTitle, onClose }: WorkbenchPro
     const [isAnalyzingAsset, setIsAnalyzingAsset] = useState(false);
     const [_isLoading, setIsLoading] = useState(true);
 
+    // Auto-generated analysis data
+    const [autoAnalysis, setAutoAnalysis] = useState<{
+        methods: Array<{ name: string; description: string }>;
+        datasets: Array<{ name: string; description: string; url?: string }>;
+        code_refs: Array<{ repo_url?: string; description: string }>;
+    } | null>(null);
+    const [showAutoSection, setShowAutoSection] = useState(true);
+
     // Load existing workbench items for this paper on mount
     useEffect(() => {
         const loadWorkbenchItems = async () => {
@@ -356,7 +364,26 @@ export default function Workbench({ paperId, paperTitle, onClose }: WorkbenchPro
                 setIsLoading(false);
             }
         };
+
+        // Also load auto-generated analysis data
+        const loadAutoAnalysis = async () => {
+            if (!paperId) return;
+            try {
+                const { data } = await api.get(`/papers/${paperId}/analysis`);
+                if (data && (data.methods?.length || data.datasets?.length || data.code_refs?.length)) {
+                    setAutoAnalysis({
+                        methods: data.methods || [],
+                        datasets: data.datasets || [],
+                        code_refs: data.code_refs || [],
+                    });
+                }
+            } catch (error) {
+                // Analysis may not exist yet, that's OK
+            }
+        };
+
         loadWorkbenchItems();
+        loadAutoAnalysis();
     }, [paperId]);
 
     // Handle method drop - call LLM analysis
@@ -479,12 +506,103 @@ export default function Workbench({ paperId, paperTitle, onClose }: WorkbenchPro
             {/* Help Text */}
             <div className="px-4 py-2 bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-slate-200 flex-shrink-0">
                 <p className="text-xs text-indigo-600">
-                    💡 选中论文中的文本，拖入对应区域进行智能分析
+                    💡 选中论文中的文本，点击工具栏按钮或拖入区域添加
                 </p>
             </div>
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {/* Auto-Generated Analysis Section */}
+                {autoAnalysis && (autoAnalysis.methods.length > 0 || autoAnalysis.datasets.length > 0 || autoAnalysis.code_refs.length > 0) && (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
+                        <button
+                            onClick={() => setShowAutoSection(!showAutoSection)}
+                            className="w-full flex items-center justify-between px-3 py-2 bg-slate-100 hover:bg-slate-200 transition-colors"
+                        >
+                            <div className="flex items-center gap-2">
+                                <span className="text-slate-400">🤖</span>
+                                <span className="text-xs font-medium text-slate-600">自动分析结果</span>
+                                <span className="px-1.5 py-0.5 bg-slate-200 text-slate-500 text-[10px] rounded">
+                                    {autoAnalysis.methods.length + autoAnalysis.datasets.length + autoAnalysis.code_refs.length}
+                                </span>
+                            </div>
+                            {showAutoSection ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                        </button>
+
+                        {showAutoSection && (
+                            <div className="p-3 space-y-2">
+                                {/* Auto Methods */}
+                                {autoAnalysis.methods.length > 0 && (
+                                    <div className="space-y-1">
+                                        <div className="flex items-center gap-1 text-xs text-slate-500">
+                                            <FlaskConical className="w-3 h-3" />
+                                            <span>方法 ({autoAnalysis.methods.length})</span>
+                                        </div>
+                                        {autoAnalysis.methods.slice(0, 3).map((m, i) => (
+                                            <div key={i} className="bg-white rounded-lg px-2 py-1.5 text-xs text-slate-600 border border-slate-100">
+                                                <span className="font-medium">{m.name}</span>
+                                                <p className="text-slate-400 line-clamp-1 mt-0.5">{m.description}</p>
+                                            </div>
+                                        ))}
+                                        {autoAnalysis.methods.length > 3 && (
+                                            <p className="text-[10px] text-slate-400 pl-2">+{autoAnalysis.methods.length - 3} 更多...</p>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Auto Datasets */}
+                                {autoAnalysis.datasets.length > 0 && (
+                                    <div className="space-y-1">
+                                        <div className="flex items-center gap-1 text-xs text-slate-500">
+                                            <Database className="w-3 h-3" />
+                                            <span>数据集 ({autoAnalysis.datasets.length})</span>
+                                        </div>
+                                        {autoAnalysis.datasets.slice(0, 3).map((d, i) => (
+                                            <div key={i} className="bg-white rounded-lg px-2 py-1.5 text-xs text-slate-600 border border-slate-100">
+                                                <span className="font-medium">{d.name}</span>
+                                                {d.url && (
+                                                    <a href={d.url} target="_blank" rel="noopener noreferrer" className="ml-1 text-indigo-500 hover:underline">
+                                                        <ExternalLink className="w-3 h-3 inline" />
+                                                    </a>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Auto Code */}
+                                {autoAnalysis.code_refs.length > 0 && (
+                                    <div className="space-y-1">
+                                        <div className="flex items-center gap-1 text-xs text-slate-500">
+                                            <span>💻</span>
+                                            <span>代码 ({autoAnalysis.code_refs.length})</span>
+                                        </div>
+                                        {autoAnalysis.code_refs.slice(0, 2).map((c, i) => (
+                                            <div key={i} className="bg-white rounded-lg px-2 py-1.5 text-xs text-slate-600 border border-slate-100">
+                                                {c.repo_url ? (
+                                                    <a href={c.repo_url} target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:underline">
+                                                        {c.repo_url.replace(/^https?:\/\//, '').substring(0, 40)}...
+                                                    </a>
+                                                ) : (
+                                                    <span className="text-slate-400 line-clamp-1">{c.description}</span>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* User Content Section Label */}
+                {(methodItems.length > 0 || assetItems.length > 0 || noteItems.length > 0 || autoAnalysis) && (
+                    <div className="flex items-center gap-2 pt-2">
+                        <span className="text-xs font-medium text-slate-500">📝 我的笔记</span>
+                        <div className="flex-1 h-px bg-slate-200" />
+                    </div>
+                )}
+
                 {/* Method Zone */}
                 <DropZone
                     title="方法炼金台"

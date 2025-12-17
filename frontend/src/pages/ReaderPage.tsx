@@ -47,7 +47,7 @@ export default function ReaderPage() {
     const [showSettings, setShowSettings] = useState(false); // New State for Aa menu
     const [hoveredCitation, setHoveredCitation] = useState<{ id: string, x: number, y: number } | null>(null);
     const [showLeftSidebar, setShowLeftSidebar] = useState(true); // Left sidebar visibility
-    const [showRightSidebar, setShowRightSidebar] = useState(false); // Right sidebar (Workbench) visibility
+    const [showRightSidebar, setShowRightSidebar] = useState(true); // Right sidebar (Workbench) - auto open
     const [sidebarTab, setSidebarTab] = useState<'analysis' | 'graph'>('analysis'); // Sidebar tab
     const [viewMode, setViewMode] = useState<'overview' | 'read'>('overview'); // Explore vs Read mode
     const mainContentRef = useRef<HTMLElement>(null);
@@ -55,6 +55,7 @@ export default function ReaderPage() {
     // Smart Selection State
     const [selectedText, setSelectedText] = useState<string>('');
     const [selectionPosition, setSelectionPosition] = useState<{ x: number; y: number } | null>(null);
+    const [isDragging, setIsDragging] = useState(false);
 
     const { data: paper, isLoading: isPaperLoading } = useQuery({
         queryKey: ['paper', paperId],
@@ -379,24 +380,66 @@ export default function ReaderPage() {
     const handleJumpToLine = (location: TextLocation) => {
         if (!mainContentRef.current) return;
 
-        // Find element by line number or text snippet
-        const lines = mainContentRef.current.querySelectorAll('[data-line]');
         let targetElement: Element | null = null;
 
-        // Try to find by line number first
-        for (const el of lines) {
-            const lineNum = parseInt(el.getAttribute('data-line') || '0', 10);
-            if (lineNum >= location.start_line && lineNum <= location.end_line) {
-                targetElement = el;
-                break;
+        // Strategy 1: Try to find by text snippet (most reliable)
+        if (location.text_snippet) {
+            const allElements = mainContentRef.current.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, td, th, blockquote, pre, span');
+            const snippet = location.text_snippet.trim();
+
+            // Try exact match first
+            for (const el of allElements) {
+                const text = el.textContent || '';
+                if (text.includes(snippet)) {
+                    targetElement = el;
+                    break;
+                }
+            }
+
+            // Try partial match (first 50 chars)
+            if (!targetElement && snippet.length > 50) {
+                const partialSnippet = snippet.substring(0, 50);
+                for (const el of allElements) {
+                    const text = el.textContent || '';
+                    if (text.includes(partialSnippet)) {
+                        targetElement = el;
+                        break;
+                    }
+                }
+            }
+
+            // Try normalized match (remove extra whitespace)
+            if (!targetElement) {
+                const normalizedSnippet = snippet.replace(/\s+/g, ' ').toLowerCase().substring(0, 40);
+                for (const el of allElements) {
+                    const normalizedText = (el.textContent || '').replace(/\s+/g, ' ').toLowerCase();
+                    if (normalizedText.includes(normalizedSnippet)) {
+                        targetElement = el;
+                        break;
+                    }
+                }
             }
         }
 
-        // If not found, try to find by text snippet
+        // Strategy 2: Try to find by line number (if data-line exists)
+        if (!targetElement) {
+            const lines = mainContentRef.current.querySelectorAll('[data-line]');
+            for (const el of lines) {
+                const lineNum = parseInt(el.getAttribute('data-line') || '0', 10);
+                if (lineNum >= location.start_line && lineNum <= location.end_line) {
+                    targetElement = el;
+                    break;
+                }
+            }
+        }
+
+        // Strategy 3: Try to find heading by title keywords
         if (!targetElement && location.text_snippet) {
-            const allElements = mainContentRef.current.querySelectorAll('p, h1, h2, h3, h4, li');
-            for (const el of allElements) {
-                if (el.textContent?.includes(location.text_snippet.substring(0, 30))) {
+            const headings = mainContentRef.current.querySelectorAll('h1, h2, h3, h4, h5, h6');
+            const keywords = location.text_snippet.split(/\s+/).slice(0, 3).join('');
+            for (const el of headings) {
+                const text = (el.textContent || '').toLowerCase();
+                if (text.includes(keywords.toLowerCase())) {
                     targetElement = el;
                     break;
                 }
@@ -409,6 +452,8 @@ export default function ReaderPage() {
             setTimeout(() => {
                 targetElement?.classList.remove('highlight-ref');
             }, 2000);
+        } else {
+            console.warn('Could not find location:', location);
         }
     };
 
@@ -428,6 +473,9 @@ export default function ReaderPage() {
         const handleMouseUp = (e: MouseEvent) => {
             // Don't trigger if clicking inside the popup
             if ((e.target as HTMLElement).closest('.smart-selection-popup')) return;
+
+            // Don't show popup if user is dragging
+            if (isDragging) return;
 
             const selection = window.getSelection();
             const text = selection?.toString().trim();
@@ -454,9 +502,28 @@ export default function ReaderPage() {
             }
         };
 
+        const handleDragStart = () => {
+            // Hide popup when dragging starts
+            setIsDragging(true);
+            setSelectedText('');
+            setSelectionPosition(null);
+        };
+
+        const handleDragEnd = () => {
+            // Re-enable popup after drag ends
+            setIsDragging(false);
+        };
+
         document.addEventListener('mouseup', handleMouseUp);
-        return () => document.removeEventListener('mouseup', handleMouseUp);
-    }, []);
+        document.addEventListener('dragstart', handleDragStart);
+        document.addEventListener('dragend', handleDragEnd);
+
+        return () => {
+            document.removeEventListener('mouseup', handleMouseUp);
+            document.removeEventListener('dragstart', handleDragStart);
+            document.removeEventListener('dragend', handleDragEnd);
+        };
+    }, [isDragging]);
 
     const isLoading = isPaperLoading || isContentLoading;
 

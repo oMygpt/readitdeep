@@ -235,14 +235,29 @@ async def parse_paper_task(paper_id: str, file_path: str, file_content: bytes, f
         # 5. Classification
         update_paper({"status": "classifying"})
         
+        # Import category utilities
+        from app.services.classification import suggest_tags, find_similar_category, get_all_categories
+        
         tags = await suggest_tags(paper_id)
         
-        # 自动设置 category 为第一个 tag（置信度最高）
+        # 自动设置 category（合并相似分类）
         if tags:
             paper = store.get(paper_id)
             if paper and not paper.get("category"):
                 top_tag = tags[0].name if hasattr(tags[0], 'name') else str(tags[0])
-                update_paper({"category": top_tag})
+                
+                # 检查是否有相似的已有分类
+                existing_categories = get_all_categories()
+                similar_category = find_similar_category(top_tag, existing_categories)
+                
+                if similar_category:
+                    # 合并到已有分类
+                    update_paper({"category": similar_category})
+                    logger.info(f"Paper {paper_id}: Merged into existing category '{similar_category}'")
+                else:
+                    # 创建新分类
+                    update_paper({"category": top_tag})
+                    logger.info(f"Paper {paper_id}: Created new category '{top_tag}'")
 
         # Finalize
         update_paper({"status": "completed"})
@@ -397,6 +412,71 @@ async def get_paper_analysis(
         if paper["user_id"] != current_user.id and not current_user.is_admin:
              raise HTTPException(403, "无权访问此论文")
 
+    # 获取论文内容用于定位
+    markdown_content = paper.get("markdown_content", "")
+    content_lines = markdown_content.split('\n') if markdown_content else []
+    
+    def find_text_location(text_snippet: str, prefer_url: str = None) -> dict:
+        """在论文内容中查找文本片段的位置"""
+        if not text_snippet or not content_lines:
+            return {"start_line": 0, "end_line": 0, "text_snippet": text_snippet or ""}
+        
+        snippet_clean = text_snippet.strip()[:100]  # 取前100字符
+        
+        # 如果有 URL，优先搜索包含 URL 的行
+        if prefer_url:
+            url_pattern = prefer_url.replace("https://", "").replace("http://", "")[:30]
+            for i, line in enumerate(content_lines):
+                if url_pattern in line:
+                    return {
+                        "start_line": i + 1,
+                        "end_line": min(i + 3, len(content_lines)),
+                        "text_snippet": snippet_clean
+                    }
+        
+        # 搜索时跳过前10行（通常是标题/作者信息）
+        skip_first_n = 10
+        
+        # 尝试在正文中查找（跳过标题行）
+        for i, line in enumerate(content_lines):
+            # 跳过标题行（以 # 开头）
+            if line.strip().startswith('#'):
+                continue
+            # 跳过前几行（避免匹配到标题区域）
+            if i < skip_first_n:
+                continue
+            # 模糊匹配
+            if snippet_clean[:30] in line:
+                return {
+                    "start_line": i + 1,
+                    "end_line": min(i + 3, len(content_lines)),
+                    "text_snippet": snippet_clean
+                }
+        
+        # 宽松匹配（小写+去除空格），同样跳过头部
+        snippet_normalized = snippet_clean.replace(" ", "").lower()[:30]
+        for i, line in enumerate(content_lines):
+            if line.strip().startswith('#') or i < skip_first_n:
+                continue
+            line_normalized = line.replace(" ", "").lower()
+            if snippet_normalized in line_normalized:
+                return {
+                    "start_line": i + 1,
+                    "end_line": min(i + 3, len(content_lines)),
+                    "text_snippet": snippet_clean
+                }
+        
+        # 最后尝试全文搜索（包括头部）
+        for i, line in enumerate(content_lines):
+            if snippet_clean[:20] in line and not line.strip().startswith('#'):
+                return {
+                    "start_line": i + 1,
+                    "end_line": min(i + 3, len(content_lines)),
+                    "text_snippet": snippet_clean
+                }
+        
+        return {"start_line": 0, "end_line": 0, "text_snippet": snippet_clean}
+
     # 从 Workbench 获取数据
     from app.core.workbench_store import workbench_store
     items = workbench_store.get_items_by_paper(paper_id)
@@ -410,32 +490,52 @@ async def get_paper_analysis(
         title = item.get("title", "Unknown")
         desc = item.get("description", "")
         data = item.get("data", {})
+        asset = data.get("asset", {})
         
-        # 构造 Location 对象
-        loc_text = data.get("location", "")
-        location = {
-            "start_line": 0,
-            "end_line": 0,
-            "text_snippet": loc_text
-        }
+        # 根据类型获取不同的定位文本
+        item_type = item.get("type")
+        analysis = data.get("analysis", {})
+        asset = data.get("asset", {})
         
-        if item.get("type") == "method":
+        if item_type == "method":
+            # 方法：从 analysis 获取 text_snippet
+            loc_text = (
+                analysis.get("text_snippet") or  # LLM 返回的原文片段
+                analysis.get("method_name") or  # 方法名称
+                title
+            )
+            resource_url = None
+        else:
+            # 资产（数据集/代码）：从 asset 获取
+            loc_text = (
+                asset.get("text_snippet") or  # LLM 返回的原文片段
+                asset.get("name") or  # 资源名称
+                data.get("location") or
+                title
+            )
+            resource_url = asset.get("url")
+        
+        # 实际在内容中查找位置
+        location = find_text_location(loc_text, prefer_url=resource_url)
+        
+        if item_type == "method":
             methods.append({
                 "name": title,
                 "description": desc,
                 "location": location
             })
-        elif item.get("type") == "dataset":
+        elif item_type == "dataset":
              datasets.append({
                 "name": title,
                 "description": desc,
+                "usage": asset.get("usage_in_paper", ""),
                 "location": location,
-                "url": data.get("asset", {}).get("url")
+                "url": asset.get("url")
              })
-        elif item.get("type") == "code":
+        elif item_type == "code":
              code_refs.append({
                 "description": desc,
-                "repo_url": data.get("asset", {}).get("url"),
+                "repo_url": asset.get("url"),
                 "location": location
              })
 
@@ -520,8 +620,21 @@ async def run_analysis_pipeline(paper_id: str, user_id: str):
         
         update_paper({"status": "analyzed"})
         
-        # 4. Classification
-        await suggest_tags(paper_id)
+        # 4. Classification with category consolidation
+        from app.services.classification import find_similar_category, get_all_categories
+        tags = await suggest_tags(paper_id)
+        
+        if tags:
+            paper = store.get(paper_id)
+            if paper and not paper.get("category"):
+                top_tag = tags[0].name if hasattr(tags[0], 'name') else str(tags[0])
+                existing_categories = get_all_categories()
+                similar_category = find_similar_category(top_tag, existing_categories)
+                
+                if similar_category:
+                    update_paper({"category": similar_category})
+                else:
+                    update_paper({"category": top_tag})
         
         # Final
         update_paper({"status": "completed"})
@@ -538,6 +651,47 @@ async def trigger_analysis_endpoint(
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
 ):
-    """手动触发分析"""
-    background_tasks.add_task(run_analysis_pipeline, paper_id, current_user.id)
-    return {"status": "triggered", "message": "Analysis started in background"}
+    """
+    手动触发分析
+    
+    - 如果论文已有内容，只重新运行分析流程
+    - 如果论文没有内容（解析失败），重新解析 PDF
+    """
+    paper = store.get(paper_id)
+    if not paper:
+        raise HTTPException(404, "论文不存在")
+    
+    # 权限检查
+    if paper.get("user_id") != current_user.id and not current_user.is_admin:
+        raise HTTPException(403, "无权操作此论文")
+    
+    # 检查是否有内容
+    if paper.get("markdown_content"):
+        # 有内容，只重新分析
+        background_tasks.add_task(run_analysis_pipeline, paper_id, current_user.id)
+        return {"status": "triggered", "message": "分析任务已启动"}
+    else:
+        # 没有内容，需要重新解析 PDF
+        file_path = paper.get("file_path")
+        if not file_path:
+            raise HTTPException(400, "找不到原始文件路径")
+        
+        import os
+        if not os.path.exists(file_path):
+            raise HTTPException(400, "原始文件已删除，无法重新解析")
+        
+        # 读取文件内容
+        with open(file_path, "rb") as f:
+            file_content = f.read()
+        
+        # 重新解析
+        background_tasks.add_task(
+            parse_paper_task,
+            paper_id,
+            file_path,
+            file_content,
+            paper.get("filename", "unknown.pdf"),
+            current_user.id
+        )
+        return {"status": "triggered", "message": "PDF 重新解析任务已启动"}
+

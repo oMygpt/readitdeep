@@ -38,7 +38,7 @@ export default function AnalysisPanel({ paperId, onJumpToLine }: AnalysisPanelPr
     );
 
     // 获取分析结果
-    const { data: analysis, error, refetch } = useQuery({
+    const { data: analysis, error } = useQuery({
         queryKey: ['analysis', paperId],
         queryFn: () => analysisApi.get(paperId),
         retry: false,
@@ -139,9 +139,10 @@ export default function AnalysisPanel({ paperId, onJumpToLine }: AnalysisPanelPr
                     内容和研究方法分析
                 </h3>
                 <button
-                    onClick={() => refetch()}
-                    className="p-1 text-slate-400 hover:text-slate-600 rounded"
-                    title="刷新"
+                    onClick={() => triggerMutation.mutate()}
+                    disabled={triggerMutation.isPending}
+                    className={`p-1 rounded transition-colors ${triggerMutation.isPending ? 'text-indigo-500 animate-spin' : 'text-slate-400 hover:text-slate-600'}`}
+                    title="重新分析"
                 >
                     <RefreshCw className="w-3.5 h-3.5" />
                 </button>
@@ -201,6 +202,7 @@ export default function AnalysisPanel({ paperId, onJumpToLine }: AnalysisPanelPr
                                 key={i}
                                 title={dataset.name}
                                 description={dataset.description}
+                                usage={dataset.usage}
                                 location={dataset.location}
                                 url={dataset.url}
                                 onClick={() => handleJump(dataset.location)}
@@ -308,12 +310,14 @@ function Section({
 function ClickableItem({
     title,
     description,
+    usage,
     location,
     url,
     onClick,
 }: {
     title: string;
     description: string;
+    usage?: string;
     location?: TextLocation;
     url?: string;
     onClick: () => void;
@@ -339,6 +343,11 @@ function ClickableItem({
                 )}
             </div>
             <p className="text-xs text-slate-500 mt-1 line-clamp-2">{description}</p>
+            {usage && (
+                <p className="text-xs text-emerald-600 mt-1 line-clamp-1">
+                    📋 用途: {usage}
+                </p>
+            )}
             {location && (
                 <p className="text-xs text-indigo-500 mt-1">
                     → 点击跳转到第 {location.start_line} 行
@@ -347,3 +356,4 @@ function ClickableItem({
         </div>
     );
 }
+

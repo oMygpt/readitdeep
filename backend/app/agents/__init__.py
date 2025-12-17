@@ -31,6 +31,7 @@ class DatasetItem(TypedDict):
     name: str
     url: Optional[str]
     description: str
+    usage: Optional[str]  # 在论文中的使用方式
     location: Optional[TextLocation]
 
 

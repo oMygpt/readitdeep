@@ -276,8 +276,45 @@ export default function SmartSelectionPopup({
 
     const [chatHistory, setChatHistory] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
     const [isChatLoading, setIsChatLoading] = useState(false);
+    const [workbenchStatus, setWorkbenchStatus] = useState<{ type: string; success: boolean } | null>(null);
 
     const actions = getSmartActions(text);
+
+    // 添加到工作台
+    const handleWorkbenchAdd = useCallback(async (zone: 'method' | 'asset' | 'note') => {
+        try {
+            if (zone === 'method') {
+                await api.post('/workbench/analyze/method', {
+                    text,
+                    paper_id: paperId,
+                    paper_title: paperTitle,
+                    location: '',
+                });
+            } else if (zone === 'asset') {
+                await api.post('/workbench/analyze/asset', {
+                    text,
+                    paper_id: paperId,
+                    paper_title: paperTitle,
+                    location: '',
+                });
+            } else {
+                await api.post('/workbench/notes', {
+                    text,
+                    paper_id: paperId,
+                    paper_title: paperTitle,
+                    location: '',
+                    is_title_note: false,
+                    reflection: '',
+                });
+            }
+            setWorkbenchStatus({ type: zone, success: true });
+            setTimeout(() => setWorkbenchStatus(null), 2000);
+        } catch (error) {
+            console.error('Failed to add to workbench:', error);
+            setWorkbenchStatus({ type: zone, success: false });
+            setTimeout(() => setWorkbenchStatus(null), 2000);
+        }
+    }, [text, paperId, paperTitle]);
 
     const handleAction = useCallback(async (action: SmartAction) => {
         const windowPos = {
@@ -377,6 +414,7 @@ export default function SmartSelectionPopup({
                 }}
             >
                 <div className="flex items-center gap-1 bg-white rounded-full shadow-xl border border-slate-200 px-2 py-1.5">
+                    {/* 智能分析按钮 */}
                     {actions.map((action) => (
                         <button
                             key={action.id}
@@ -388,7 +426,40 @@ export default function SmartSelectionPopup({
                             <span className="hidden sm:inline">{action.label}</span>
                         </button>
                     ))}
+
+                    {/* 分隔线 */}
                     <div className="w-px h-5 bg-slate-200 mx-1" />
+
+                    {/* 工作台快捷按钮 */}
+                    <button
+                        onClick={() => handleWorkbenchAdd('method')}
+                        className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50 rounded-full transition-all"
+                        title="添加到方法炼金台"
+                    >
+                        <span className="text-sm">🔬</span>
+                        <span className="hidden lg:inline">方法</span>
+                    </button>
+                    <button
+                        onClick={() => handleWorkbenchAdd('asset')}
+                        className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-emerald-600 hover:bg-emerald-50 rounded-full transition-all"
+                        title="添加到资产仓库"
+                    >
+                        <span className="text-sm">📊</span>
+                        <span className="hidden lg:inline">资产</span>
+                    </button>
+                    <button
+                        onClick={() => handleWorkbenchAdd('note')}
+                        className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-purple-600 hover:bg-purple-50 rounded-full transition-all"
+                        title="添加到智能笔记"
+                    >
+                        <span className="text-sm">💡</span>
+                        <span className="hidden lg:inline">笔记</span>
+                    </button>
+
+                    {/* 分隔线 */}
+                    <div className="w-px h-5 bg-slate-200 mx-1" />
+
+                    {/* 关闭按钮 */}
                     <button
                         onClick={onClose}
                         className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
@@ -396,6 +467,19 @@ export default function SmartSelectionPopup({
                         <X className="w-4 h-4" />
                     </button>
                 </div>
+
+                {/* 工作台操作反馈 */}
+                {workbenchStatus && (
+                    <div className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 rounded-lg text-xs font-medium shadow-lg animate-in fade-in zoom-in-95 ${workbenchStatus.success
+                            ? 'bg-green-500 text-white'
+                            : 'bg-red-500 text-white'
+                        }`}>
+                        {workbenchStatus.success
+                            ? `✓ 已添加到${workbenchStatus.type === 'method' ? '方法炼金台' : workbenchStatus.type === 'asset' ? '资产仓库' : '智能笔记'}`
+                            : '添加失败，请重试'
+                        }
+                    </div>
+                )}
             </div>
 
             {/* 结果窗口 */}

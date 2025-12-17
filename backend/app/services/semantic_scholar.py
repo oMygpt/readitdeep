@@ -35,6 +35,18 @@ class S2Paper:
     abstract: Optional[str] = None
 
 
+class S2RateLimitError(Exception):
+    """S2 API 限流错误"""
+    pass
+
+
+class S2ApiError(Exception):
+    """S2 API 错误"""
+    def __init__(self, message: str, status_code: int = 500):
+        super().__init__(message)
+        self.status_code = status_code
+
+
 class SemanticScholarService:
     """
     Semantic Scholar API 封装 (HTTP 版本)
@@ -91,6 +103,10 @@ class SemanticScholarService:
         - S2 Paper ID: 直接使用 paperId
         
         注意: ArXiv ID 格式需要 "ARXIV:" 前缀（大写）
+        
+        Raises:
+            S2RateLimitError: API 限流
+            S2ApiError: 其他 API 错误
         """
         try:
             client = await self._get_client()
@@ -108,16 +124,24 @@ class SemanticScholarService:
                 logger.info(f"S2: Paper not found: {paper_id}")
                 return None
             
+            if response.status_code == 429:
+                logger.warning(f"S2: Rate limited for {paper_id}")
+                raise S2RateLimitError("Semantic Scholar API 请求过于频繁，请稍后再试")
+            
             response.raise_for_status()
             data = response.json()
             return self._paper_from_dict(data)
             
+        except S2RateLimitError:
+            raise
         except httpx.HTTPStatusError as e:
             logger.warning(f"S2 get_paper HTTP error for {paper_id}: {e.response.status_code}")
-            return None
+            if e.response.status_code == 429:
+                raise S2RateLimitError("Semantic Scholar API 请求过于频繁，请稍后再试")
+            raise S2ApiError(f"S2 API 错误: {e.response.status_code}", e.response.status_code)
         except Exception as e:
             logger.warning(f"S2 get_paper error for {paper_id}: {e}")
-            return None
+            raise S2ApiError(f"S2 API 连接错误: {str(e)}")
     
     async def get_citations(self, paper_id: str, limit: int = 20) -> list[S2Paper]:
         """

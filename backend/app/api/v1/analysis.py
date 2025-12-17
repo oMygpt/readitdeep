@@ -39,6 +39,7 @@ class DatasetItem(BaseModel):
     name: str
     url: Optional[str] = None
     description: str
+    usage: Optional[str] = None  # 在论文中的使用方式
     location: Optional[TextLocation] = None
 
 
