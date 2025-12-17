@@ -246,7 +246,7 @@ export default function PaperGraph({ paperId }: PaperGraphProps) {
             include_citations: true,
             include_references: true,
             include_recommendations: false,
-            limit: 10,
+            limit: 50,  // Increased from 10 to show more citations/references
         }),
         retry: false,
         staleTime: 5 * 60 * 1000,
@@ -266,7 +266,7 @@ export default function PaperGraph({ paperId }: PaperGraphProps) {
         // Expand: fetch second-level data
         setIsExpanding(nodeId);
         try {
-            const data = await graphApi.expand(paperId, externalId, 5);
+            const data = await graphApi.expand(paperId, externalId, 20);  // Increased from 5 to 20
             setExpandedData(prev => {
                 const next = new Map(prev);
                 next.set(nodeId, {
@@ -280,8 +280,17 @@ export default function PaperGraph({ paperId }: PaperGraphProps) {
                 next.add(nodeId);
                 return next;
             });
-        } catch (err) {
+        } catch (err: unknown) {
             console.error('Expand error:', err);
+            // Show user-friendly error message
+            const axiosError = err as { response?: { status?: number; data?: { detail?: string } } };
+            if (axiosError?.response?.status === 429) {
+                alert('Semantic Scholar API 请求频繁，请稍后再试');
+            } else if (axiosError?.response?.status === 502) {
+                alert('Semantic Scholar API 暂时不可用，请稍后再试');
+            } else {
+                alert('获取引用信息失败: ' + (axiosError?.response?.data?.detail || '未知错误'));
+            }
         } finally {
             setIsExpanding(null);
         }
@@ -329,11 +338,14 @@ export default function PaperGraph({ paperId }: PaperGraphProps) {
             .sort((a, b) => (b.year || 0) - (a.year || 0));
 
         citingNodes.forEach((node, i) => {
-            const cols = Math.min(citingNodes.length, 4);
+            // Dynamic columns based on node count: more nodes = more columns
+            const totalCiting = citingNodes.length;
+            const cols = totalCiting <= 4 ? totalCiting : Math.min(Math.ceil(Math.sqrt(totalCiting * 2)), 6);
             const row = Math.floor(i / cols);
             const col = i % cols;
-            const xOffset = (col - (Math.min(cols, citingNodes.length - row * cols) - 1) / 2) * 200;
-            const yOffset = row * 120;
+            const rowNodeCount = Math.min(cols, totalCiting - row * cols);
+            const xOffset = (col - (rowNodeCount - 1) / 2) * 180;
+            const yOffset = row * 130;
 
             nodes.push({
                 id: node.id,
@@ -364,11 +376,14 @@ export default function PaperGraph({ paperId }: PaperGraphProps) {
             .sort((a, b) => (a.year || 0) - (b.year || 0));
 
         referenceNodes.forEach((node, i) => {
-            const cols = Math.min(referenceNodes.length, 4);
+            // Dynamic columns based on node count: more nodes = more columns
+            const totalRefs = referenceNodes.length;
+            const cols = totalRefs <= 4 ? totalRefs : Math.min(Math.ceil(Math.sqrt(totalRefs * 2)), 6);
             const row = Math.floor(i / cols);
             const col = i % cols;
-            const xOffset = (col - (Math.min(cols, referenceNodes.length - row * cols) - 1) / 2) * 200;
-            const yOffset = row * 120;
+            const rowNodeCount = Math.min(cols, totalRefs - row * cols);
+            const xOffset = (col - (rowNodeCount - 1) / 2) * 180;
+            const yOffset = row * 130;
 
             nodes.push({
                 id: node.id,
@@ -398,10 +413,11 @@ export default function PaperGraph({ paperId }: PaperGraphProps) {
     // Calculate adaptive height based on node count
     const graphHeight = useMemo(() => {
         const nodeCount = initialNodes.length;
-        if (nodeCount <= 3) return 300;
-        if (nodeCount <= 6) return 450;
-        if (nodeCount <= 10) return 550;
-        return 650;
+        if (nodeCount <= 3) return 350;
+        if (nodeCount <= 6) return 500;
+        if (nodeCount <= 15) return 650;
+        if (nodeCount <= 30) return 800;
+        return 1000;  // Large graphs
     }, [initialNodes.length]);
 
     const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);

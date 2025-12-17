@@ -10,12 +10,14 @@ Read it DEEP - 分类 API
 - GET /library/tags - 获取所有标签统计
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List, Optional
 import logging
 
 from app.core.store import store
+from app.models.user import User
+from app.api.v1.auth import get_current_user
 from app.services.classification import (
     suggest_tags,
     confirm_tags,
@@ -218,3 +220,83 @@ async def get_library_categories():
         CategoryStatsResponse(name=name, count=count)
         for name, count in sorted(category_counts.items(), key=lambda x: -x[1])
     ]
+
+
+class RenameCategoryRequest(BaseModel):
+    old_name: str
+    new_name: str
+
+
+class RenameCategoryResponse(BaseModel):
+    success: bool
+    old_name: str
+    new_name: str
+    papers_updated: int
+
+
+@tags_router.put("/categories/rename", response_model=RenameCategoryResponse)
+async def rename_category(
+    request: RenameCategoryRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    重命名分类 (仅当前用户的论文)
+    
+    将当前用户所有使用 old_name 分类的论文改为 new_name
+    """
+    if not request.new_name.strip():
+        raise HTTPException(status_code=400, detail="新分类名称不能为空")
+    
+    papers_updated = 0
+    # 只获取当前用户的论文
+    user_papers = store.get_by_user(current_user.id)
+    
+    for paper in user_papers:
+        if paper.get("category") == request.old_name:
+            paper["category"] = request.new_name.strip()
+            store.set(paper["id"], paper)
+            papers_updated += 1
+    
+    logger.info(f"Category renamed for user {current_user.id}: '{request.old_name}' -> '{request.new_name}' ({papers_updated} papers)")
+    
+    return RenameCategoryResponse(
+        success=True,
+        old_name=request.old_name,
+        new_name=request.new_name.strip(),
+        papers_updated=papers_updated,
+    )
+
+
+class DeleteCategoryResponse(BaseModel):
+    success: bool
+    category: str
+    papers_updated: int
+
+
+@tags_router.delete("/categories/{category_name}", response_model=DeleteCategoryResponse)
+async def delete_category(
+    category_name: str,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    删除分类 (将该分类下的论文设为 Uncategorized) - 仅当前用户的论文
+    """
+    import urllib.parse
+    decoded_name = urllib.parse.unquote(category_name)
+    
+    papers_updated = 0
+    user_papers = store.get_by_user(current_user.id)
+    
+    for paper in user_papers:
+        if paper.get("category") == decoded_name:
+            paper["category"] = None
+            store.set(paper["id"], paper)
+            papers_updated += 1
+    
+    logger.info(f"Category deleted for user {current_user.id}: '{decoded_name}' ({papers_updated} papers moved to Uncategorized)")
+    
+    return DeleteCategoryResponse(
+        success=True,
+        category=decoded_name,
+        papers_updated=papers_updated,
+    )

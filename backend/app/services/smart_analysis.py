@@ -89,6 +89,7 @@ async def get_llm_for_action(paper_id: str, action_type: str) -> ChatOpenAI:
                 api_key=action_api_key or config.get("llm_api_key") or settings.llm_api_key or "dummy",
                 model=action_model or config.get("llm_model") or settings.llm_model,
                 temperature=0.3,
+                request_timeout=90,  # 90 seconds timeout for LLM calls
             )
     
     # 继承主 LLM 配置
@@ -103,6 +104,7 @@ async def get_llm_for_action(paper_id: str, action_type: str) -> ChatOpenAI:
         api_key=api_key,
         model=model,
         temperature=0.3,
+        request_timeout=90,  # 90 seconds timeout for LLM calls
     )
 
 

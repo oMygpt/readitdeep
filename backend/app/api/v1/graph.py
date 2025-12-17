@@ -17,7 +17,7 @@ from datetime import datetime, timedelta
 import logging
 
 from app.core.store import store
-from app.services.semantic_scholar import get_s2_service, S2_AVAILABLE
+from app.services.semantic_scholar import get_s2_service, S2_AVAILABLE, S2RateLimitError, S2ApiError
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -233,7 +233,7 @@ async def get_paper_graph(
     include_local: bool = Query(True, description="包含本地相似论文"),
     include_citations: bool = Query(True, description="包含 S2 引用"),
     include_references: bool = Query(True, description="包含 S2 参考文献"),
-    limit: int = Query(10, ge=1, le=50, description="每类最大数量"),
+    limit: int = Query(50, ge=1, le=100, description="每类最大数量"),
     force_refresh: bool = Query(False, description="强制刷新"),
 ) -> PaperGraphResponse:
     """
@@ -336,7 +336,7 @@ async def get_paper_graph(
 async def expand_paper_node(
     paper_id: str,
     node_external_id: str,
-    limit: int = Query(5, ge=1, le=20, description="最大数量"),
+    limit: int = Query(20, ge=1, le=50, description="最大数量"),
 ) -> PaperGraphResponse:
     """
     展开二级引用 - 获取指定节点的引用关系
@@ -420,7 +420,13 @@ async def expand_paper_node(
             edges=edges,
             from_store=False,
         )
-        
+    
+    except S2RateLimitError as e:
+        logger.warning(f"S2 rate limit for expand node: {e}")
+        raise HTTPException(status_code=429, detail="Semantic Scholar API 请求频繁，请稍后再试")
+    except S2ApiError as e:
+        logger.warning(f"S2 API error for expand node: {e}")
+        raise HTTPException(status_code=502, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:

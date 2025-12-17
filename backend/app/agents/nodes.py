@@ -197,11 +197,14 @@ async def dataset_agent_node(state: PaperAnalysisState) -> dict:
         
         datasets: list[DatasetItem] = []
         for d in datasets_raw:
-            location = find_text_location(content, d.get("location", ""))
+            # 支持两种字段名：text_snippet (新) 或 location (旧)
+            snippet = d.get("text_snippet") or d.get("location", "")
+            location = find_text_location(content, snippet)
             datasets.append({
                 "name": d.get("name", ""),
                 "url": d.get("url"),
                 "description": d.get("description", ""),
+                "usage": d.get("usage", ""),  # 新增 usage 字段
                 "location": location
             })
         

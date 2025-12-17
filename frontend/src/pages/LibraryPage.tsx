@@ -19,9 +19,11 @@ import {
     List,
     Grid,
     ChevronRight,
+    Edit2,
+    RefreshCw,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { libraryApi, papersApi, monitorApi } from '../lib/api';
+import { libraryApi, papersApi, monitorApi, analysisApi } from '../lib/api';
 import UserMenu from '../components/UserMenu';
 import CategoryTagEditor from '../components/CategoryTagEditor';
 
@@ -36,12 +38,16 @@ export default function LibraryPage() {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [editingPaper, setEditingPaper] = useState<{ id: string; category?: string; tags: string[] } | null>(null);
     const [paperStatuses, setPaperStatuses] = useState<Record<string, { status: string; message: string }>>({});
+    const [renamingCategory, setRenamingCategory] = useState<string | null>(null);
+    const [newCategoryName, setNewCategoryName] = useState('');
+    const [isRenaming, setIsRenaming] = useState(false);
+    const [reanalyzingId, setReanalyzingId] = useState<string | null>(null);
 
-    // Polling for updates
+    // Polling for updates (暂停轮询当编辑弹窗打开时)
     const { data: libraryData, isLoading } = useQuery({
         queryKey: ['library', search],
         queryFn: () => libraryApi.list({ search: search || undefined }),
-        refetchInterval: 3000,
+        refetchInterval: (renamingCategory || editingPaper) ? false : 3000,
     });
 
     const papers = libraryData?.items || [];
@@ -80,6 +86,18 @@ export default function LibraryPage() {
         mutationFn: papersApi.upload,
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['library'] });
+        },
+    });
+
+    // Reanalyze Mutation
+    const reanalyzeMutation = useMutation({
+        mutationFn: analysisApi.trigger,
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['library'] });
+            setReanalyzingId(null);
+        },
+        onError: () => {
+            setReanalyzingId(null);
         },
     });
 
@@ -151,10 +169,29 @@ export default function LibraryPage() {
         setSelectedTag(null);
     };
 
+    const handleReanalyze = async (e: React.MouseEvent, paperId: string) => {
+        e.stopPropagation();
+        e.preventDefault();
+        setReanalyzingId(paperId);
+        try {
+            await reanalyzeMutation.mutateAsync(paperId);
+        } catch (err) {
+            console.error('Reanalyze failed', err);
+        }
+    };
+
     return (
         <div className="flex h-screen bg-slate-50 text-slate-800 font-sans">
             {/* Left Sidebar */}
             <aside className="w-72 bg-slate-50 border-r border-slate-200 hidden lg:flex flex-col pt-8 overflow-y-auto">
+                {/* Logo */}
+                <div className="px-6 mb-8 flex items-center gap-2">
+                    <div className="p-1.5 bg-indigo-600 rounded-lg text-white shadow-sm shadow-indigo-200">
+                        <BookOpen className="w-5 h-5" />
+                    </div>
+                    <span className="font-bold text-lg tracking-tight text-slate-800">Read it Deep</span>
+                </div>
+
                 {/* Search */}
                 <div className="px-6 mb-6">
                     <div className="relative">
@@ -192,14 +229,31 @@ export default function LibraryPage() {
                         {Object.entries(categories).map(([cat, count]) => (
                             <div
                                 key={cat}
-                                onClick={() => setSelectedCategory(selectedCategory === cat ? null : cat)}
-                                className={`flex items-center justify-between px-3 py-2 rounded-md cursor-pointer text-sm font-medium transition-colors ${selectedCategory === cat ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-200 text-slate-600'
+                                className={`flex items-center justify-between px-3 py-2 rounded-md cursor-pointer text-sm font-medium transition-colors group ${selectedCategory === cat ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-200 text-slate-600'
                                     }`}
                             >
-                                <span className="truncate max-w-[140px]">{cat}</span>
-                                <span className="bg-slate-200 text-slate-500 text-xs px-2 py-0.5 rounded-full">
-                                    {count}
+                                <span
+                                    className="truncate max-w-[120px] flex-1"
+                                    onClick={() => setSelectedCategory(selectedCategory === cat ? null : cat)}
+                                >
+                                    {cat}
                                 </span>
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setRenamingCategory(cat);
+                                            setNewCategoryName(cat);
+                                        }}
+                                        className="p-1 text-slate-400 hover:text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        title="重命名分类"
+                                    >
+                                        <Edit2 className="w-3 h-3" />
+                                    </button>
+                                    <span className="bg-slate-200 text-slate-500 text-xs px-2 py-0.5 rounded-full">
+                                        {count}
+                                    </span>
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -247,13 +301,20 @@ export default function LibraryPage() {
                 </div>
 
                 {/* Suggestions */}
-                <div className="px-6 mt-auto mb-8">
+                <div className="px-6 mt-auto mb-6">
                     <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-100">
                         <h3 className="text-indigo-900 font-semibold text-sm mb-1">Deep Read AI</h3>
                         <p className="text-xs text-indigo-700 leading-relaxed mb-3">
                             Start by uploading a PDF. I will parse layout, formulas, and references for you.
                         </p>
                     </div>
+                </div>
+
+                {/* Copyright Footer */}
+                <div className="px-6 mb-8 text-center">
+                    <p className="text-[10px] text-slate-400 font-medium">
+                        By A<sup style={{ fontSize: '0.6em' }}>3</sup> Team
+                    </p>
                 </div>
             </aside>
 
@@ -439,6 +500,16 @@ export default function LibraryPage() {
 
                                         {/* Actions */}
                                         <div className="col-span-1 flex items-center justify-end gap-2">
+                                            {isFailed && (
+                                                <button
+                                                    onClick={(e) => handleReanalyze(e, paper.id)}
+                                                    disabled={reanalyzingId === paper.id}
+                                                    className="p-1 text-amber-500 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors disabled:opacity-50"
+                                                    title="重新分析"
+                                                >
+                                                    <RefreshCw className={`w-4 h-4 ${reanalyzingId === paper.id ? 'animate-spin' : ''}`} />
+                                                </button>
+                                            )}
                                             {isCompleted && (
                                                 <ChevronRight className="w-4 h-4 text-slate-400" />
                                             )}
@@ -503,9 +574,24 @@ export default function LibraryPage() {
                                         </div>
 
                                         <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                                            {isCompleted && <CheckCircle className="w-4 h-4 text-green-500" />}
-                                            {isProcessing && <Loader2 className="w-4 h-4 animate-spin text-yellow-500" />}
-                                            {isFailed && <AlertCircle className="w-4 h-4 text-red-500" />}
+                                            <div className="flex items-center gap-2">
+                                                {isCompleted && <CheckCircle className="w-4 h-4 text-green-500" />}
+                                                {isProcessing && <Loader2 className="w-4 h-4 animate-spin text-yellow-500" />}
+                                                {isFailed && (
+                                                    <>
+                                                        <AlertCircle className="w-4 h-4 text-red-500" />
+                                                        <button
+                                                            onClick={(e) => handleReanalyze(e, paper.id)}
+                                                            disabled={reanalyzingId === paper.id}
+                                                            className="text-xs text-amber-600 hover:text-amber-700 flex items-center gap-1 disabled:opacity-50"
+                                                            title="重新分析"
+                                                        >
+                                                            <RefreshCw className={`w-3 h-3 ${reanalyzingId === paper.id ? 'animate-spin' : ''}`} />
+                                                            重试
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
                                             <button
                                                 onClick={(e) => handleDeleteClick(e, paper.id)}
                                                 className="p-1 text-slate-400 hover:text-red-600 rounded"
@@ -555,6 +641,57 @@ export default function LibraryPage() {
                     onClose={() => setEditingPaper(null)}
                     onSaved={() => queryClient.invalidateQueries({ queryKey: ['library'] })}
                 />
+            )}
+
+            {/* Category Rename Modal */}
+            {renamingCategory && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setRenamingCategory(null)}>
+                    <div className="bg-white rounded-xl shadow-2xl p-6 max-w-sm mx-4 w-full" onClick={(e) => e.stopPropagation()}>
+                        <h3 className="text-lg font-semibold text-slate-800 mb-4">重命名分类</h3>
+                        <p className="text-sm text-slate-500 mb-4">
+                            将所有 "{renamingCategory}" 分类下的论文移动到新分类：
+                        </p>
+                        <input
+                            type="text"
+                            value={newCategoryName}
+                            onChange={(e) => setNewCategoryName(e.target.value)}
+                            placeholder="输入新分类名称"
+                            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent mb-4"
+                            autoFocus
+                        />
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                onClick={() => setRenamingCategory(null)}
+                                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                            >
+                                取消
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    if (!newCategoryName.trim() || isRenaming) return;
+                                    setIsRenaming(true);
+                                    try {
+                                        const result = await libraryApi.renameCategory(renamingCategory!, newCategoryName.trim());
+                                        console.log('Rename result:', result);
+                                        await queryClient.invalidateQueries({ queryKey: ['library'] });
+                                        setRenamingCategory(null);
+                                        setNewCategoryName('');
+                                    } catch (e) {
+                                        console.error('Rename failed', e);
+                                        alert('重命名失败: ' + (e as Error).message);
+                                    } finally {
+                                        setIsRenaming(false);
+                                    }
+                                }}
+                                disabled={!newCategoryName.trim() || newCategoryName === renamingCategory || isRenaming}
+                                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                            >
+                                {isRenaming && <Loader2 className="w-4 h-4 animate-spin" />}
+                                {isRenaming ? '保存中...' : '确认'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

@@ -8,7 +8,7 @@ const TOKEN_KEY = 'readitdeep_token';
 
 export const api = axios.create({
     baseURL: '/api/v1',
-    timeout: 30000,
+    timeout: 120000,
     headers: {
         'Content-Type': 'application/json',
     },
@@ -122,6 +122,16 @@ export const libraryApi = {
         const { data } = await api.get('/library/categories');
         return data;
     },
+
+    renameCategory: async (oldName: string, newName: string): Promise<{ success: boolean; papers_updated: number }> => {
+        const { data } = await api.put('/library/categories/rename', { old_name: oldName, new_name: newName });
+        return data;
+    },
+
+    deleteCategory: async (categoryName: string): Promise<{ success: boolean; papers_updated: number }> => {
+        const { data } = await api.delete(`/library/categories/${encodeURIComponent(categoryName)}`);
+        return data;
+    },
 };
 
 export const monitorApi = {
@@ -153,6 +163,7 @@ export interface DatasetItem {
     name: string;
     url?: string;
     description: string;
+    usage?: string;  // How the dataset is used in this paper
     location?: TextLocation;
 }
 

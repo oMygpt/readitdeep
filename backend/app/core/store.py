@@ -55,6 +55,10 @@ class JSONStore:
             del self._data[key]
             self._save()
 
+    def keys(self) -> list:
+        """获取所有论文的 ID 列表"""
+        return list(self._data.keys())
+
     def get_all(self) -> list:
         return list(self._data.values())
 

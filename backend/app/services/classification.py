@@ -69,9 +69,52 @@ CLASSIFICATION_PROMPT = """请分析以下学术论文内容，为其推荐合�
 """
 
 
+def find_similar_category(new_category: str, existing_categories: list[str], threshold: float = 0.8) -> str | None:
+    """
+    检查是否有相似的已有分类
+    
+    Args:
+        new_category: 新分类名称
+        existing_categories: 已有分类列表
+        threshold: 相似度阈值 (0-1)
+    
+    Returns:
+        相似的已有分类名称，或 None
+    """
+    try:
+        from rapidfuzz import fuzz
+        for existing in existing_categories:
+            # 使用 token_sort_ratio 处理中英文混合的情况
+            similarity = fuzz.token_sort_ratio(new_category.lower(), existing.lower()) / 100
+            if similarity >= threshold:
+                logger.info(f"Category merge: '{new_category}' -> '{existing}' (similarity: {similarity:.2f})")
+                return existing
+    except ImportError:
+        # 如果没有 rapidfuzz，退回到简单比较
+        for existing in existing_categories:
+            if new_category.lower() == existing.lower():
+                return existing
+    return None
+
+
+def get_all_categories() -> list[str]:
+    """获取所有已使用的分类"""
+    categories = set()
+    for paper_id in store.keys():
+        paper = store.get(paper_id)
+        if paper and paper.get("category"):
+            categories.add(paper["category"])
+    return list(categories)
+
+
 async def suggest_tags(paper_id: str) -> list[TagSuggestion]:
     """
     为论文生成标签建议
+    
+    规则:
+    - 只保留置信度 >= 0.85 的标签
+    - 最多 3 个标签
+    - 自动确认为正式标签
     
     Args:
         paper_id: 论文 ID
@@ -112,18 +155,27 @@ async def suggest_tags(paper_id: str) -> list[TagSuggestion]:
         # 按置信度排序
         suggestions.sort(key=lambda x: x.confidence, reverse=True)
         
-        # 更新论文的建议标签
+        # 过滤置信度 >= 0.85 的标签，最多 3 个
+        MIN_CONFIDENCE = 0.85
+        MAX_TAGS = 3
+        high_confidence_tags = [s for s in suggestions if s.confidence >= MIN_CONFIDENCE][:MAX_TAGS]
+        
+        # 更新论文的标签 (自动确认)
+        confirmed_tag_names = [s.name for s in high_confidence_tags]
+        
         store.set(paper_id, {
             **paper,
-            "suggested_tags": [s.name for s in suggestions],
+            "tags": confirmed_tag_names,  # 直接设为正式标签
+            "suggested_tags": [s.name for s in suggestions],  # 保留所有建议供参考
             "tag_suggestions": [
                 {"name": s.name, "confidence": s.confidence, "reason": s.reason}
                 for s in suggestions
             ],
+            "tags_confirmed": True,  # 自动确认
         })
         
-        logger.info(f"Paper {paper_id}: Suggested {len(suggestions)} tags")
-        return suggestions
+        logger.info(f"Paper {paper_id}: Auto-confirmed {len(confirmed_tag_names)} tags (confidence >= {MIN_CONFIDENCE})")
+        return high_confidence_tags
         
     except Exception as e:
         logger.error(f"Classification failed for {paper_id}: {e}")

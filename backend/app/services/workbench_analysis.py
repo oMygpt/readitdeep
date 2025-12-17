@@ -44,6 +44,7 @@ async def get_llm_for_paper(paper_id: str):
         api_key=config.get("llm_api_key") or settings.llm_api_key or "dummy",
         model=config.get("llm_model") or settings.llm_model,
         temperature=0.3,
+        request_timeout=90,  # 90 seconds timeout for LLM calls
     )
 
 async def analyze_method(
