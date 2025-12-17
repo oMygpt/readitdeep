@@ -1,10 +1,14 @@
 /**
- * Read it DEEP - 全局工作台页面
+ * Read it DEEP - 全局工作台页面 v2
  * 
- * 汇总所有论文的工作台内容
+ * 优化版本：
+ * - Tab 切换：灵感笔记(N) / 方法(N) / 资产(N)
+ * - 搜索功能：全文搜索
+ * - 分类筛选：按类型、按论文
+ * - 条目展开详情
  */
 
-import React, { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
@@ -16,7 +20,10 @@ import {
     ChevronLeft,
     BookOpen,
     ExternalLink,
-    BarChart3,
+    Search,
+    X,
+    FileText,
+    Code,
 } from 'lucide-react';
 import { api } from '../lib/api';
 
@@ -38,13 +45,7 @@ interface WorkbenchData {
     notes: WorkbenchItem[];
 }
 
-interface WorkbenchStats {
-    total_items: number;
-    methods_count: number;
-    datasets_count: number;
-    notes_count: number;
-    papers_count: number;
-}
+type TabType = 'notes' | 'methods' | 'assets';
 
 // API Functions
 const workbenchApi = {
@@ -52,113 +53,210 @@ const workbenchApi = {
         const { data } = await api.get('/workbench');
         return data;
     },
-    getStats: async (): Promise<WorkbenchStats> => {
-        const { data } = await api.get('/workbench/stats');
-        return data;
-    },
     deleteItem: async (itemId: string): Promise<void> => {
         await api.delete(`/workbench/items/${itemId}`);
     },
 };
 
-// Item Card Component
-function ItemCard({
+// Expanded Item Card Component
+function ExpandedItemCard({
     item,
-    onDelete
+    onDelete,
+    onClose,
 }: {
     item: WorkbenchItem;
     onDelete: () => void;
+    onClose: () => void;
 }) {
-    const typeStyles = {
-        method: { bg: 'bg-indigo-50', border: 'border-indigo-200', icon: <FlaskConical className="w-4 h-4 text-indigo-600" /> },
-        dataset: { bg: 'bg-emerald-50', border: 'border-emerald-200', icon: <Database className="w-4 h-4 text-emerald-600" /> },
-        code: { bg: 'bg-amber-50', border: 'border-amber-200', icon: <FlaskConical className="w-4 h-4 text-amber-600" /> },
-        note: { bg: 'bg-purple-50', border: 'border-purple-200', icon: <Lightbulb className="w-4 h-4 text-purple-600" /> },
-    };
-
-    const style = typeStyles[item.type as keyof typeof typeStyles] || typeStyles.note;
+    const analysis = item.data?.analysis as Record<string, unknown> | undefined;
+    const asset = item.data?.asset as Record<string, unknown> | undefined;
+    const originalText = (item.data?.original_text as string) || '';
+    const reflection = (item.data?.reflection as string) || '';
 
     return (
-        <div className={`${style.bg} ${style.border} border rounded-xl p-4 hover:shadow-md transition-all`}>
-            <div className="flex items-start gap-3">
-                <div className="mt-0.5">{style.icon}</div>
-                <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-slate-800 mb-1">{item.title}</h3>
-                    <p className="text-sm text-slate-600 line-clamp-2 mb-3">{item.description}</p>
-                    <div className="flex items-center justify-between">
-                        {item.source_paper_id && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col">
+                {/* Header */}
+                <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        {item.type === 'method' && <FlaskConical className="w-5 h-5 text-indigo-600" />}
+                        {item.type === 'dataset' && <Database className="w-5 h-5 text-emerald-600" />}
+                        {item.type === 'code' && <Code className="w-5 h-5 text-amber-600" />}
+                        {item.type === 'note' && <Lightbulb className="w-5 h-5 text-purple-600" />}
+                        <h2 className="text-lg font-bold text-slate-800">{item.title}</h2>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                    {/* Description */}
+                    <div>
+                        <h3 className="text-sm font-medium text-slate-500 mb-2">描述</h3>
+                        <p className="text-slate-700">{item.description}</p>
+                    </div>
+
+                    {/* Original Text */}
+                    {originalText && (
+                        <div>
+                            <h3 className="text-sm font-medium text-slate-500 mb-2 flex items-center gap-1">
+                                <FileText className="w-4 h-4" /> 原文片段
+                            </h3>
+                            <div className="bg-slate-50 rounded-lg p-4 text-sm text-slate-600 max-h-40 overflow-y-auto border border-slate-200">
+                                {originalText.length > 500 ? originalText.substring(0, 500) + '...' : originalText}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Reflection (for notes) */}
+                    {reflection && (
+                        <div>
+                            <h3 className="text-sm font-medium text-slate-500 mb-2">💭 心得笔记</h3>
+                            <div className="bg-purple-50 rounded-lg p-4 text-sm text-purple-700 border border-purple-200">
+                                {reflection}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Method Analysis */}
+                    {analysis && (
+                        <div className="space-y-3">
+                            {typeof analysis.pseudocode === 'string' && (
+                                <div>
+                                    <h3 className="text-sm font-medium text-slate-500 mb-2">伪代码</h3>
+                                    <pre className="bg-slate-900 text-green-400 p-4 rounded-lg text-sm overflow-x-auto">
+                                        {analysis.pseudocode}
+                                    </pre>
+                                </div>
+                            )}
+                            {Boolean(analysis.reviewer_comments) && (
+                                <div>
+                                    <h3 className="text-sm font-medium text-slate-500 mb-2">审稿视角</h3>
+                                    <div className="bg-indigo-50 rounded-lg p-4 space-y-2">
+                                        {(() => {
+                                            const comments = analysis.reviewer_comments as { strengths?: string[]; weaknesses?: string[] };
+                                            return (
+                                                <>
+                                                    {comments.strengths?.map((s, i) => (
+                                                        <div key={`s-${i}`} className="text-sm text-green-600">✓ {s}</div>
+                                                    ))}
+                                                    {comments.weaknesses?.map((w, i) => (
+                                                        <div key={`w-${i}`} className="text-sm text-amber-600">⚠ {w}</div>
+                                                    ))}
+                                                </>
+                                            );
+                                        })()}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Asset Info */}
+                    {asset && (
+                        <div className="space-y-3">
+                            {typeof asset.url === 'string' && (
+                                <div>
+                                    <h3 className="text-sm font-medium text-slate-500 mb-2">链接</h3>
+                                    <a
+                                        href={String(asset.url)}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-800"
+                                    >
+                                        <ExternalLink className="w-4 h-4" />
+                                        {String(asset.url)}
+                                    </a>
+                                </div>
+                            )}
+                            {typeof asset.usage_in_paper === 'string' && (
+                                <div>
+                                    <h3 className="text-sm font-medium text-slate-500 mb-2">论文中的用途</h3>
+                                    <p className="text-slate-600">{String(asset.usage_in_paper)}</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Source Paper */}
+                    {item.source_paper_id && (
+                        <div className="pt-4 border-t border-slate-200">
                             <Link
                                 to={`/read/${item.source_paper_id}`}
-                                className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800"
+                                className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors"
                             >
-                                <ExternalLink className="w-3 h-3" />
+                                <BookOpen className="w-4 h-4" />
                                 查看来源论文
                             </Link>
-                        )}
-                        <span className="text-xs text-slate-400">
-                            {new Date(item.created_at).toLocaleDateString('zh-CN')}
-                        </span>
-                    </div>
+                        </div>
+                    )}
                 </div>
-                <button
-                    onClick={onDelete}
-                    className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                >
-                    <Trash2 className="w-4 h-4" />
-                </button>
+
+                {/* Footer */}
+                <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between bg-slate-50">
+                    <span className="text-sm text-slate-400">
+                        创建于 {new Date(item.created_at).toLocaleString('zh-CN')}
+                    </span>
+                    <button
+                        onClick={() => {
+                            if (confirm('确定删除此项目？')) {
+                                onDelete();
+                                onClose();
+                            }
+                        }}
+                        className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-2"
+                    >
+                        <Trash2 className="w-4 h-4" />
+                        删除
+                    </button>
+                </div>
             </div>
         </div>
     );
 }
 
-// Zone Section Component
-function ZoneSection({
-    title,
-    icon,
-    items,
-    color,
-    onDeleteItem,
+// Compact Item Card
+function ItemCard({
+    item,
+    onClick,
 }: {
-    title: string;
-    icon: React.ReactNode;
-    items: WorkbenchItem[];
-    color: string;
-    onDeleteItem: (id: string) => void;
+    item: WorkbenchItem;
+    onClick: () => void;
 }) {
-    const [isExpanded, setIsExpanded] = useState(true);
+    const typeStyles = {
+        method: { bg: 'bg-indigo-50 hover:bg-indigo-100', border: 'border-indigo-200', icon: <FlaskConical className="w-4 h-4 text-indigo-600" /> },
+        dataset: { bg: 'bg-emerald-50 hover:bg-emerald-100', border: 'border-emerald-200', icon: <Database className="w-4 h-4 text-emerald-600" /> },
+        code: { bg: 'bg-amber-50 hover:bg-amber-100', border: 'border-amber-200', icon: <Code className="w-4 h-4 text-amber-600" /> },
+        note: { bg: 'bg-purple-50 hover:bg-purple-100', border: 'border-purple-200', icon: <Lightbulb className="w-4 h-4 text-purple-600" /> },
+    };
+
+    const style = typeStyles[item.type as keyof typeof typeStyles] || typeStyles.note;
 
     return (
-        <div className="mb-8">
-            <button
-                onClick={() => setIsExpanded(!isExpanded)}
-                className="flex items-center gap-3 mb-4 group"
-            >
-                <div className={`p-2 rounded-lg ${color}`}>
-                    {icon}
+        <div
+            onClick={onClick}
+            className={`${style.bg} ${style.border} border rounded-xl p-4 cursor-pointer transition-all hover:shadow-md`}
+        >
+            <div className="flex items-start gap-3">
+                <div className="mt-0.5">{style.icon}</div>
+                <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-slate-800 mb-1 line-clamp-1">{item.title}</h3>
+                    <p className="text-sm text-slate-600 line-clamp-2">{item.description}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                        <span className="text-xs text-slate-400">
+                            {new Date(item.created_at).toLocaleDateString('zh-CN')}
+                        </span>
+                        {item.source_paper_id && (
+                            <span className="text-xs text-indigo-500">📄 有来源论文</span>
+                        )}
+                    </div>
                 </div>
-                <h2 className="text-xl font-bold text-slate-800">{title}</h2>
-                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-sm rounded-full">
-                    {items.length}
-                </span>
-            </button>
-
-            {isExpanded && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {items.length === 0 ? (
-                        <div className="col-span-full text-center py-8 text-slate-400 text-sm">
-                            暂无内容
-                        </div>
-                    ) : (
-                        items.map((item) => (
-                            <ItemCard
-                                key={item.id}
-                                item={item}
-                                onDelete={() => onDeleteItem(item.id)}
-                            />
-                        ))
-                    )}
-                </div>
-            )}
+            </div>
         </div>
     );
 }
@@ -166,35 +264,91 @@ function ZoneSection({
 // Main Page Component
 export default function GlobalWorkbenchPage() {
     const queryClient = useQueryClient();
+    const [activeTab, setActiveTab] = useState<TabType>('notes');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [filterType, setFilterType] = useState<string>('all');
+    const [selectedItem, setSelectedItem] = useState<WorkbenchItem | null>(null);
 
     const { data: workbench, isLoading } = useQuery({
         queryKey: ['global-workbench'],
         queryFn: workbenchApi.getGlobal,
     });
 
-    const { data: stats } = useQuery({
-        queryKey: ['workbench-stats'],
-        queryFn: workbenchApi.getStats,
-    });
-
     const deleteMutation = useMutation({
         mutationFn: workbenchApi.deleteItem,
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['global-workbench'] });
-            queryClient.invalidateQueries({ queryKey: ['workbench-stats'] });
         },
     });
 
-    const handleDelete = (itemId: string) => {
-        if (confirm('确定删除此项目？')) {
-            deleteMutation.mutate(itemId);
+    // Get items for current tab
+    const currentItems = useMemo(() => {
+        if (!workbench) return [];
+
+        let items: WorkbenchItem[] = [];
+        if (activeTab === 'notes') items = workbench.notes || [];
+        else if (activeTab === 'methods') items = workbench.methods || [];
+        else items = workbench.datasets || [];
+
+        // Apply search filter
+        if (searchQuery) {
+            const query = searchQuery.toLowerCase();
+            items = items.filter(item =>
+                item.title.toLowerCase().includes(query) ||
+                item.description.toLowerCase().includes(query)
+            );
         }
+
+        // Apply type filter
+        if (filterType !== 'all') {
+            if (activeTab === 'methods') {
+                items = items.filter(item => {
+                    const analysis = item.data?.analysis as Record<string, string> | undefined;
+                    return analysis?.method_type === filterType;
+                });
+            } else if (activeTab === 'assets') {
+                items = items.filter(item => {
+                    const asset = item.data?.asset as Record<string, string> | undefined;
+                    return item.type === filterType || asset?.type === filterType;
+                });
+            }
+        }
+
+        return items;
+    }, [workbench, activeTab, searchQuery, filterType]);
+
+    // Get filter options for current tab
+    const filterOptions = useMemo(() => {
+        if (activeTab === 'methods') {
+            return [
+                { value: 'all', label: '全部类型' },
+                { value: '算法', label: '算法' },
+                { value: '框架', label: '框架' },
+                { value: '流程', label: '流程' },
+                { value: '评估方法', label: '评估方法' },
+            ];
+        } else if (activeTab === 'assets') {
+            return [
+                { value: 'all', label: '全部类型' },
+                { value: 'dataset', label: '数据集' },
+                { value: 'code', label: '代码' },
+                { value: 'model', label: '模型' },
+                { value: 'api', label: 'API' },
+            ];
+        }
+        return [];
+    }, [activeTab]);
+
+    const counts = {
+        notes: workbench?.notes?.length || 0,
+        methods: workbench?.methods?.length || 0,
+        assets: workbench?.datasets?.length || 0,
     };
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
             {/* Header */}
-            <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
+            <header className="bg-white border-b border-slate-200 sticky top-0 z-40">
                 <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
                     <div className="flex items-center gap-4">
                         <Link
@@ -224,96 +378,120 @@ export default function GlobalWorkbenchPage() {
                 </div>
             </header>
 
-            <main className="max-w-7xl mx-auto px-6 py-8">
-                {/* Stats */}
-                {stats && (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                        <div className="bg-white rounded-xl p-4 border border-slate-200">
-                            <div className="flex items-center gap-2 text-slate-500 mb-1">
-                                <BarChart3 className="w-4 h-4" />
-                                <span className="text-sm">总项目</span>
-                            </div>
-                            <div className="text-2xl font-bold text-slate-800">{stats.total_items}</div>
-                        </div>
-                        <div className="bg-white rounded-xl p-4 border border-slate-200">
-                            <div className="flex items-center gap-2 text-indigo-500 mb-1">
-                                <FlaskConical className="w-4 h-4" />
-                                <span className="text-sm">方法</span>
-                            </div>
-                            <div className="text-2xl font-bold text-slate-800">{stats.methods_count}</div>
-                        </div>
-                        <div className="bg-white rounded-xl p-4 border border-slate-200">
-                            <div className="flex items-center gap-2 text-emerald-500 mb-1">
-                                <Database className="w-4 h-4" />
-                                <span className="text-sm">数据集</span>
-                            </div>
-                            <div className="text-2xl font-bold text-slate-800">{stats.datasets_count}</div>
-                        </div>
-                        <div className="bg-white rounded-xl p-4 border border-slate-200">
-                            <div className="flex items-center gap-2 text-purple-500 mb-1">
-                                <Lightbulb className="w-4 h-4" />
-                                <span className="text-sm">笔记</span>
-                            </div>
-                            <div className="text-2xl font-bold text-slate-800">{stats.notes_count}</div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Loading State */}
-                {isLoading && (
-                    <div className="flex items-center justify-center py-20">
-                        <div className="text-slate-500">加载中...</div>
-                    </div>
-                )}
-
-                {/* Content */}
-                {workbench && (
-                    <>
-                        <ZoneSection
-                            title="方法炼金台"
-                            icon={<FlaskConical className="w-5 h-5 text-indigo-600" />}
-                            items={workbench.methods}
-                            color="bg-indigo-100"
-                            onDeleteItem={handleDelete}
+            <main className="max-w-7xl mx-auto px-6 py-6">
+                {/* Search Bar */}
+                <div className="mb-6">
+                    <div className="relative">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="搜索笔记、方法、资产..."
+                            className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                         />
-
-                        <ZoneSection
-                            title="资产仓库"
-                            icon={<Database className="w-5 h-5 text-emerald-600" />}
-                            items={workbench.datasets}
-                            color="bg-emerald-100"
-                            onDeleteItem={handleDelete}
-                        />
-
-                        <ZoneSection
-                            title="灵感画板"
-                            icon={<Lightbulb className="w-5 h-5 text-purple-600" />}
-                            items={workbench.notes}
-                            color="bg-purple-100"
-                            onDeleteItem={handleDelete}
-                        />
-                    </>
-                )}
-
-                {/* Empty State */}
-                {workbench &&
-                    workbench.methods.length === 0 &&
-                    workbench.datasets.length === 0 &&
-                    workbench.notes.length === 0 && (
-                        <div className="text-center py-20">
-                            <Sparkles className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-                            <h3 className="text-xl font-semibold text-slate-600 mb-2">工作台为空</h3>
-                            <p className="text-slate-500 mb-6">在阅读论文时，将方法、数据集或灵感添加到工作台</p>
-                            <Link
-                                to="/"
-                                className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                        {searchQuery && (
+                            <button
+                                onClick={() => setSearchQuery('')}
+                                className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600"
                             >
-                                <BookOpen className="w-4 h-4" />
-                                开始阅读论文
-                            </Link>
+                                <X className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {/* Tabs */}
+                <div className="bg-white rounded-xl border border-slate-200 mb-6">
+                    <div className="flex border-b border-slate-200">
+                        <button
+                            onClick={() => { setActiveTab('notes'); setFilterType('all'); }}
+                            className={`flex-1 px-6 py-4 flex items-center justify-center gap-2 font-medium transition-colors ${activeTab === 'notes'
+                                ? 'text-purple-600 border-b-2 border-purple-600 bg-purple-50/50'
+                                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                                }`}
+                        >
+                            <Lightbulb className="w-5 h-5" />
+                            灵感笔记({counts.notes})
+                        </button>
+                        <button
+                            onClick={() => { setActiveTab('methods'); setFilterType('all'); }}
+                            className={`flex-1 px-6 py-4 flex items-center justify-center gap-2 font-medium transition-colors ${activeTab === 'methods'
+                                ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/50'
+                                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                                }`}
+                        >
+                            <FlaskConical className="w-5 h-5" />
+                            方法({counts.methods})
+                        </button>
+                        <button
+                            onClick={() => { setActiveTab('assets'); setFilterType('all'); }}
+                            className={`flex-1 px-6 py-4 flex items-center justify-center gap-2 font-medium transition-colors ${activeTab === 'assets'
+                                ? 'text-emerald-600 border-b-2 border-emerald-600 bg-emerald-50/50'
+                                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                                }`}
+                        >
+                            <Database className="w-5 h-5" />
+                            资产({counts.assets})
+                        </button>
+                    </div>
+
+                    {/* Filter */}
+                    {filterOptions.length > 0 && (
+                        <div className="px-6 py-3 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
+                            <span className="text-sm text-slate-500">筛选:</span>
+                            <select
+                                value={filterType}
+                                onChange={(e) => setFilterType(e.target.value)}
+                                className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            >
+                                {filterOptions.map(opt => (
+                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
+                            </select>
                         </div>
                     )}
+
+                    {/* Items Grid */}
+                    <div className="p-6">
+                        {isLoading ? (
+                            <div className="flex items-center justify-center py-12">
+                                <div className="text-slate-500">加载中...</div>
+                            </div>
+                        ) : currentItems.length === 0 ? (
+                            <div className="text-center py-12">
+                                <div className="text-slate-400 mb-2">
+                                    {searchQuery ? '未找到匹配项目' : '暂无内容'}
+                                </div>
+                                {!searchQuery && (
+                                    <p className="text-sm text-slate-400">
+                                        在阅读论文时，将内容添加到工作台
+                                    </p>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {currentItems.map((item) => (
+                                    <ItemCard
+                                        key={item.id}
+                                        item={item}
+                                        onClick={() => setSelectedItem(item)}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
             </main>
+
+            {/* Item Detail Modal */}
+            {selectedItem && (
+                <ExpandedItemCard
+                    item={selectedItem}
+                    onDelete={() => deleteMutation.mutate(selectedItem.id)}
+                    onClose={() => setSelectedItem(null)}
+                />
+            )}
         </div>
     );
 }
