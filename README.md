@@ -80,4 +80,62 @@ Ready to dive deep?
 3. **Activate** the Workbench.
 4. **Build** your Knowledge Graph.
 
+---
+
+## 🐳 部署指南
+
+### 本地开发
+
+```bash
+# 配置环境变量
+cp .env.example .env
+# 编辑 .env 填写 API Keys
+
+# 启动开发服务器
+./start.sh
+```
+
+### Docker 部署
+
+#### 方式 1: 本地构建
+
+```bash
+cp .env.docker.example .env
+./docker-start.sh              # 默认: Frontend 3000, Backend 8080
+./docker-start.sh 80 8080      # 使用 80 端口
+```
+
+#### 方式 2: 使用 GHCR 镜像 (推荐)
+
+GitHub Actions 会在每次推送时自动构建镜像到 GHCR。
+
+```bash
+# 1. 上传配置到服务器
+scp docker-compose.ghcr.yml .env user@server:/opt/readitdeep/
+
+# 2. 在服务器上拉取并启动
+cd /opt/readitdeep
+docker compose -f docker-compose.ghcr.yml pull
+FRONTEND_PORT=80 GITHUB_OWNER=oMygpt docker compose -f docker-compose.ghcr.yml up -d
+```
+
+#### 更新部署
+
+```bash
+docker compose -f docker-compose.ghcr.yml pull
+docker compose -f docker-compose.ghcr.yml up -d
+```
+
+### 数据持久化
+
+所有数据存储在 `./readit_data/` 目录:
+- `db/` - 数据库、papers.json、workbench.json
+- `uploads/` - PDF 和解析结果
+- `redis/` - 缓存数据
+
+> 📚 详细部署文档: [docs/DOCKER_DEPLOYMENT.md](docs/DOCKER_DEPLOYMENT.md)
+
+---
+
 **Read it DEEP** — *Where reading meets thinking.*
+

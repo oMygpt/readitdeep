@@ -1,0 +1,83 @@
+version: '3.8'
+
+# =============================================================================
+# Read it DEEP - Docker Compose (GHCR 镜像版本)
+# =============================================================================
+# 使用 GitHub Container Registry 的预构建镜像
+# 无需本地构建，直接拉取运行
+#
+# 用法:
+#   docker compose -f docker-compose.ghcr.yml up -d
+# =============================================================================
+
+# 修改为你的 GitHub 用户名/组织名
+x-image-prefix: &image-prefix ghcr.io/oMygpt/readitdeep
+
+services:
+  # ===========================================================================
+  # Backend API (预构建镜像)
+  # ===========================================================================
+  backend:
+    image: ghcr.io/${GITHUB_OWNER:-YOUR_GITHUB_USERNAME}/readitdeep-backend:${IMAGE_TAG:-latest}
+    container_name: readitdeep-backend
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    environment:
+      - DATABASE_URL=sqlite
+      - REDIS_URL=redis://redis:6379/0
+    env_file:
+      - .env
+    volumes:
+      - ./readit_data/db:/app/data
+      - ./readit_data/uploads:/app/data/uploads
+      - ./readit_data/logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - readitdeep-network
+
+  # ===========================================================================
+  # Frontend (预构建镜像)
+  # ===========================================================================
+  frontend:
+    image: ghcr.io/${GITHUB_OWNER:-YOUR_GITHUB_USERNAME}/readitdeep-frontend:${IMAGE_TAG:-latest}
+    container_name: readitdeep-frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - readitdeep-network
+
+  # ===========================================================================
+  # Redis
+  # ===========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: readitdeep-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - ./readit_data/redis:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - readitdeep-network
+
+networks:
+  readitdeep-network:
+    driver: bridge

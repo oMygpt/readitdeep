@@ -1,45 +1,95 @@
+version: '3.8'
+
+# =============================================================================
+# Read it DEEP - Docker Compose 生产配置
+# =============================================================================
+# 启动方式:
+#   ./docker-start.sh [前端端口] [后端端口]
+#   或: docker compose up -d --build
+#
+# 持久化数据目录: ./readit_data/
+#   - db/       SQLite数据库、papers.json、workbench.json、token_stats.json
+#   - uploads/  用户上传的PDF、Mineru解析结果、提取的Markdown
+#   - redis/    Redis持久化数据
+#   - logs/     LLM/LangGraph分析日志
+# =============================================================================
+
 services:
-  # Backend API
+  # ===========================================================================
+  # Backend API (FastAPI + Python)
+  # ===========================================================================
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    container_name: readitdeep-backend
     ports:
-      - "8080:8080"
+      - "${BACKEND_PORT:-8080}:8080"
     environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      # 使用容器内路径
+      - DATABASE_URL=sqlite
       - REDIS_URL=redis://redis:6379/0
-      - LLM_BASE_URL=${LLM_BASE_URL}
-      - LLM_API_KEY=${LLM_API_KEY}
-      - MINERU_API_URL=${MINERU_API_URL}
-      - MINERU_API_KEY=${MINERU_API_KEY}
+    env_file:
+      - .env
     volumes:
-      - ./uploads:/app/uploads
+      # 数据库和JSON存储 (相对于/app)
+      - ./readit_data/db:/app/data
+      # 用户上传文件 (覆盖data/uploads)
+      - ./readit_data/uploads:/app/data/uploads
+      # 分析日志
+      - ./readit_data/logs:/app/logs
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - readitdeep-network
 
-  # Frontend
+  # ===========================================================================
+  # Frontend (Vite + Nginx)
+  # ===========================================================================
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=${VITE_API_URL:-}
+    container_name: readitdeep-frontend
     ports:
-      - "3000:80"
+      - "${FRONTEND_PORT:-3000}:80"
     depends_on:
       - backend
     restart: unless-stopped
+    networks:
+      - readitdeep-network
 
-  # Redis (for caching and task queue)
+  # ===========================================================================
+  # Redis (缓存和任务队列)
+  # ===========================================================================
   redis:
-    image: redis:alpine
+    # GHCR 替代: ghcr.io/redis/redis-stack-server:latest
+    image: redis:7-alpine
+    container_name: readitdeep-redis
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
-      - redis_data:/data
+      - ./readit_data/redis:/data
+    command: redis-server --appendonly yes
     restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - readitdeep-network
 
-volumes:
-  redis_data:
+networks:
+  readitdeep-network:
+    driver: bridge

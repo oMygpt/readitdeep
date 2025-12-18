@@ -109,7 +109,7 @@ export const libraryApi = {
         category?: string;
         status?: string;
     }): Promise<LibraryResponse> => {
-        const { data } = await api.get('/library', { params });
+        const { data } = await api.get('/library/', { params });
         return data;
     },
 
