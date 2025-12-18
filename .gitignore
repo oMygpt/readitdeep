@@ -36,3 +36,6 @@ uploads/
 # Database
 *.db
 *.sqlite3
+
+# Docker persistent data
+readit_data/

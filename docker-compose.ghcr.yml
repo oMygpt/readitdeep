@@ -1,42 +1,35 @@
 version: '3.8'
 
 # =============================================================================
-# Read it DEEP - Docker Compose 生产配置
+# Read it DEEP - Docker Compose (GHCR 镜像版本)
 # =============================================================================
-# 启动方式:
-#   ./docker-start.sh [前端端口] [后端端口]
-#   或: docker compose up -d --build
+# 使用 GitHub Container Registry 的预构建镜像
+# 无需本地构建，直接拉取运行
 #
-# 持久化数据目录: ./readit_data/
-#   - db/       SQLite数据库、papers.json、workbench.json、token_stats.json
-#   - uploads/  用户上传的PDF、Mineru解析结果、提取的Markdown
-#   - redis/    Redis持久化数据
-#   - logs/     LLM/LangGraph分析日志
+# 用法:
+#   docker compose -f docker-compose.ghcr.yml up -d
 # =============================================================================
+
+# 修改为你的 GitHub 用户名/组织名
+x-image-prefix: &image-prefix ghcr.io/oMygpt/readitdeep
 
 services:
   # ===========================================================================
-  # Backend API (FastAPI + Python)
+  # Backend API (预构建镜像)
   # ===========================================================================
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: ghcr.io/${GITHUB_OWNER:-YOUR_GITHUB_USERNAME}/readitdeep-backend:${IMAGE_TAG:-latest}
     container_name: readitdeep-backend
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     environment:
-      # 使用容器内路径
       - DATABASE_URL=sqlite
       - REDIS_URL=redis://redis:6379/0
     env_file:
       - .env
     volumes:
-      # 数据库和JSON存储 (相对于/app)
       - ./readit_data/db:/app/data
-      # 用户上传文件 (覆盖data/uploads)
       - ./readit_data/uploads:/app/data/uploads
-      # 分析日志
       - ./readit_data/logs:/app/logs
     depends_on:
       redis:
@@ -52,14 +45,10 @@ services:
       - readitdeep-network
 
   # ===========================================================================
-  # Frontend (Vite + Nginx)
+  # Frontend (预构建镜像)
   # ===========================================================================
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        - VITE_API_URL=${VITE_API_URL:-}
+    image: ghcr.io/${GITHUB_OWNER:-YOUR_GITHUB_USERNAME}/readitdeep-frontend:${IMAGE_TAG:-latest}
     container_name: readitdeep-frontend
     ports:
       - "${FRONTEND_PORT:-3000}:80"
@@ -70,10 +59,9 @@ services:
       - readitdeep-network
 
   # ===========================================================================
-  # Redis (缓存和任务队列)
+  # Redis
   # ===========================================================================
   redis:
-    # GHCR 替代: ghcr.io/redis/redis-stack-server:latest
     image: redis:7-alpine
     container_name: readitdeep-redis
     ports:

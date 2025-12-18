@@ -1,4 +1,9 @@
 # Frontend Dockerfile
+# =============================================================================
+# GHCR 替代方案 (Nginx):
+#   FROM cgr.dev/chainguard/nginx:latest
+#   或 ghcr.io/nginxinc/nginx-unprivileged:stable-alpine
+# =============================================================================
 FROM node:20-alpine as builder
 
 WORKDIR /app
