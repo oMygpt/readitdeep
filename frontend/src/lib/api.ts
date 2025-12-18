@@ -437,6 +437,11 @@ export const authApi = {
         return data;
     },
 
+    register: async (email: string, password: string, username?: string): Promise<TokenResponse> => {
+        const { data } = await api.post('/auth/register', { email, password, username });
+        return data;
+    },
+
     refresh: async (refreshToken: string): Promise<TokenResponse> => {
         const { data } = await api.post('/auth/refresh', {}, {
             headers: { Authorization: `Bearer ${refreshToken}` }
