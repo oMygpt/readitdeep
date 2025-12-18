@@ -1,26 +1,30 @@
 {
-  "total_tokens": 21797,
-  "total_prompt_tokens": 20159,
-  "total_completion_tokens": 1638,
+  "total_tokens": 115889,
+  "total_prompt_tokens": 108771,
+  "total_completion_tokens": 7118,
   "by_function": {
     "workbench_method": {
-      "total_tokens": 2044,
-      "prompt_tokens": 1157,
-      "completion_tokens": 887,
-      "calls_count": 1
+      "total_tokens": 6152,
+      "prompt_tokens": 3429,
+      "completion_tokens": 2723,
+      "calls_count": 3
     },
     "workbench_asset": {
-      "total_tokens": 19753,
-      "prompt_tokens": 19002,
-      "completion_tokens": 751,
-      "calls_count": 1
+      "total_tokens": 109737,
+      "prompt_tokens": 105342,
+      "completion_tokens": 4395,
+      "calls_count": 3
     }
   },
   "by_date": {
     "2025-12-17": {
       "total_tokens": 21797,
       "calls_count": 2
+    },
+    "2025-12-18": {
+      "total_tokens": 94092,
+      "calls_count": 4
     }
   },
-  "calls_count": 2
+  "calls_count": 6
 }
