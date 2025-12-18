@@ -46344,6 +46344,12 @@
       }
     ],
     "tags_confirmed": true,
-    "category": "大语言模型"
+    "category": "大语言模型",
+    "s2_graph": {
+      "citations": [],
+      "citations_fetched_at": "2025-12-18T17:19:20.830059",
+      "references": [],
+      "references_fetched_at": "2025-12-18T17:19:21.143247"
+    }
   }
 }
