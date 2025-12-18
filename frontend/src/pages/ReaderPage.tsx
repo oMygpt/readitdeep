@@ -55,7 +55,9 @@ export default function ReaderPage() {
     // Smart Selection State
     const [selectedText, setSelectedText] = useState<string>('');
     const [selectionPosition, setSelectionPosition] = useState<{ x: number; y: number } | null>(null);
+    const [selectionLocation, setSelectionLocation] = useState<TextLocation | null>(null);
     const [isDragging, setIsDragging] = useState(false);
+    const [workbenchRefreshKey, setWorkbenchRefreshKey] = useState(0);
 
     const { data: paper, isLoading: isPaperLoading } = useQuery({
         queryKey: ['paper', paperId],
@@ -470,6 +472,35 @@ export default function ReaderPage() {
 
     // Text Selection Detection for Smart Popup
     useEffect(() => {
+        const computeTextLocation = (selection: Selection): TextLocation | null => {
+            if (selection.rangeCount === 0) return null;
+            const range = selection.getRangeAt(0);
+            const container = range.commonAncestorContainer;
+
+            // Try to find context
+            let node: Node | null = container;
+            let startLine = 0;
+            // Traverse up to find context
+            while (node && node !== mainContentRef.current) {
+                if (node instanceof HTMLElement) {
+                    // Check for data-line (if lines are marked)
+                    if (node.hasAttribute('data-line')) {
+                        startLine = parseInt(node.getAttribute('data-line') || '0', 10);
+                    }
+                }
+                node = node.parentNode;
+            }
+
+            // If we didn't find specific line, maybe we can default to something
+            // For now, just return what we found plus the text snippet
+            return {
+                start_line: startLine,
+                end_line: startLine, // Single line for now unless we iterate range
+                text_snippet: selection.toString().substring(0, 100),
+                // We might want to extend TextLocation interface if needed, but for now strict to API types or just pass as snippet
+            };
+        };
+
         const handleMouseUp = (e: MouseEvent) => {
             // Don't trigger if clicking inside the popup
             if ((e.target as HTMLElement).closest('.smart-selection-popup')) return;
@@ -477,18 +508,24 @@ export default function ReaderPage() {
             // Don't show popup if user is dragging
             if (isDragging) return;
 
+            // Only trigger for selections within the main content area (not sidebars)
+            if (!mainContentRef.current?.contains(e.target as Node)) return;
+
             const selection = window.getSelection();
             const text = selection?.toString().trim();
 
             if (text && text.length > 10) {
                 const range = selection?.getRangeAt(0);
                 const rect = range?.getBoundingClientRect();
+                const location = selection ? computeTextLocation(selection) : null;
+
                 if (rect) {
                     setSelectedText(text);
                     setSelectionPosition({
                         x: rect.left + rect.width / 2,
                         y: rect.top,
                     });
+                    setSelectionLocation(location);
                 }
             } else {
                 // Delay clearing to allow clicking popup buttons
@@ -497,6 +534,7 @@ export default function ReaderPage() {
                     if (!popupExists) {
                         setSelectedText('');
                         setSelectionPosition(null);
+                        setSelectionLocation(null);
                     }
                 }, 100);
             }
@@ -507,6 +545,7 @@ export default function ReaderPage() {
             setIsDragging(true);
             setSelectedText('');
             setSelectionPosition(null);
+            setSelectionLocation(null);
         };
 
         const handleDragEnd = () => {
@@ -514,16 +553,31 @@ export default function ReaderPage() {
             setIsDragging(false);
         };
 
+        // Auto-close popup when clicking to start a new selection
+        const handleMouseDown = (e: MouseEvent) => {
+            // Don't close if clicking inside the popup
+            if ((e.target as HTMLElement).closest('.smart-selection-popup')) return;
+
+            // If popup is showing and clicking in content area, close it
+            if (selectionPosition && mainContentRef.current?.contains(e.target as Node)) {
+                setSelectedText('');
+                setSelectionPosition(null);
+                setSelectionLocation(null);
+            }
+        };
+
         document.addEventListener('mouseup', handleMouseUp);
+        document.addEventListener('mousedown', handleMouseDown);
         document.addEventListener('dragstart', handleDragStart);
         document.addEventListener('dragend', handleDragEnd);
 
         return () => {
             document.removeEventListener('mouseup', handleMouseUp);
+            document.removeEventListener('mousedown', handleMouseDown);
             document.removeEventListener('dragstart', handleDragStart);
             document.removeEventListener('dragend', handleDragEnd);
         };
-    }, [isDragging]);
+    }, [isDragging, selectionPosition]);
 
     const isLoading = isPaperLoading || isContentLoading;
 
@@ -980,6 +1034,8 @@ export default function ReaderPage() {
                                 paperId={paperId}
                                 paperTitle={paper.title || '论文'}
                                 onClose={() => setShowRightSidebar(false)}
+                                onJumpToLocation={handleJumpToLine}
+                                refreshKey={workbenchRefreshKey}
                             />
                         )}
                     </aside>
@@ -1017,17 +1073,20 @@ export default function ReaderPage() {
             )}
 
             {/* Smart Selection Popup */}
-            {selectedText && selectionPosition && paperId && (
+            {selectionPosition && (
                 <SmartSelectionPopup
                     text={selectedText}
                     position={selectionPosition}
-                    paperId={paperId}
+                    paperId={paperId!}
                     paperTitle={paper?.title || paper?.filename || ''}
-                    fullContent={content}
+                    fullContent={contentData?.markdown || ''}
+                    location={selectionLocation}
                     onClose={() => {
                         setSelectedText('');
                         setSelectionPosition(null);
+                        setSelectionLocation(null);
                     }}
+                    onNoteAdded={() => setWorkbenchRefreshKey(k => k + 1)}
                 />
             )}
         </div>
