@@ -91,6 +91,7 @@ async def get_llm_for_action(paper_id: str, action_type: str) -> ChatOpenAI:
                 model=action_model or config.get("llm_model") or settings.llm_model,
                 temperature=0.3,
                 request_timeout=90,  # 90 seconds timeout for LLM calls
+                streaming=True,  # Enable streaming
             )
     
     # 继承主 LLM 配置
@@ -100,12 +101,19 @@ async def get_llm_for_action(paper_id: str, action_type: str) -> ChatOpenAI:
     
     logger.info(f"[SmartAnalysis] Using LLM config: base_url={base_url}, model={model}, api_key_set={bool(api_key and api_key != 'dummy')}")
     
+    if not base_url:
+        raise ValueError("LLM base_url is not configured. Please set LLM_BASE_URL in environment or admin config.")
+    
+    if not api_key or api_key == "dummy":
+        raise ValueError("LLM API key is not configured. Please set LLM_API_KEY in environment or admin config.")
+    
     return ChatOpenAI(
         base_url=base_url,
         api_key=api_key,
         model=model,
         temperature=0.3,
         request_timeout=90,  # 90 seconds timeout for LLM calls
+        streaming=True,  # Enable streaming
     )
 
 
@@ -199,3 +207,94 @@ async def smart_analyze(
             "error": str(e),
             "action_type": action_type,
         }
+
+
+async def smart_analyze_stream(
+    text: str,
+    paper_id: str,
+    paper_title: str,
+    action_type: str,
+    context: Optional[str] = None,
+    chat_history: Optional[List[Dict[str, str]]] = None,
+    user_message: Optional[str] = None,
+):
+    """
+    流式智能分析选中文本
+    
+    Yields SSE-formatted chunks for real-time streaming response
+    """
+    import json
+    
+    if action_type not in ACTION_TO_PROMPT:
+        yield f"data: {json.dumps({'error': f'未知的分析类型: {action_type}'})}\n\n"
+        return
+    
+    try:
+        # 获取 LLM (支持 per-action 配置)
+        llm = await get_llm_for_action(paper_id, action_type)
+        
+        # 从 PromptLoader 获取 Prompt
+        loader = get_prompt_loader()
+        prompt_type = ACTION_TO_PROMPT[action_type]
+        prompt_file = loader.get_prompt(prompt_type)
+        
+        if prompt_file:
+            system_prompt = prompt_file.system_prompt
+            user_prompt_template = prompt_file.user_prompt_template
+        else:
+            logger.warning(f"Prompt not found for {prompt_type}, using fallback")
+            fallback = FALLBACK_PROMPTS[action_type]
+            system_prompt = fallback["system"]
+            user_prompt_template = fallback["user"]
+        
+        # 构建用户 prompt
+        format_args = {
+            "text": text[:3000],
+            "paper_title": paper_title,
+            "location": "",
+            "context": (context or "")[:5000],
+            "user_message": user_message or "请解释这段内容",
+        }
+        
+        try:
+            user_prompt = user_prompt_template.format(**format_args)
+        except KeyError:
+            user_prompt = user_prompt_template
+            for key, value in format_args.items():
+                user_prompt = user_prompt.replace("{" + key + "}", str(value))
+        
+        # Chat 模式
+        if action_type == "chat":
+            if context:
+                system_prompt += f"\n\n**论文上下文片段：**\n{context[:5000]}"
+            
+            messages = [SystemMessage(content=system_prompt)]
+            
+            if chat_history:
+                for msg in chat_history[-10:]:
+                    if msg.get("role") == "user":
+                        messages.append(HumanMessage(content=msg["content"]))
+                    else:
+                        messages.append(SystemMessage(content=msg["content"]))
+            
+            messages.append(HumanMessage(content=user_prompt))
+        else:
+            messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=user_prompt),
+            ]
+        
+        # 流式调用 LLM
+        callback = get_tracking_callback(f"smart_{action_type}")
+        
+        async for chunk in llm.astream(messages, config={"callbacks": [callback]}):
+            if chunk.content:
+                yield f"data: {json.dumps({'content': chunk.content})}\n\n"
+        
+        # 发送完成信号
+        yield f"data: {json.dumps({'done': True, 'action_type': action_type})}\n\n"
+        
+    except Exception as e:
+        logger.error(f"Smart analysis stream failed: {e}")
+        yield f"data: {json.dumps({'error': str(e)})}\n\n"
+

@@ -15,6 +15,8 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { api } from '../lib/api';
 
+import type { TextLocation } from '../lib/api';
+
 interface SmartAction {
     id: string;
     label: string;
@@ -33,7 +35,9 @@ interface SmartSelectionPopupProps {
     paperId: string;
     paperTitle: string;
     fullContent?: string;  // For Chat with PDF context
+    location?: TextLocation | null;
     onClose: () => void;
+    onNoteAdded?: () => void;  // Callback when notes/methods/assets are added to workbench
 }
 
 // 检测是否为公式文本
@@ -263,7 +267,9 @@ export default function SmartSelectionPopup({
     paperId,
     paperTitle,
     fullContent,
+    location,
     onClose,
+    onNoteAdded,
 }: SmartSelectionPopupProps) {
     const [activeWindow, setActiveWindow] = useState<{
         type: string;
@@ -283,38 +289,96 @@ export default function SmartSelectionPopup({
     // 添加到工作台
     const handleWorkbenchAdd = useCallback(async (zone: 'method' | 'asset' | 'note') => {
         try {
+            const locationStr = location ? JSON.stringify(location) : '';
+
             if (zone === 'method') {
                 await api.post('/workbench/analyze/method', {
                     text,
                     paper_id: paperId,
                     paper_title: paperTitle,
-                    location: '',
+                    location: locationStr,
                 });
             } else if (zone === 'asset') {
                 await api.post('/workbench/analyze/asset', {
                     text,
                     paper_id: paperId,
                     paper_title: paperTitle,
-                    location: '',
+                    location: locationStr,
                 });
             } else {
                 await api.post('/workbench/notes', {
                     text,
                     paper_id: paperId,
                     paper_title: paperTitle,
-                    location: '',
+                    location: locationStr,
                     is_title_note: false,
                     reflection: '',
                 });
             }
             setWorkbenchStatus({ type: zone, success: true });
+            // Trigger workbench refresh
+            onNoteAdded?.();
             setTimeout(() => setWorkbenchStatus(null), 2000);
         } catch (error) {
             console.error('Failed to add to workbench:', error);
             setWorkbenchStatus({ type: zone, success: false });
             setTimeout(() => setWorkbenchStatus(null), 2000);
         }
-    }, [text, paperId, paperTitle]);
+    }, [text, paperId, paperTitle, location, onNoteAdded]);
+
+    // Stream reader helper
+    const streamAnalyze = async (
+        url: string,
+        body: any,
+        onContent: (content: string) => void,
+        onComplete: () => void,
+        onError: (err: any) => void
+    ) => {
+        try {
+            const token = localStorage.getItem('readitdeep_token');
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify(body),
+            });
+
+            if (!response.ok) {
+                const error = await response.text();
+                throw new Error(error || response.statusText);
+            }
+
+            const reader = response.body?.getReader();
+            const decoder = new TextDecoder();
+
+            if (!reader) throw new Error('No readable stream');
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                const lines = chunk.split('\n\n');
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.slice(6));
+                            if (data.error) throw new Error(data.error);
+                            if (data.content) onContent(data.content);
+                            if (data.done) onComplete();
+                        } catch (e) {
+                            // Skip invalid JSON or partial chunks
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            onError(error);
+        }
+    };
 
     const handleAction = useCallback(async (action: SmartAction) => {
         const windowPos = {
@@ -323,7 +387,7 @@ export default function SmartSelectionPopup({
         };
 
         if (action.id === 'chat') {
-            // 初始化 Chat with PDF
+            // Initialize Chat with PDF
             setChatHistory([
                 {
                     role: 'assistant',
@@ -341,7 +405,7 @@ export default function SmartSelectionPopup({
             return;
         }
 
-        // 其他分析类型
+        // Other analysis types
         setActiveWindow({
             type: action.id,
             title: action.label,
@@ -351,25 +415,62 @@ export default function SmartSelectionPopup({
             position: windowPos,
         });
 
+        // Use streaming with fallback to non-streaming
         try {
-            const response = await api.post('/workbench/analyze/smart', {
-                text,
-                paper_id: paperId,
-                paper_title: paperTitle,
-                action_type: action.id,
-            });
-
-            setActiveWindow(prev => prev ? {
-                ...prev,
-                content: response.data.result || response.data.analysis || '分析完成',
-                isLoading: false,
-            } : null);
-        } catch (error) {
-            setActiveWindow(prev => prev ? {
-                ...prev,
-                content: `分析失败: ${(error as Error).message}`,
-                isLoading: false,
-            } : null);
+            await streamAnalyze(
+                '/api/v1/workbench/analyze/smart/stream',
+                {
+                    text,
+                    paper_id: paperId,
+                    paper_title: paperTitle,
+                    action_type: action.id,
+                },
+                (content) => {
+                    setActiveWindow(prev => prev ? {
+                        ...prev,
+                        content: prev.content + content,
+                    } : null);
+                },
+                () => {
+                    setActiveWindow(prev => prev ? {
+                        ...prev,
+                        isLoading: false,
+                    } : null);
+                },
+                async (error) => {
+                    // Fallback to non-streaming API
+                    console.warn('Stream failed, falling back to non-streaming:', error);
+                    try {
+                        const response = await api.post('/workbench/analyze/smart', {
+                            text,
+                            paper_id: paperId,
+                            paper_title: paperTitle,
+                            action_type: action.id,
+                        });
+                        if (response.data.success) {
+                            setActiveWindow(prev => prev ? {
+                                ...prev,
+                                content: response.data.result,
+                                isLoading: false,
+                            } : null);
+                        } else {
+                            setActiveWindow(prev => prev ? {
+                                ...prev,
+                                content: `**分析失败**: ${response.data.error || '未知错误'}`,
+                                isLoading: false,
+                            } : null);
+                        }
+                    } catch (fallbackError) {
+                        setActiveWindow(prev => prev ? {
+                            ...prev,
+                            content: `**分析出错**: ${(error as Error).message}`,
+                            isLoading: false,
+                        } : null);
+                    }
+                }
+            );
+        } catch (e) {
+            console.error('Analysis failed:', e);
         }
     }, [text, paperId, paperTitle, position]);
 
@@ -377,8 +478,12 @@ export default function SmartSelectionPopup({
         setChatHistory(prev => [...prev, { role: 'user', content: message }]);
         setIsChatLoading(true);
 
-        try {
-            const response = await api.post('/workbench/analyze/smart', {
+        // Append empty assistant message for streaming
+        setChatHistory(prev => [...prev, { role: 'assistant', content: '' }]);
+
+        await streamAnalyze(
+            '/api/v1/workbench/analyze/smart/stream',
+            {
                 text,
                 paper_id: paperId,
                 paper_title: paperTitle,
@@ -386,20 +491,32 @@ export default function SmartSelectionPopup({
                 context: fullContent?.slice(0, 8000),
                 chat_history: chatHistory,
                 user_message: message,
-            });
-
-            setChatHistory(prev => [
-                ...prev,
-                { role: 'assistant', content: response.data.result || '抱歉，我无法回答这个问题。' },
-            ]);
-        } catch (error) {
-            setChatHistory(prev => [
-                ...prev,
-                { role: 'assistant', content: `出错了: ${(error as Error).message}` },
-            ]);
-        } finally {
-            setIsChatLoading(false);
-        }
+            },
+            (content) => {
+                setChatHistory(prev => {
+                    const newHistory = [...prev];
+                    const lastMsg = newHistory[newHistory.length - 1];
+                    if (lastMsg.role === 'assistant') {
+                        lastMsg.content += content;
+                    }
+                    return newHistory;
+                });
+            },
+            () => {
+                setIsChatLoading(false);
+            },
+            (error) => {
+                setChatHistory(prev => {
+                    const newHistory = [...prev];
+                    const lastMsg = newHistory[newHistory.length - 1];
+                    if (lastMsg.role === 'assistant') {
+                        lastMsg.content += `\n\n**出错**: ${(error as Error).message}`;
+                    }
+                    return newHistory;
+                });
+                setIsChatLoading(false);
+            }
+        );
     }, [text, paperId, paperTitle, fullContent, chatHistory]);
 
     return (
@@ -471,8 +588,8 @@ export default function SmartSelectionPopup({
                 {/* 工作台操作反馈 */}
                 {workbenchStatus && (
                     <div className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 rounded-lg text-xs font-medium shadow-lg animate-in fade-in zoom-in-95 ${workbenchStatus.success
-                            ? 'bg-green-500 text-white'
-                            : 'bg-red-500 text-white'
+                        ? 'bg-green-500 text-white'
+                        : 'bg-red-500 text-white'
                         }`}>
                         {workbenchStatus.success
                             ? `✓ 已添加到${workbenchStatus.type === 'method' ? '方法炼金台' : workbenchStatus.type === 'asset' ? '资产仓库' : '智能笔记'}`

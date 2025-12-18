@@ -289,7 +289,7 @@ async def update_reflection_endpoint(item_id: str, request: UpdateReflectionRequ
 
 # ============ Smart Analysis Endpoints ============
 
-from app.services.smart_analysis import smart_analyze
+from app.services.smart_analysis import smart_analyze, smart_analyze_stream
 
 
 class SmartAnalyzeRequest(BaseModel):
@@ -324,3 +324,40 @@ async def smart_analyze_endpoint(request: SmartAnalyzeRequest):
         user_message=request.user_message,
     )
     return result
+
+
+from fastapi.responses import StreamingResponse
+
+
+@router.post("/analyze/smart/stream")
+async def smart_analyze_stream_endpoint(request: SmartAnalyzeRequest):
+    """
+    流式智能分析选中文本
+    
+    使用 Server-Sent Events (SSE) 实现实时响应流
+    用户可以看到分析结果逐步生成，而不需要等待完整响应
+    
+    支持类型:
+    - math: 公式解析
+    - feynman: 费曼教学法讲解
+    - deep: 深度研究分析
+    - chat: Chat with PDF 对话
+    """
+    return StreamingResponse(
+        smart_analyze_stream(
+            text=request.text,
+            paper_id=request.paper_id,
+            paper_title=request.paper_title,
+            action_type=request.action_type,
+            context=request.context,
+            chat_history=request.chat_history,
+            user_message=request.user_message,
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        }
+    )
+

@@ -25,6 +25,7 @@ import {
     PanelRightClose,
 } from 'lucide-react';
 import { api } from '../lib/api';
+import type { TextLocation } from '../lib/api';
 
 // Types
 export interface WorkbenchItem {
@@ -42,6 +43,8 @@ interface WorkbenchProps {
     paperId: string;
     paperTitle: string;
     onClose?: () => void;
+    onJumpToLocation?: (location: TextLocation) => void;
+    refreshKey?: number;  // Increment to trigger refresh
 }
 
 // Smart Note Card with expandable reflection
@@ -49,10 +52,12 @@ function SmartNoteCard({
     item,
     onRemove,
     onUpdateReflection,
+    onJumpToItemLocation,
 }: {
     item: WorkbenchItem;
     onRemove: () => void;
     onUpdateReflection: (reflection: string) => void;
+    onJumpToItemLocation?: (location: TextLocation) => void;
 }) {
     const [isExpanded, setIsExpanded] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
@@ -62,7 +67,17 @@ function SmartNoteCard({
     const [isSaving, setIsSaving] = useState(false);
 
     const originalText = (item.data?.original_text as string) || '';
-    const location = (item.data?.location as string) || '';
+    const locationStr = (item.data?.location as string) || '';
+
+    let locationObj: TextLocation | null = null;
+    try {
+        if (locationStr) {
+            locationObj = JSON.parse(locationStr);
+        }
+    } catch (e) {
+        // Ignore invalid location
+    }
+
     const reflectionUpdatedAt = item.data?.reflection_updated_at as string;
 
     const handleSave = async () => {
@@ -87,6 +102,19 @@ function SmartNoteCard({
                     </p>
                 </div>
                 <div className="flex items-center gap-1">
+                    {/* Location Jump Button */}
+                    {locationObj && onJumpToItemLocation && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onJumpToItemLocation(locationObj!);
+                            }}
+                            className="p-1 text-purple-400 hover:text-purple-700 hover:bg-purple-100 rounded transition-colors"
+                            title="跳转到原文位置"
+                        >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                        </button>
+                    )}
                     {isExpanded ? <ChevronUp className="w-4 h-4 text-purple-400" /> : <ChevronDown className="w-4 h-4 text-purple-400" />}
                     <button
                         onClick={(e) => { e.stopPropagation(); onRemove(); }}
@@ -105,7 +133,14 @@ function SmartNoteCard({
                         <div className="flex items-center gap-1 text-xs text-purple-500 mb-1">
                             <FileText className="w-3 h-3" />
                             原文
-                            {location && <span className="text-purple-400">({location})</span>}
+                            {locationObj && (
+                                <span
+                                    className="text-purple-400 cursor-pointer hover:underline ml-1"
+                                    onClick={() => onJumpToItemLocation?.(locationObj!)}
+                                >
+                                    (Line {locationObj.start_line})
+                                </span>
+                            )}
                         </div>
                         <div className="bg-white rounded-lg p-3 text-sm text-slate-700 border border-purple-100 max-h-32 overflow-y-auto">
                             {originalText}
@@ -328,7 +363,7 @@ function DropZone({
 }
 
 // Main Enhanced Workbench Component
-export default function Workbench({ paperId, paperTitle, onClose }: WorkbenchProps) {
+export default function Workbench({ paperId, paperTitle, onClose, onJumpToLocation, refreshKey }: WorkbenchProps) {
     const [methodItems, setMethodItems] = useState<WorkbenchItem[]>([]);
     const [assetItems, setAssetItems] = useState<WorkbenchItem[]>([]);
     const [noteItems, setNoteItems] = useState<WorkbenchItem[]>([]);
@@ -384,7 +419,7 @@ export default function Workbench({ paperId, paperTitle, onClose }: WorkbenchPro
 
         loadWorkbenchItems();
         loadAutoAnalysis();
-    }, [paperId]);
+    }, [paperId, refreshKey]);
 
     // Handle method drop - call LLM analysis
     const handleMethodDrop = useCallback(async (text: string) => {
@@ -639,6 +674,7 @@ export default function Workbench({ paperId, paperTitle, onClose }: WorkbenchPro
                             item={item}
                             onRemove={onRemove}
                             onUpdateReflection={(reflection) => handleUpdateReflection(item.id, reflection)}
+                            onJumpToItemLocation={onJumpToLocation}
                         />
                     )}
                 />
