@@ -1,27 +1,32 @@
 /**
- * Read it DEEP - 登录页面
+ * Read it DEEP - 登录/注册页面
  * 
- * 简洁的登录表单（注册由管理员面板管理）
+ * 支持登录和注册（第一个用户自动成为管理员）
  */
 
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { BookOpen, Loader2, AlertCircle } from 'lucide-react';
+import { authApi } from '../lib/api';
+import { BookOpen, Loader2, AlertCircle, UserPlus, LogIn } from 'lucide-react';
 
 export default function LoginPage() {
     const navigate = useNavigate();
     const location = useLocation();
     const { login, isLoading: authLoading } = useAuth();
 
+    const [mode, setMode] = useState<'login' | 'register'>('login');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [username, setUsername] = useState('');
     const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
     const from = (location.state as { from?: string })?.from || '/library';
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
         setIsLoading(true);
@@ -32,6 +37,40 @@ export default function LoginPage() {
         } catch (err: unknown) {
             const error = err as { response?: { data?: { detail?: string } } };
             setError(error.response?.data?.detail || '登录失败，请检查邮箱和密码');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleRegister = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        setSuccess('');
+
+        if (password !== confirmPassword) {
+            setError('两次输入的密码不一致');
+            return;
+        }
+
+        if (password.length < 6) {
+            setError('密码至少需要 6 个字符');
+            return;
+        }
+
+        setIsLoading(true);
+
+        try {
+            const response = await authApi.register(email, password, username || undefined);
+            // Auto login after registration
+            localStorage.setItem('readitdeep_token', response.access_token);
+            localStorage.setItem('readitdeep_refresh_token', response.refresh_token);
+            setSuccess('注册成功！正在跳转...');
+            setTimeout(() => {
+                window.location.href = '/library';
+            }, 1000);
+        } catch (err: unknown) {
+            const error = err as { response?: { data?: { detail?: string } } };
+            setError(error.response?.data?.detail || '注册失败，请稍后重试');
         } finally {
             setIsLoading(false);
         }
@@ -57,18 +96,47 @@ export default function LoginPage() {
                     <p className="text-slate-500">AI 驱动的深度阅读平台</p>
                 </div>
 
+                {/* Mode Toggle */}
+                <div className="flex bg-slate-100 rounded-lg p-1 mb-6">
+                    <button
+                        onClick={() => { setMode('login'); setError(''); setSuccess(''); }}
+                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-medium transition-all ${mode === 'login'
+                                ? 'bg-white text-slate-800 shadow-sm'
+                                : 'text-slate-500 hover:text-slate-700'
+                            }`}
+                    >
+                        <LogIn className="w-4 h-4" />
+                        登录
+                    </button>
+                    <button
+                        onClick={() => { setMode('register'); setError(''); setSuccess(''); }}
+                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-medium transition-all ${mode === 'register'
+                                ? 'bg-white text-slate-800 shadow-sm'
+                                : 'text-slate-500 hover:text-slate-700'
+                            }`}
+                    >
+                        <UserPlus className="w-4 h-4" />
+                        注册
+                    </button>
+                </div>
+
+                {/* Error/Success Messages */}
+                {error && (
+                    <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-100 rounded-lg text-red-600 text-sm">
+                        <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                        <span>{error}</span>
+                    </div>
+                )}
+                {success && (
+                    <div className="flex items-center gap-2 p-3 mb-4 bg-green-50 border border-green-100 rounded-lg text-green-600 text-sm">
+                        <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                        <span>{success}</span>
+                    </div>
+                )}
+
                 {/* Login Form */}
-                <div>
-                    <h2 className="text-xl font-bold text-slate-800 mb-6 text-center">欢迎回来</h2>
-
-                    {error && (
-                        <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-100 rounded-lg text-red-600 text-sm">
-                            <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                            <span>{error}</span>
-                        </div>
-                    )}
-
-                    <form onSubmit={handleSubmit} className="space-y-4">
+                {mode === 'login' && (
+                    <form onSubmit={handleLogin} className="space-y-4">
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1.5">
                                 邮箱
@@ -114,11 +182,90 @@ export default function LoginPage() {
                             )}
                         </button>
                     </form>
+                )}
 
-                    <p className="mt-8 text-center text-sm text-slate-400">
-                        需要账户？请联系管理员
-                    </p>
-                </div>
+                {/* Register Form */}
+                {mode === 'register' && (
+                    <form onSubmit={handleRegister} className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                                邮箱 <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                                type="email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
+                                placeholder="your@email.com"
+                                required
+                                autoComplete="email"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                                用户名 <span className="text-slate-400">(可选)</span>
+                            </label>
+                            <input
+                                type="text"
+                                value={username}
+                                onChange={(e) => setUsername(e.target.value)}
+                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
+                                placeholder="您的昵称"
+                                autoComplete="username"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                                密码 <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                                type="password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
+                                placeholder="至少 6 个字符"
+                                required
+                                autoComplete="new-password"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                                确认密码 <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                                type="password"
+                                value={confirmPassword}
+                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
+                                placeholder="再次输入密码"
+                                required
+                                autoComplete="new-password"
+                            />
+                        </div>
+
+                        <button
+                            type="submit"
+                            disabled={isLoading}
+                            className="w-full py-3 px-4 bg-brand-600 text-white font-medium rounded-lg hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-md"
+                        >
+                            {isLoading ? (
+                                <>
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                    注册中...
+                                </>
+                            ) : (
+                                '创建账户'
+                            )}
+                        </button>
+
+                        <p className="text-xs text-center text-slate-400 mt-2">
+                            第一个注册的用户将自动成为管理员
+                        </p>
+                    </form>
+                )}
             </div>
 
             <div className="fixed bottom-6 text-center text-xs text-slate-400">
