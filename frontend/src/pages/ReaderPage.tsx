@@ -78,8 +78,8 @@ export default function ReaderPage() {
         }
     }, [paperId, paper?.translated_content, translatedContent]);
 
-    // Handle translation with SSE
-    const handleTranslate = () => {
+    // Handle translation - triggers background task, optionally connects SSE
+    const handleTranslate = async () => {
         if (isTranslating) return;
 
         if (translatedContent) {
@@ -88,42 +88,118 @@ export default function ReaderPage() {
             return;
         }
 
-        // Start streaming translation
+        // First trigger background translation task
         setIsTranslating(true);
-        setTranslationProgress('连接中...');
+        setTranslationProgress('启动翻译...');
 
-        const eventSource = new EventSource(`/api/v1/papers/${paperId}/translate/stream`);
-        let buffer = '';
+        try {
+            const triggerRes = await fetch(`/api/v1/papers/${paperId}/translate`, { method: 'POST' });
+            const triggerData = await triggerRes.json();
 
-        eventSource.onmessage = (event) => {
-            const data = event.data;
+            if (!triggerData.success && triggerData.status !== 'translating' && triggerData.status !== 'completed') {
+                setIsTranslating(false);
+                setTranslationProgress(triggerData.message || '启动失败');
+                return;
+            }
 
-            if (data.startsWith('[START]')) {
-                setTranslationProgress(data.replace('[START] ', ''));
-            } else if (data.startsWith('[PROGRESS]')) {
-                setTranslationProgress(data.replace('[PROGRESS] ', ''));
-            } else if (data === '[DONE]') {
-                eventSource.close();
-                setTranslatedContent(buffer);
-                setIsTranslated(true);
+            // If already completed, just fetch the result
+            if (triggerData.status === 'completed') {
+                const res = await fetch(`/api/v1/papers/${paperId}/translation`);
+                const data = await res.json();
+                if (data.translated_content) {
+                    setTranslatedContent(data.translated_content);
+                    setIsTranslated(true);
+                }
                 setIsTranslating(false);
                 setTranslationProgress('');
-            } else if (data.startsWith('[ERROR]')) {
+                return;
+            }
+
+            // Connect SSE for live progress (optional - task continues in background)
+            setTranslationProgress('连接翻译流...');
+            const eventSource = new EventSource(`/api/v1/papers/${paperId}/translate/stream`);
+            let buffer = '';
+
+            eventSource.onmessage = (event) => {
+                const data = event.data;
+
+                if (data.startsWith('[START]')) {
+                    setTranslationProgress(data.replace('[START] ', ''));
+                } else if (data.startsWith('[PROGRESS]')) {
+                    setTranslationProgress(data.replace('[PROGRESS] ', ''));
+                } else if (data === '[DONE]' || data === '[ALREADY_DONE]') {
+                    eventSource.close();
+                    // Fetch final result
+                    fetch(`/api/v1/papers/${paperId}/translation`)
+                        .then(res => res.json())
+                        .then(result => {
+                            if (result.translated_content) {
+                                setTranslatedContent(result.translated_content);
+                                setIsTranslated(true);
+                            }
+                        });
+                    setIsTranslating(false);
+                    setTranslationProgress('');
+                } else if (data.startsWith('[ERROR]')) {
+                    eventSource.close();
+                    setIsTranslating(false);
+                    setTranslationProgress('翻译失败');
+                    console.error(data);
+                } else {
+                    // Unescape newlines and append
+                    buffer += data.replace(/\\n/g, '\n');
+                }
+            };
+
+            eventSource.onerror = () => {
                 eventSource.close();
-                setIsTranslating(false);
-                setTranslationProgress('翻译失败');
-                console.error(data);
-            } else {
-                // Unescape newlines and append
-                buffer += data.replace(/\\n/g, '\n');
+                // SSE disconnected but task continues in background
+                // Start polling for status
+                setTranslationProgress('翻译进行中 (后台)...');
+                pollTranslationStatus();
+            };
+        } catch (error) {
+            console.error('Translation trigger failed:', error);
+            setIsTranslating(false);
+            setTranslationProgress('启动失败');
+        }
+    };
+
+    // Poll for translation status (when SSE disconnects)
+    const pollTranslationStatus = async () => {
+        const checkStatus = async () => {
+            try {
+                const res = await fetch(`/api/v1/papers/${paperId}/translation`);
+                const data = await res.json();
+
+                if (data.status === 'completed' && data.translated_content) {
+                    setTranslatedContent(data.translated_content);
+                    setIsTranslated(true);
+                    setIsTranslating(false);
+                    setTranslationProgress('');
+                    return true; // Done
+                } else if (data.status === 'failed') {
+                    setIsTranslating(false);
+                    setTranslationProgress(`翻译失败: ${data.error || '未知错误'}`);
+                    return true; // Done (failed)
+                } else if (data.status === 'translating') {
+                    setTranslationProgress(`翻译中 ${data.progress}% (${data.chunks_done}/${data.chunks_total})`);
+                    return false; // Continue polling
+                }
+                return false;
+            } catch {
+                return false;
             }
         };
 
-        eventSource.onerror = () => {
-            eventSource.close();
-            setIsTranslating(false);
-            setTranslationProgress('连接失败');
+        // Poll every 2 seconds
+        const poll = async () => {
+            const done = await checkStatus();
+            if (!done) {
+                setTimeout(poll, 2000);
+            }
         };
+        poll();
     };
 
 
