@@ -74,7 +74,7 @@ services:
   # ===========================================================================
   redis:
     # GHCR 替代: ghcr.io/redis/redis-stack-server:latest
-    image: ghcr.io/redis/redis-stack-server:latest
+    image: redis:7-alpine
     container_name: readitdeep-redis
     ports:
       - "${REDIS_PORT:-6379}:6379"
