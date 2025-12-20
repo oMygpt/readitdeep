@@ -58,7 +58,7 @@ class User(Base):
     def to_dict(self) -> dict:
         """转换为字典 (不含敏感信息)"""
         return {
-            "id": self.id,
+            "id": str(self.id),
             "email": self.email,
             "username": self.username,
             "role": self.role,

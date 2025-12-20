@@ -207,10 +207,13 @@ export default function ReaderPage() {
     // Use translated content if available and toggled, otherwise original
     const content = (isTranslated && translatedContent) ? translatedContent : (contentData?.markdown || '');
 
-    // Extract references logic
-    const parsedReferences = useMemo(() => {
-        if (!content) return [];
+    // Extract references logic - supports both numbered [1] and author-year format
+    const { parsedReferences, authorYearIndex } = useMemo(() => {
+        if (!content) return { parsedReferences: [] as string[], authorYearIndex: new Map<string, number>() };
+
         const extractedRefs: string[] = [];
+        const ayIndex = new Map<string, number>(); // Maps "author_year" -> index
+
         // Support Chinese "参考文献" and various colon formats
         const refSectionMatch = content.match(/(?:^|\n)(?:#+\s*|\*\*)?(?:References|Bibliography|参考文献|参考资料)(?:\*\*|:|：)?\s*[\r\n]+([\s\S]*)$/i);
 
@@ -218,22 +221,114 @@ export default function ReaderPage() {
             const refText = refSectionMatch[1];
             const lines = refText.split('\n');
             let currentId: string | null = null;
+            let currentRefIndex = 0;
+            let currentRefText = '';
+
+            // Helper: extract author key from reference text for author-year format
+            const extractAuthorKey = (text: string): string[] => {
+                const keys: string[] = [];
+
+                // Pattern 1: "Lastname, F." or "Lastname, Firstname" at start
+                const match1 = text.match(/^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?),?\s/);
+                if (match1) {
+                    keys.push(match1[1].toLowerCase());
+                }
+
+                // Pattern 2: Multiple authors - extract first author for "et al." matching
+                const etAlMatch = text.match(/^([A-Z][a-z]+)/);
+                if (etAlMatch) {
+                    keys.push(etAlMatch[1].toLowerCase());
+                }
+
+                // Pattern 3: Organization name like "OpenAI"
+                const orgMatch = text.match(/^([A-Z][A-Za-z]+)\s*[\.,\(]/);
+                if (orgMatch) {
+                    keys.push(orgMatch[1].toLowerCase());
+                }
+
+                return keys;
+            };
+
+            // Helper: extract year from reference text
+            const extractYear = (text: string): string | null => {
+                // Common patterns: (2023), 2023., (2023a), 2023,
+                const yearMatch = text.match(/[\(\s,]?((?:19|20)\d{2}[a-z]?)[\)\.,\s]/);
+                return yearMatch ? yearMatch[1] : null;
+            };
+
+            // Helper: register author-year mapping
+            const registerAuthorYear = (refIndex: number, text: string) => {
+                const authors = extractAuthorKey(text);
+                const year = extractYear(text);
+
+                if (year) {
+                    authors.forEach(author => {
+                        const key = `${author}_${year}`.toLowerCase();
+                        if (!ayIndex.has(key)) {
+                            ayIndex.set(key, refIndex);
+                        }
+                    });
+                }
+            };
 
             for (const line of lines) {
-                // Support standard [1] and potentially loose formatting
-                const match = line.match(/^\s*(?:(?:\d+\.|-)\s*)?\[(\d+)\]\s+(.*)/);
-                if (match) {
-                    currentId = match[1];
-                    extractedRefs[parseInt(currentId!) - 1] = match[2].trim();
-                } else if (currentId && line.trim()) {
-                    const index = parseInt(currentId) - 1;
-                    if (extractedRefs[index]) {
-                        extractedRefs[index] += " " + line.trim();
+                // Pattern 1: Numbered format - [1] Author...
+                const numberedMatch = line.match(/^\s*(?:(?:\d+\.|-)\s*)?\[(\d+)\]\s+(.*)/);
+                if (numberedMatch) {
+                    // Save previous reference if exists
+                    if (currentId && currentRefText) {
+                        registerAuthorYear(parseInt(currentId) - 1, currentRefText);
+                    }
+
+                    currentId = numberedMatch[1];
+                    currentRefText = numberedMatch[2].trim();
+                    extractedRefs[parseInt(numberedMatch[1]) - 1] = currentRefText;
+                    continue;
+                }
+
+                // Pattern 2: Author-year format - "Lastname, F., ... (2023). Title..."
+                // Detect new reference entry (starts with author name)
+                const authorStartMatch = line.match(/^([A-Z][a-z]+,?\s+[A-Z]\.?|[A-Z][A-Za-z]+\s+\()/);
+                if (authorStartMatch && !line.match(/^\s+/)) {
+                    // Save previous reference if exists
+                    if (currentRefText) {
+                        extractedRefs[currentRefIndex] = currentRefText;
+                        registerAuthorYear(currentRefIndex, currentRefText);
+                        currentRefIndex++;
+                    }
+                    currentId = null; // Not numbered
+                    currentRefText = line.trim();
+                    continue;
+                }
+
+                // Continuation line
+                if (line.trim()) {
+                    if (currentId) {
+                        // Numbered format continuation
+                        const index = parseInt(currentId) - 1;
+                        if (extractedRefs[index]) {
+                            extractedRefs[index] += " " + line.trim();
+                            currentRefText = extractedRefs[index];
+                        }
+                    } else if (currentRefText) {
+                        // Author-year format continuation
+                        currentRefText += " " + line.trim();
                     }
                 }
             }
+
+            // Don't forget the last entry
+            if (currentRefText) {
+                if (currentId) {
+                    registerAuthorYear(parseInt(currentId) - 1, currentRefText);
+                } else {
+                    extractedRefs[currentRefIndex] = currentRefText;
+                    registerAuthorYear(currentRefIndex, currentRefText);
+                }
+            }
         }
-        return extractedRefs;
+
+        return { parsedReferences: extractedRefs, authorYearIndex: ayIndex };
     }, [content]);
 
     // Extract Paper Structure (Front Matter, Abstract, Body)
@@ -368,15 +463,47 @@ export default function ReaderPage() {
 
         let tempContent = cleanBodyContent;
 
+        // Helper function to create citation link
+        const createCitationLink = (author: string, year: string, displayText: string): string => {
+            const key = `${author.toLowerCase().replace(/\s+/g, '')}_${year}`;
+            const refIndex = authorYearIndex.get(key);
+
+            if (refIndex !== undefined) {
+                // Found matching reference
+                return `<span class="citation-ref author-year-citation text-indigo-600 hover:underline cursor-pointer" data-ref-id="${refIndex + 1}" data-author="${author}" data-year="${year}">${displayText}</span>`;
+            }
+            // No match found, return as-is but still styled
+            return `<span class="citation-ref author-year-citation text-indigo-500/70" data-author="${author}" data-year="${year}">${displayText}</span>`;
+        };
+
         try {
             // Replace anchors - Reference entries at start of line: [1] Author...
             tempContent = tempContent.replace(/(^|\n)\s*\[(\d+)\]/g, (_match: string, prefix: string, id: string) => {
                 return `${prefix}<span id="ref-${id}" class="reference-anchor text-slate-400 font-mono text-sm">[${id}]</span>`;
             });
 
+            // Also add anchors for author-year format references in References section
+            // Match: "Author, F. ... (2023)" at start of line in References section
+            const refSectionStart = tempContent.search(/(?:^|\n)(?:#+\s*|\*\*)?(?:References|Bibliography|参考文献|参考资料)/i);
+            if (refSectionStart !== -1) {
+                const beforeRefs = tempContent.substring(0, refSectionStart);
+                let refsSection = tempContent.substring(refSectionStart);
+
+                // Add anchors to author-year format entries
+                let ayRefIndex = 0;
+                refsSection = refsSection.replace(
+                    /(\n)([A-Z][a-z]+(?:,\s*[A-Z]\.?|\s+[A-Z]\.?)[^(]*\((?:19|20)\d{2}[a-z]?\))/g,
+                    (_match: string, prefix: string, entry: string) => {
+                        ayRefIndex++;
+                        return `${prefix}<span id="ref-ay-${ayRefIndex}" class="reference-entry-anchor">${entry}</span>`;
+                    }
+                );
+                tempContent = beforeRefs + refsSection;
+            }
+
             // Use placeholders to protect anchors
             const placeholders: { token: string; replacement: string }[] = [];
-            tempContent = tempContent.replace(/<span id="ref-(\d+)"[^>]*>\[\1\]<\/span>/g, (match: string) => {
+            tempContent = tempContent.replace(/<span id="ref-[^"]*"[^>]*>[^<]*<\/span>/g, (match: string) => {
                 const token = `__REF_ANCHOR_PROTECTED_${placeholders.length}__`;
                 placeholders.push({ token, replacement: match });
                 return token;
@@ -384,7 +511,6 @@ export default function ReaderPage() {
 
             // Replace LaTeX superscript citations: $^{1;2;3}$ or $^{1,2,3}$ or $^{1}$
             tempContent = tempContent.replace(/\$\^{([0-9;,\s]+)}\$/g, (_match: string, ids: string) => {
-                // Split by ; or , and create clickable links for each
                 const idList = ids.split(/[;,]/).map(s => s.trim()).filter(s => s);
                 const links = idList.map(id =>
                     `<span class="citation-ref text-indigo-600 hover:underline cursor-pointer font-bold" data-ref-id="${id}">${id}</span>`
@@ -392,10 +518,73 @@ export default function ReaderPage() {
                 return `<sup class="citation-sup">[${links}]</sup>`;
             });
 
-            // Replace inline citations - Standard [1] format
+            // Replace inline citations - Multiple citations format: [31, 30] or [27, 60, 64]
+            tempContent = tempContent.replace(/\[(\d+(?:\s*[,;]\s*\d+)+)\]/g, (_match: string, ids: string) => {
+                const idList = ids.split(/[,;]/).map(s => s.trim()).filter(s => s);
+                const links = idList.map(id =>
+                    `<span class="citation-ref text-indigo-600 hover:underline cursor-pointer font-bold" data-ref-id="${id}">${id}</span>`
+                ).join(', ');
+                return `<sup class="citation-sup">[${links}]</sup>`;
+            });
+
+            // Replace inline citations - Standard [1] format (single number)
             tempContent = tempContent.replace(/\[(\d+)\]/g, (_match: string, id: string) => {
                 return `<sup class="citation-sup"><span class="citation-ref text-indigo-600 hover:underline cursor-pointer font-bold" data-ref-id="${id}">[${id}]</span></sup>`;
             });
+
+            // === AUTHOR-YEAR CITATION FORMAT SUPPORT ===
+
+            // Pattern 1: Parenthetical with multiple citations separated by semicolons
+            // e.g., (Chowdhery et al., 2023; OpenAI, 2023)
+            tempContent = tempContent.replace(
+                /\(([A-Z][a-z]+(?:\s+et\s+al\.?)?(?:,\s*|\s+)\d{4}[a-z]?(?:\s*;\s*[A-Z][a-z]+(?:\s+et\s+al\.?)?(?:,\s*|\s+)\d{4}[a-z]?)*)\)/g,
+                (_match: string, content: string) => {
+                    // Split by semicolon
+                    const citations = content.split(/\s*;\s*/);
+                    const links = citations.map((citation: string) => {
+                        // Extract author and year
+                        const citMatch = citation.match(/([A-Z][a-z]+(?:\s+et\s+al\.?)?)\s*,?\s*(\d{4}[a-z]?)/);
+                        if (citMatch) {
+                            const [, author, year] = citMatch;
+                            const authorKey = author.replace(/\s+et\s+al\.?/i, '').trim();
+                            return createCitationLink(authorKey, year, citation.trim());
+                        }
+                        return citation;
+                    }).join('; ');
+                    return `(${links})`;
+                }
+            );
+
+            // Pattern 2: In-text citation: "Author et al. (2023)" or "Author (2023)"
+            // e.g., "Wei et al. (2022)" or "OpenAI (2023)"
+            tempContent = tempContent.replace(
+                /([A-Z][a-z]+(?:\s+et\s+al\.)?\s*)\((\d{4}[a-z]?)\)/g,
+                (match: string, author: string, year: string) => {
+                    const authorKey = author.replace(/\s+et\s+al\.?/i, '').trim();
+                    return createCitationLink(authorKey, year, match);
+                }
+            );
+
+            // Pattern 3: Product/Model name followed by citation in parentheses
+            // e.g., "Qwen3 (Yang et al., 2025a)" or "Llama3 (Dubey et al., 2024)"
+            // This matches: Word/Number + space + (Author et al., Year)
+            tempContent = tempContent.replace(
+                /([A-Z][A-Za-z0-9-]+)\s+\(([A-Z][a-z]+(?:\s+et\s+al\.?)?,?\s*\d{4}[a-z]?)\)/g,
+                (match: string, productName: string, citationContent: string) => {
+                    // Don't process if already processed (check for span tag)
+                    if (match.includes('<span')) return match;
+
+                    // Extract author and year from citation
+                    const citMatch = citationContent.match(/([A-Z][a-z]+(?:\s+et\s+al\.?)?)\s*,?\s*(\d{4}[a-z]?)/);
+                    if (citMatch) {
+                        const [, author, year] = citMatch;
+                        const authorKey = author.replace(/\s+et\s+al\.?/i, '').trim();
+                        const citationLink = createCitationLink(authorKey, year, `(${citationContent})`);
+                        return `${productName} ${citationLink}`;
+                    }
+                    return match;
+                }
+            );
 
             // Restore anchors
             placeholders.forEach((p) => {
@@ -407,7 +596,7 @@ export default function ReaderPage() {
         }
 
         return tempContent || cleanBodyContent;
-    }, [cleanBodyContent]);
+    }, [cleanBodyContent, authorYearIndex]);
 
     const handleMouseOver = (e: React.MouseEvent) => {
         const target = e.target as HTMLElement;
@@ -431,20 +620,53 @@ export default function ReaderPage() {
         const target = e.target as HTMLElement;
         if (target.classList.contains('citation-ref')) {
             const id = target.getAttribute('data-ref-id');
-            if (id) {
-                const refElement = document.getElementById(`ref-${id}`);
-                if (refElement) {
-                    refElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const author = target.getAttribute('data-author');
+            const year = target.getAttribute('data-year');
 
-                    // Highlight effect
-                    const parent = refElement.closest('p') || refElement.parentElement;
-                    if (parent) {
-                        parent.classList.add('highlight-ref');
-                        setTimeout(() => {
-                            parent.classList.remove('highlight-ref');
-                        }, 2000);
+            let refElement: HTMLElement | null = null;
+
+            // First try: direct ref-id lookup
+            if (id) {
+                refElement = document.getElementById(`ref-${id}`);
+            }
+
+            // Second try: search for author-year anchor
+            if (!refElement && author && year) {
+                // Try author-year format anchors
+                const ayAnchors = document.querySelectorAll('[id^="ref-ay-"]');
+                for (const anchor of ayAnchors) {
+                    const text = anchor.textContent?.toLowerCase() || '';
+                    if (text.includes(author.toLowerCase()) && text.includes(year)) {
+                        refElement = anchor as HTMLElement;
+                        break;
                     }
                 }
+
+                // Third try: search in references section text
+                if (!refElement && mainContentRef.current) {
+                    const refSection = mainContentRef.current.querySelector('.reference-section, [id*="reference"], h2:has(+ p)');
+                    if (refSection) {
+                        const paragraphs = refSection.parentElement?.querySelectorAll('p') || [];
+                        for (const p of paragraphs) {
+                            const text = p.textContent?.toLowerCase() || '';
+                            if (text.includes(author.toLowerCase()) && text.includes(year)) {
+                                refElement = p as HTMLElement;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (refElement) {
+                refElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                // Highlight effect
+                const parent = refElement.closest('p') || refElement.parentElement || refElement;
+                parent.classList.add('highlight-ref');
+                setTimeout(() => {
+                    parent.classList.remove('highlight-ref');
+                }, 2000);
             }
         }
     };

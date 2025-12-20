@@ -20,80 +20,91 @@ const ZenReader: React.FC<ZenReaderProps> = ({ content, isZen, onSelection, refe
 
   // Extract references from Markdown content if metadata is missing
   const parsedReferences = useMemo(() => {
-      if (references && references.length > 0) return references;
+    if (references && references.length > 0) return references;
 
-      const extractedRefs: string[] = [];
-      // 1. Try to find the References section
-      // Match Header: # References, **References**, References:, etc.
-      const refSectionMatch = content.match(/(?:^|\n)(?:#+\s*|\*\*)?(?:References|Bibliography|参考文献|参考资料)(?:\*\*|:)?\s*[\r\n]+([\s\S]*)$/i);
-      
-      if (refSectionMatch) {
-          const refText = refSectionMatch[1];
-          // 2. Parse lines starting with [n]
-          // Normalize text to handle wrapping
-          const lines = refText.split('\n');
-          let currentId: string | null = null;
-          
-          for (const line of lines) {
-              // Match [n] at start of line, optionally preceded by list markers (1. or -)
-              const match = line.match(/^\s*(?:(?:\d+\.|-)\s*)?\[(\d+)\]\s+(.*)/);
-              if (match) {
-                  currentId = match[1];
-                  // Ensure array has space
-                  extractedRefs[parseInt(currentId) - 1] = match[2].trim();
-              } else if (currentId && line.trim()) {
-                  // Append continuation lines (simple heuristic)
-                  // If line is not a new reference and not empty, append to previous
-                  const index = parseInt(currentId) - 1;
-                  if (extractedRefs[index]) {
-                      extractedRefs[index] += " " + line.trim();
-                  }
-              }
+    const extractedRefs: string[] = [];
+    // 1. Try to find the References section
+    // Match Header: # References, **References**, References:, etc.
+    const refSectionMatch = content.match(/(?:^|\n)(?:#+\s*|\*\*)?(?:References|Bibliography|参考文献|参考资料)(?:\*\*|:)?\s*[\r\n]+([\s\S]*)$/i);
+
+    if (refSectionMatch) {
+      const refText = refSectionMatch[1];
+      // 2. Parse lines starting with [n]
+      // Normalize text to handle wrapping
+      const lines = refText.split('\n');
+      let currentId: string | null = null;
+
+      for (const line of lines) {
+        // Match [n] at start of line, optionally preceded by list markers (1. or -)
+        const match = line.match(/^\s*(?:(?:\d+\.|-)\s*)?\[(\d+)\]\s+(.*)/);
+        if (match) {
+          currentId = match[1];
+          // Ensure array has space
+          extractedRefs[parseInt(currentId) - 1] = match[2].trim();
+        } else if (currentId && line.trim()) {
+          // Append continuation lines (simple heuristic)
+          // If line is not a new reference and not empty, append to previous
+          const index = parseInt(currentId) - 1;
+          if (extractedRefs[index]) {
+            extractedRefs[index] += " " + line.trim();
           }
+        }
       }
-      return extractedRefs;
+    }
+    return extractedRefs;
   }, [content, references]);
 
   const processedContent = useMemo(() => {
-      let tempContent = content;
+    let tempContent = content;
 
-      // 1. Inject anchors into the References list (lines starting with [n])
-      // We look for patterns like: newline + [1] + space
-      tempContent = tempContent.replace(/(\n\s*)\[(\d+)\]/g, (match, prefix, id) => {
-          return `${prefix}<span id="ref-${id}" class="reference-anchor text-slate-500 font-mono">[${id}]</span>`;
-      });
+    // 1. Inject anchors into the References list (lines starting with [n])
+    // We look for patterns like: newline + [1] + space
+    tempContent = tempContent.replace(/(\n\s*)\[(\d+)\]/g, (match, prefix, id) => {
+      return `${prefix}<span id="ref-${id}" class="reference-anchor text-slate-500 font-mono">[${id}]</span>`;
+    });
 
-      // 2. Replace inline citations [n] with superscript links
-      // We look for [n] that are NOT preceded by the specific anchor formatting we just added.
-      // Or simply, we assume any remaining [n] are citations if they are not part of the anchor tag.
-      // Since we replaced the reference list [n] with <span ...>[n]</span>, the regex /\[(\d+)\]/ DOES match inside the span.
-      // We need to be careful.
-      
-      // Let's iterate and replace only if NOT inside a tag. This is hard with regex.
-      // Alternative: Use a temporary placeholder for the reference list anchors.
-      
-      // Reset content
-      tempContent = content;
-      
-      // Replace Reference List items with a unique token
-      const placeholders: string[] = [];
-      tempContent = tempContent.replace(/(\n\s*)\[(\d+)\]/g, (match, prefix, id) => {
-          const token = `__REF_ANCHOR_${id}__`;
-          placeholders.push({ token, replacement: `${prefix}<span id="ref-${id}" class="reference-anchor text-slate-500 font-mono">[${id}]</span>` } as any);
-          return token;
-      });
+    // 2. Replace inline citations [n] with superscript links
+    // We look for [n] that are NOT preceded by the specific anchor formatting we just added.
+    // Or simply, we assume any remaining [n] are citations if they are not part of the anchor tag.
+    // Since we replaced the reference list [n] with <span ...>[n]</span>, the regex /\[(\d+)\]/ DOES match inside the span.
+    // We need to be careful.
 
-      // Now replace all other [n] with superscripts
-      tempContent = tempContent.replace(/\[(\d+)\]/g, (match, id) => {
-          return `<sup class="citation-sup"><a href="#ref-${id}" class="citation-ref text-brand-600 hover:underline cursor-pointer decoration-dotted" data-ref-id="${id}">[${id}]</a></sup>`;
-      });
+    // Let's iterate and replace only if NOT inside a tag. This is hard with regex.
+    // Alternative: Use a temporary placeholder for the reference list anchors.
 
-      // Restore reference list items
-      placeholders.forEach((p: any) => {
-          tempContent = tempContent.replace(p.token, p.replacement);
-      });
+    // Reset content
+    tempContent = content;
 
-      return tempContent;
+    // Replace Reference List items with a unique token
+    const placeholders: string[] = [];
+    tempContent = tempContent.replace(/(\n\s*)\[(\d+)\]/g, (match, prefix, id) => {
+      const token = `__REF_ANCHOR_${id}__`;
+      placeholders.push({ token, replacement: `${prefix}<span id="ref-${id}" class="reference-anchor text-slate-500 font-mono">[${id}]</span>` } as any);
+      return token;
+    });
+
+    // Now replace multiple citation format [n, m, ...] first
+    // This pattern matches brackets containing multiple comma/semicolon separated numbers
+    tempContent = tempContent.replace(/\[(\d+(?:\s*[,;]\s*\d+)+)\]/g, (_match, ids) => {
+      // Split by , or ; and create clickable links for each
+      const idList = ids.split(/[,;]/).map((s: string) => s.trim()).filter((s: string) => s);
+      const links = idList.map((id: string) =>
+        `<a href="#ref-${id}" class="citation-ref text-brand-600 hover:underline cursor-pointer decoration-dotted" data-ref-id="${id}">${id}</a>`
+      ).join(', ');
+      return `<sup class="citation-sup">[${links}]</sup>`;
+    });
+
+    // Now replace all other single [n] with superscripts
+    tempContent = tempContent.replace(/\[(\d+)\]/g, (match, id) => {
+      return `<sup class="citation-sup"><a href="#ref-${id}" class="citation-ref text-brand-600 hover:underline cursor-pointer decoration-dotted" data-ref-id="${id}">[${id}]</a></sup>`;
+    });
+
+    // Restore reference list items
+    placeholders.forEach((p: any) => {
+      tempContent = tempContent.replace(p.token, p.replacement);
+    });
+
+    return tempContent;
   }, [content]);
 
   const handleMouseUp = () => {
@@ -109,47 +120,47 @@ const ZenReader: React.FC<ZenReaderProps> = ({ content, isZen, onSelection, refe
   };
 
   const handleMouseOver = (e: React.MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.classList.contains('citation-ref')) {
-          const id = target.getAttribute('data-ref-id');
-          if (id) {
-              const rect = target.getBoundingClientRect();
-              setHoveredCitation({ id, x: rect.left + rect.width / 2, y: rect.bottom });
-          }
+    const target = e.target as HTMLElement;
+    if (target.classList.contains('citation-ref')) {
+      const id = target.getAttribute('data-ref-id');
+      if (id) {
+        const rect = target.getBoundingClientRect();
+        setHoveredCitation({ id, x: rect.left + rect.width / 2, y: rect.bottom });
       }
+    }
   };
 
   const handleMouseOut = (e: React.MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.classList.contains('citation-ref')) {
-          setHoveredCitation(null);
-      }
+    const target = e.target as HTMLElement;
+    if (target.classList.contains('citation-ref')) {
+      setHoveredCitation(null);
+    }
   };
 
   const getReferenceText = (id: string) => {
-      const index = parseInt(id, 10) - 1;
-      if (index >= 0 && index < parsedReferences.length && parsedReferences[index]) {
-          return parsedReferences[index];
-      }
-      return `Reference [${id}] not found.`;
+    const index = parseInt(id, 10) - 1;
+    if (index >= 0 && index < parsedReferences.length && parsedReferences[index]) {
+      return parsedReferences[index];
+    }
+    return `Reference [${id}] not found.`;
   };
 
   return (
-    <div 
+    <div
       className={`h-full overflow-y-auto no-scrollbar transition-all duration-500 bg-white ${isZen ? 'px-[20%] pt-16' : 'px-0 pt-0'}`}
       onMouseUp={handleMouseUp}
       onMouseOver={handleMouseOver}
       onMouseOut={handleMouseOut}
     >
-        {hoveredCitation && (
-            <div 
-                className="fixed z-50 bg-slate-800 text-white text-xs p-3 rounded shadow-lg max-w-sm pointer-events-none transform -translate-x-1/2 mt-2 animate-fade-in"
-                style={{ top: hoveredCitation.y, left: hoveredCitation.x }}
-            >
-                {getReferenceText(hoveredCitation.id)}
-            </div>
-        )}
-        <style>{`
+      {hoveredCitation && (
+        <div
+          className="fixed z-50 bg-slate-800 text-white text-xs p-3 rounded shadow-lg max-w-sm pointer-events-none transform -translate-x-1/2 mt-2 animate-fade-in"
+          style={{ top: hoveredCitation.y, left: hoveredCitation.x }}
+        >
+          {getReferenceText(hoveredCitation.id)}
+        </div>
+      )}
+      <style>{`
           .team-highlight {
             background-color: rgba(253, 224, 71, 0.3);
             border-bottom: 2px solid #eab308;
@@ -199,13 +210,13 @@ const ZenReader: React.FC<ZenReaderProps> = ({ content, isZen, onSelection, refe
         `}</style>
       <article className={`prose prose-slate prose-headings:font-serif lg:prose-lg max-w-none pb-32 markdown-content ${isZen ? '' : 'px-12 py-8'}`}>
         <ReactMarkdown
-            remarkPlugins={[remarkGfm, remarkMath]}
-            rehypePlugins={[rehypeKatex, rehypeRaw]}
-            components={{
-                img: ({node, ...props}) => <img {...props} className="rounded-lg shadow-md max-w-full mx-auto my-4" loading="lazy" />
-            }}
+          remarkPlugins={[remarkGfm, remarkMath]}
+          rehypePlugins={[rehypeKatex, rehypeRaw]}
+          components={{
+            img: ({ node, ...props }) => <img {...props} className="rounded-lg shadow-md max-w-full mx-auto my-4" loading="lazy" />
+          }}
         >
-            {processedContent}
+          {processedContent}
         </ReactMarkdown>
       </article>
     </div>

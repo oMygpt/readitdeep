@@ -60,10 +60,10 @@ class UserResponse(BaseModel):
 
 # ================== JWT 工具 ==================
 
-def create_access_token(user_id: str, role: str) -> str:
+def create_access_token(user_id, role: str) -> str:
     """创建访问令牌"""
     payload = {
-        "sub": user_id,
+        "sub": str(user_id),  # Convert UUID to string
         "role": role,
         "type": "access",
         "exp": datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS),
@@ -72,10 +72,10 @@ def create_access_token(user_id: str, role: str) -> str:
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
-def create_refresh_token(user_id: str) -> str:
+def create_refresh_token(user_id) -> str:
     """创建刷新令牌"""
     payload = {
-        "sub": user_id,
+        "sub": str(user_id),  # Convert UUID to string
         "type": "refresh",
         "exp": datetime.utcnow() + timedelta(days=JWT_REFRESH_DAYS),
         "iat": datetime.utcnow(),
