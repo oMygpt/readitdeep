@@ -1,14 +1,15 @@
 /**
  * Read it DEEP - Enhanced Smart Workbench Component
  * 
- * 智能工作台 v2：
- * - 文本拖放 + LLM 智能分析
- * - 方法炼金台：提炼研究方法 + 审稿视角
- * - 资产仓库：识别 GitHub/Huggingface/数据集
- * - 智能笔记：原文 + 心得 + 位置 + 可展开卡片
+ * Smart Workbench v2:
+ * - Text drag-drop + LLM smart analysis
+ * - Method Lab: extract research methods + reviewer perspective
+ * - Asset Vault: identify GitHub/Huggingface/datasets
+ * - Smart Notes: original + reflection + location + expandable cards
  */
 
 import React, { useState, useCallback, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     FlaskConical,
     Database,
@@ -59,6 +60,7 @@ function SmartNoteCard({
     onUpdateReflection: (reflection: string) => void;
     onJumpToItemLocation?: (location: TextLocation) => void;
 }) {
+    const { t } = useTranslation();
     const [isExpanded, setIsExpanded] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [reflection, setReflection] = useState(
@@ -98,7 +100,7 @@ function SmartNoteCard({
                 <div className="flex-1 min-w-0">
                     <div className="font-medium text-sm text-purple-900 line-clamp-1">{item.title}</div>
                     <p className="text-xs text-purple-600 line-clamp-1 mt-0.5">
-                        {reflection || '点击添加心得...'}
+                        {reflection || t('workbench.clickToAddReflection')}
                     </p>
                 </div>
                 <div className="flex items-center gap-1">
@@ -110,7 +112,7 @@ function SmartNoteCard({
                                 onJumpToItemLocation(locationObj!);
                             }}
                             className="p-1 text-purple-400 hover:text-purple-700 hover:bg-purple-100 rounded transition-colors"
-                            title="跳转到原文位置"
+                            title={t('workbench.jumpToLocation')}
                         >
                             <ExternalLink className="w-3.5 h-3.5" />
                         </button>
@@ -132,13 +134,13 @@ function SmartNoteCard({
                     <div className="mt-3">
                         <div className="flex items-center gap-1 text-xs text-purple-500 mb-1">
                             <FileText className="w-3 h-3" />
-                            原文
+                            {t('workbench.originalText')}
                             {locationObj && (
                                 <span
                                     className="text-purple-400 cursor-pointer hover:underline ml-1"
                                     onClick={() => onJumpToItemLocation?.(locationObj!)}
                                 >
-                                    (Line {locationObj.start_line})
+                                    ({t('workbench.line')} {locationObj.start_line})
                                 </span>
                             )}
                         </div>
@@ -152,7 +154,7 @@ function SmartNoteCard({
                         <div className="flex items-center justify-between mb-1">
                             <div className="flex items-center gap-1 text-xs text-purple-500">
                                 <Edit3 className="w-3 h-3" />
-                                心得笔记
+                                {t('workbench.reflection')}
                             </div>
                             {reflectionUpdatedAt && (
                                 <span className="text-xs text-purple-300">
@@ -166,7 +168,7 @@ function SmartNoteCard({
                                     value={reflection}
                                     onChange={(e) => setReflection(e.target.value)}
                                     className="w-full h-32 p-3 text-sm border border-purple-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
-                                    placeholder="写下你的思考和心得..."
+                                    placeholder={t('workbench.clickToAddReflection').replace('...', '')}
                                     autoFocus
                                 />
                                 <div className="flex justify-end gap-2">
@@ -174,7 +176,7 @@ function SmartNoteCard({
                                         onClick={() => setIsEditing(false)}
                                         className="px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-100 rounded-lg"
                                     >
-                                        取消
+                                        {t('common.cancel')}
                                     </button>
                                     <button
                                         onClick={handleSave}
@@ -182,7 +184,7 @@ function SmartNoteCard({
                                         className="px-3 py-1.5 text-xs bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-1"
                                     >
                                         {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-                                        保存
+                                        {t('common.save')}
                                     </button>
                                 </div>
                             </div>
@@ -191,7 +193,7 @@ function SmartNoteCard({
                                 onClick={() => setIsEditing(true)}
                                 className="bg-white rounded-lg p-3 text-sm text-slate-700 border border-purple-100 min-h-[60px] cursor-text hover:border-purple-300 transition-colors"
                             >
-                                {reflection || <span className="text-slate-400 italic">点击添加心得...</span>}
+                                {reflection || <span className="text-slate-400 italic">{t('workbench.clickToAddReflection')}</span>}
                             </div>
                         )}
                     </div>
@@ -203,6 +205,7 @@ function SmartNoteCard({
 
 // Method Card with analysis data
 function MethodCard({ item, onRemove }: { item: WorkbenchItem; onRemove: () => void }) {
+    const { t } = useTranslation();
     const [isExpanded, setIsExpanded] = useState(false);
     const analysis = item.data?.analysis as Record<string, unknown> | undefined;
 
@@ -229,7 +232,7 @@ function MethodCard({ item, onRemove }: { item: WorkbenchItem; onRemove: () => v
                 <div className="px-3 pb-3 space-y-2 border-t border-indigo-100 mt-0 pt-3">
                     {Boolean(analysis.pseudocode) && (
                         <div>
-                            <div className="text-xs text-indigo-500 mb-1">伪代码</div>
+                            <div className="text-xs text-indigo-500 mb-1">{t('workbench.pseudocode')}</div>
                             <pre className="bg-slate-900 text-green-400 p-3 rounded-lg text-xs overflow-x-auto">
                                 {String(analysis.pseudocode as string)}
                             </pre>
@@ -237,7 +240,7 @@ function MethodCard({ item, onRemove }: { item: WorkbenchItem; onRemove: () => v
                     )}
                     {Boolean(analysis.reviewer_comments) && (
                         <div>
-                            <div className="text-xs text-indigo-500 mb-1">审稿视角</div>
+                            <div className="text-xs text-indigo-500 mb-1">{t('workbench.reviewerPerspective')}</div>
                             <div className="bg-white rounded-lg p-2 text-xs space-y-1">
                                 {((analysis.reviewer_comments as Record<string, string[]>).strengths || []).map((s: string, i: number) => (
                                     <div key={i} className="text-green-600">✓ {s}</div>
@@ -256,6 +259,7 @@ function MethodCard({ item, onRemove }: { item: WorkbenchItem; onRemove: () => v
 
 // Asset Card
 function AssetCard({ item, onRemove }: { item: WorkbenchItem; onRemove: () => void }) {
+    const { t } = useTranslation();
     const asset = item.data?.asset as Record<string, unknown> | undefined;
     const url = asset?.url as string;
 
@@ -274,7 +278,7 @@ function AssetCard({ item, onRemove }: { item: WorkbenchItem; onRemove: () => vo
                             className="inline-flex items-center gap-1 text-xs text-emerald-700 hover:text-emerald-900 mt-2"
                         >
                             <ExternalLink className="w-3 h-3" />
-                            {String(asset?.platform || '链接')}
+                            {String(asset?.platform || t('workbench.link'))}
                         </a>
                     )}
                 </div>
@@ -304,6 +308,7 @@ function DropZone({
     isLoading: boolean;
     renderItem: (item: WorkbenchItem, onRemove: () => void) => React.ReactNode;
 }) {
+    const { t } = useTranslation();
     const [isDragOver, setIsDragOver] = useState(false);
 
     const handleDragOver = (e: React.DragEvent) => {
@@ -352,7 +357,7 @@ function DropZone({
                 {items.length === 0 && !isLoading ? (
                     <div className={`flex flex-col items-center justify-center h-20 text-xs ${isDragOver ? 'text-indigo-500' : 'text-slate-400'}`}>
                         <span className="text-lg mb-1">{isDragOver ? '📥' : '📋'}</span>
-                        <span>{isDragOver ? '释放以添加' : '选中文本拖入此处'}</span>
+                        <span>{isDragOver ? t('workbench.releaseToAdd') : t('workbench.dragToAdd')}</span>
                     </div>
                 ) : (
                     items.map((item) => renderItem(item, () => onRemoveItem(item.id)))
@@ -364,6 +369,7 @@ function DropZone({
 
 // Main Enhanced Workbench Component
 export default function Workbench({ paperId, paperTitle, onClose, onJumpToLocation, refreshKey }: WorkbenchProps) {
+    const { t } = useTranslation();
     const [methodItems, setMethodItems] = useState<WorkbenchItem[]>([]);
     const [assetItems, setAssetItems] = useState<WorkbenchItem[]>([]);
     const [noteItems, setNoteItems] = useState<WorkbenchItem[]>([]);
@@ -521,7 +527,7 @@ export default function Workbench({ paperId, paperTitle, onClose, onJumpToLocati
             <div className="px-4 py-3 bg-white border-b border-slate-200 flex items-center justify-between flex-shrink-0">
                 <div className="flex items-center gap-2">
                     <Sparkles className="w-5 h-5 text-purple-600" />
-                    <h2 className="font-bold text-slate-800">智能工作台</h2>
+                    <h2 className="font-bold text-slate-800">{t('workbench.title')}</h2>
                     {totalItems > 0 && (
                         <span className="ml-1 px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full">
                             {totalItems}
@@ -541,7 +547,7 @@ export default function Workbench({ paperId, paperTitle, onClose, onJumpToLocati
             {/* Help Text */}
             <div className="px-4 py-2 bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-slate-200 flex-shrink-0">
                 <p className="text-xs text-indigo-600">
-                    💡 选中论文中的文本，点击工具栏按钮或拖入区域添加
+                    {t('workbench.helpText')}
                 </p>
             </div>
 
@@ -556,7 +562,7 @@ export default function Workbench({ paperId, paperTitle, onClose, onJumpToLocati
                         >
                             <div className="flex items-center gap-2">
                                 <span className="text-slate-400">🤖</span>
-                                <span className="text-xs font-medium text-slate-600">自动分析结果</span>
+                                <span className="text-xs font-medium text-slate-600">{t('workbench.autoAnalysis')}</span>
                                 <span className="px-1.5 py-0.5 bg-slate-200 text-slate-500 text-[10px] rounded">
                                     {autoAnalysis.methods.length + autoAnalysis.datasets.length + autoAnalysis.code_refs.length}
                                 </span>
@@ -571,7 +577,7 @@ export default function Workbench({ paperId, paperTitle, onClose, onJumpToLocati
                                     <div className="space-y-1">
                                         <div className="flex items-center gap-1 text-xs text-slate-500">
                                             <FlaskConical className="w-3 h-3" />
-                                            <span>方法 ({autoAnalysis.methods.length})</span>
+                                            <span>{t('workbench.methods')} ({autoAnalysis.methods.length})</span>
                                         </div>
                                         {autoAnalysis.methods.slice(0, 3).map((m, i) => (
                                             <div key={i} className="bg-white rounded-lg px-2 py-1.5 text-xs text-slate-600 border border-slate-100">
@@ -580,7 +586,7 @@ export default function Workbench({ paperId, paperTitle, onClose, onJumpToLocati
                                             </div>
                                         ))}
                                         {autoAnalysis.methods.length > 3 && (
-                                            <p className="text-[10px] text-slate-400 pl-2">+{autoAnalysis.methods.length - 3} 更多...</p>
+                                            <p className="text-[10px] text-slate-400 pl-2">{t('workbench.more', { count: autoAnalysis.methods.length - 3 })}</p>
                                         )}
                                     </div>
                                 )}
@@ -590,7 +596,7 @@ export default function Workbench({ paperId, paperTitle, onClose, onJumpToLocati
                                     <div className="space-y-1">
                                         <div className="flex items-center gap-1 text-xs text-slate-500">
                                             <Database className="w-3 h-3" />
-                                            <span>数据集 ({autoAnalysis.datasets.length})</span>
+                                            <span>{t('workbench.datasets')} ({autoAnalysis.datasets.length})</span>
                                         </div>
                                         {autoAnalysis.datasets.slice(0, 3).map((d, i) => (
                                             <div key={i} className="bg-white rounded-lg px-2 py-1.5 text-xs text-slate-600 border border-slate-100">
@@ -610,7 +616,7 @@ export default function Workbench({ paperId, paperTitle, onClose, onJumpToLocati
                                     <div className="space-y-1">
                                         <div className="flex items-center gap-1 text-xs text-slate-500">
                                             <span>💻</span>
-                                            <span>代码 ({autoAnalysis.code_refs.length})</span>
+                                            <span>{t('workbench.code')} ({autoAnalysis.code_refs.length})</span>
                                         </div>
                                         {autoAnalysis.code_refs.slice(0, 2).map((c, i) => (
                                             <div key={i} className="bg-white rounded-lg px-2 py-1.5 text-xs text-slate-600 border border-slate-100">
@@ -633,14 +639,14 @@ export default function Workbench({ paperId, paperTitle, onClose, onJumpToLocati
                 {/* User Content Section Label */}
                 {(methodItems.length > 0 || assetItems.length > 0 || noteItems.length > 0 || autoAnalysis) && (
                     <div className="flex items-center gap-2 pt-2">
-                        <span className="text-xs font-medium text-slate-500">📝 我的笔记</span>
+                        <span className="text-xs font-medium text-slate-500">{t('workbench.myNotes')}</span>
                         <div className="flex-1 h-px bg-slate-200" />
                     </div>
                 )}
 
                 {/* Method Zone */}
                 <DropZone
-                    title="方法炼金台"
+                    title={t('workbench.methodLab')}
                     icon={<FlaskConical className="w-4 h-4 text-indigo-600" />}
                     items={methodItems}
                     onDrop={handleMethodDrop}
@@ -651,7 +657,7 @@ export default function Workbench({ paperId, paperTitle, onClose, onJumpToLocati
 
                 {/* Asset Zone */}
                 <DropZone
-                    title="资产仓库"
+                    title={t('workbench.assetVault')}
                     icon={<Database className="w-4 h-4 text-emerald-600" />}
                     items={assetItems}
                     onDrop={handleAssetDrop}
@@ -662,7 +668,7 @@ export default function Workbench({ paperId, paperTitle, onClose, onJumpToLocati
 
                 {/* Notes Zone */}
                 <DropZone
-                    title="智能笔记"
+                    title={t('workbench.smartNotes')}
                     icon={<Lightbulb className="w-4 h-4 text-purple-600" />}
                     items={noteItems}
                     onDrop={handleNoteDrop}

@@ -1,19 +1,19 @@
 {
-  "total_tokens": 115889,
-  "total_prompt_tokens": 108771,
-  "total_completion_tokens": 7118,
+  "total_tokens": 240178,
+  "total_prompt_tokens": 221887,
+  "total_completion_tokens": 18291,
   "by_function": {
     "workbench_method": {
-      "total_tokens": 6152,
-      "prompt_tokens": 3429,
-      "completion_tokens": 2723,
-      "calls_count": 3
+      "total_tokens": 17894,
+      "prompt_tokens": 8947,
+      "completion_tokens": 8947,
+      "calls_count": 10
     },
     "workbench_asset": {
-      "total_tokens": 109737,
-      "prompt_tokens": 105342,
-      "completion_tokens": 4395,
-      "calls_count": 3
+      "total_tokens": 222284,
+      "prompt_tokens": 212940,
+      "completion_tokens": 9344,
+      "calls_count": 6
     }
   },
   "by_date": {
@@ -22,9 +22,13 @@
       "calls_count": 2
     },
     "2025-12-18": {
-      "total_tokens": 94092,
-      "calls_count": 4
+      "total_tokens": 123210,
+      "calls_count": 6
+    },
+    "2025-12-19": {
+      "total_tokens": 95171,
+      "calls_count": 8
     }
   },
-  "calls_count": 6
+  "calls_count": 16
 }

@@ -1,16 +1,17 @@
 /**
- * Read it DEEP - 管理员设置页面
+ * Read it DEEP - Admin Settings Page
  * 
- * 细粒度 API 配置:
- * - 主 LLM
- * - 翻译 LLM
- * - Embedding (全局只读)
+ * Fine-grained API Configuration:
+ * - Main LLM
+ * - Translation LLM
+ * - Embedding (global read-only)
  * - MinerU
- * - 智能分析 (继承/独立配置)
+ * - Smart Analysis (inherit/independent config)
  */
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { adminApi, type SystemConfig, type User as AdminUser, type TokenStats } from '../lib/api';
 import {
@@ -129,6 +130,7 @@ function ModeSelect({ value, onChange, options }: ModeSelectProps) {
 }
 
 export default function AdminPage() {
+    const { t } = useTranslation();
     const navigate = useNavigate();
     const { user } = useAuth();
     const [activeTab, setActiveTab] = useState<Tab>('config');
@@ -297,10 +299,10 @@ export default function AdminPage() {
                 }
             });
             await adminApi.updateConfig(updates);
-            setSaveMessage('配置已保存');
+            setSaveMessage(t('admin.configSaved'));
             await loadData();
         } catch (error) {
-            setSaveMessage('保存失败');
+            setSaveMessage(t('admin.saveFailed'));
             console.error('Failed to save config:', error);
         } finally {
             setIsSaving(false);
@@ -335,7 +337,7 @@ export default function AdminPage() {
             await adminApi.resetPassword(resetPasswordUser.id, newPassword);
             setResetPasswordUser(null);
             setNewPassword('');
-            alert('密码已重置');
+            alert(t('admin.userList.passwordReset'));
         } catch (error) {
             console.error('Failed to reset password:', error);
         }
@@ -376,8 +378,8 @@ export default function AdminPage() {
                                     <Settings className="w-5 h-5 text-white" />
                                 </div>
                                 <div>
-                                    <h1 className="text-xl font-bold text-slate-900">管理员设置</h1>
-                                    <p className="text-sm text-slate-500">系统配置与用户管理</p>
+                                    <h1 className="text-xl font-bold text-slate-900">{t('admin.title')}</h1>
+                                    <p className="text-sm text-slate-500">{t('admin.subtitle')}</p>
                                 </div>
                             </div>
                         </div>
@@ -396,7 +398,7 @@ export default function AdminPage() {
                             }`}
                     >
                         <Server className="w-4 h-4" />
-                        系统配置
+                        {t('admin.systemConfig')}
                     </button>
                     <button
                         onClick={() => setActiveTab('users')}
@@ -406,7 +408,7 @@ export default function AdminPage() {
                             }`}
                     >
                         <Users className="w-4 h-4" />
-                        用户管理 ({totalUsers})
+                        {t('admin.userManagement')} ({totalUsers})
                     </button>
                 </div>
 
@@ -424,8 +426,8 @@ export default function AdminPage() {
                                         <BarChart3 className="w-5 h-5 text-amber-600" />
                                     </div>
                                     <div>
-                                        <h3 className="font-semibold text-slate-900">LLM Token 用量统计</h3>
-                                        <p className="text-sm text-slate-500">监控系统 AI 资源消耗</p>
+                                        <h3 className="font-semibold text-slate-900">{t('admin.tokenStats.title')}</h3>
+                                        <p className="text-sm text-slate-500">{t('admin.tokenStats.subtitle')}</p>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -433,7 +435,7 @@ export default function AdminPage() {
                                         onClick={loadTokenStats}
                                         disabled={isLoadingTokenStats}
                                         className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-                                        title="刷新"
+                                        title={t('admin.tokenStats.refresh')}
                                     >
                                         <RefreshCw className={`w-4 h-4 text-slate-500 ${isLoadingTokenStats ? 'animate-spin' : ''}`} />
                                     </button>
@@ -441,7 +443,7 @@ export default function AdminPage() {
                                         onClick={handleResetTokenStats}
                                         className="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                     >
-                                        重置统计
+                                        {t('admin.tokenStats.reset')}
                                     </button>
                                 </div>
                             </div>
@@ -458,32 +460,32 @@ export default function AdminPage() {
                                             <div className="text-2xl font-bold text-amber-700">
                                                 {(tokenStats.total_tokens / 1000).toFixed(1)}K
                                             </div>
-                                            <div className="text-sm text-amber-600">总 Token</div>
+                                            <div className="text-sm text-amber-600">{t('admin.tokenStats.totalTokens')}</div>
                                         </div>
                                         <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
                                             <div className="text-xl font-bold text-slate-700">
                                                 {(tokenStats.total_prompt_tokens / 1000).toFixed(1)}K
                                             </div>
-                                            <div className="text-sm text-slate-500">输入 Token</div>
+                                            <div className="text-sm text-slate-500">{t('admin.tokenStats.inputTokens')}</div>
                                         </div>
                                         <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
                                             <div className="text-xl font-bold text-slate-700">
                                                 {(tokenStats.total_completion_tokens / 1000).toFixed(1)}K
                                             </div>
-                                            <div className="text-sm text-slate-500">输出 Token</div>
+                                            <div className="text-sm text-slate-500">{t('admin.tokenStats.outputTokens')}</div>
                                         </div>
                                         <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
                                             <div className="text-xl font-bold text-slate-700">
                                                 {tokenStats.calls_count}
                                             </div>
-                                            <div className="text-sm text-slate-500">调用次数</div>
+                                            <div className="text-sm text-slate-500">{t('admin.tokenStats.callCount')}</div>
                                         </div>
                                     </div>
 
                                     {/* 按功能分类 */}
                                     {Object.keys(tokenStats.by_function).length > 0 && (
                                         <div>
-                                            <h4 className="text-sm font-medium text-slate-600 mb-2">按功能分类</h4>
+                                            <h4 className="text-sm font-medium text-slate-600 mb-2">{t('admin.tokenStats.byFunction')}</h4>
                                             <div className="flex flex-wrap gap-2">
                                                 {Object.entries(tokenStats.by_function).map(([func, stats]) => (
                                                     <div key={func} className="px-3 py-2 bg-slate-100 rounded-lg text-sm">
@@ -498,7 +500,7 @@ export default function AdminPage() {
                                     )}
                                 </div>
                             ) : (
-                                <div className="text-center py-8 text-slate-400">暂无数据</div>
+                                <div className="text-center py-8 text-slate-400">{t('admin.tokenStats.noData')}</div>
                             )}
                         </div>
 

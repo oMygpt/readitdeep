@@ -1,16 +1,18 @@
 /**
- * Read it DEEP - 登录/注册页面
+ * Read it DEEP - Login/Register Page
  * 
- * 支持登录和注册（第一个用户自动成为管理员）
+ * Supports login and registration (first user becomes admin automatically)
  */
 
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { authApi } from '../lib/api';
 import { BookOpen, Loader2, AlertCircle, UserPlus, LogIn } from 'lucide-react';
 
 export default function LoginPage() {
+    const { t } = useTranslation();
     const navigate = useNavigate();
     const location = useLocation();
     const { login, isLoading: authLoading } = useAuth();
@@ -36,7 +38,7 @@ export default function LoginPage() {
             navigate(from, { replace: true });
         } catch (err: unknown) {
             const error = err as { response?: { data?: { detail?: string } } };
-            setError(error.response?.data?.detail || '登录失败，请检查邮箱和密码');
+            setError(error.response?.data?.detail || t('login.loginFailed'));
         } finally {
             setIsLoading(false);
         }
@@ -48,12 +50,12 @@ export default function LoginPage() {
         setSuccess('');
 
         if (password !== confirmPassword) {
-            setError('两次输入的密码不一致');
+            setError(t('login.passwordMismatch'));
             return;
         }
 
         if (password.length < 6) {
-            setError('密码至少需要 6 个字符');
+            setError(t('login.passwordTooShort'));
             return;
         }
 
@@ -64,13 +66,13 @@ export default function LoginPage() {
             // Auto login after registration
             localStorage.setItem('readitdeep_token', response.access_token);
             localStorage.setItem('readitdeep_refresh_token', response.refresh_token);
-            setSuccess('注册成功！正在跳转...');
+            setSuccess(t('login.registerSuccess'));
             setTimeout(() => {
                 window.location.href = '/library';
             }, 1000);
         } catch (err: unknown) {
             const error = err as { response?: { data?: { detail?: string } } };
-            setError(error.response?.data?.detail || '注册失败，请稍后重试');
+            setError(error.response?.data?.detail || t('login.registerFailed'));
         } finally {
             setIsLoading(false);
         }
@@ -92,8 +94,8 @@ export default function LoginPage() {
                     <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-50 rounded-2xl mb-4 group hover:bg-brand-100 transition-colors">
                         <BookOpen className="w-8 h-8 text-brand-600" />
                     </div>
-                    <h1 className="text-3xl font-serif font-bold text-slate-800 mb-2">Read it DEEP</h1>
-                    <p className="text-slate-500">AI 驱动的深度阅读平台</p>
+                    <h1 className="text-3xl font-serif font-bold text-slate-800 mb-2">{t('login.title')}</h1>
+                    <p className="text-slate-500">{t('login.subtitle')}</p>
                 </div>
 
                 {/* Mode Toggle */}
@@ -101,22 +103,22 @@ export default function LoginPage() {
                     <button
                         onClick={() => { setMode('login'); setError(''); setSuccess(''); }}
                         className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-medium transition-all ${mode === 'login'
-                                ? 'bg-white text-slate-800 shadow-sm'
-                                : 'text-slate-500 hover:text-slate-700'
+                            ? 'bg-white text-slate-800 shadow-sm'
+                            : 'text-slate-500 hover:text-slate-700'
                             }`}
                     >
                         <LogIn className="w-4 h-4" />
-                        登录
+                        {t('login.login')}
                     </button>
                     <button
                         onClick={() => { setMode('register'); setError(''); setSuccess(''); }}
                         className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-medium transition-all ${mode === 'register'
-                                ? 'bg-white text-slate-800 shadow-sm'
-                                : 'text-slate-500 hover:text-slate-700'
+                            ? 'bg-white text-slate-800 shadow-sm'
+                            : 'text-slate-500 hover:text-slate-700'
                             }`}
                     >
                         <UserPlus className="w-4 h-4" />
-                        注册
+                        {t('login.register')}
                     </button>
                 </div>
 
@@ -139,14 +141,14 @@ export default function LoginPage() {
                     <form onSubmit={handleLogin} className="space-y-4">
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                                邮箱
+                                {t('login.email')}
                             </label>
                             <input
                                 type="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
-                                placeholder="your@email.com"
+                                placeholder={t('login.emailPlaceholder')}
                                 required
                                 autoComplete="email"
                             />
@@ -154,14 +156,14 @@ export default function LoginPage() {
 
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                                密码
+                                {t('login.password')}
                             </label>
                             <input
                                 type="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
-                                placeholder="••••••••"
+                                placeholder={t('login.passwordPlaceholder')}
                                 required
                                 autoComplete="current-password"
                             />
@@ -175,10 +177,10 @@ export default function LoginPage() {
                             {isLoading ? (
                                 <>
                                     <Loader2 className="w-5 h-5 animate-spin" />
-                                    登录中...
+                                    {t('login.loggingIn')}
                                 </>
                             ) : (
-                                '登录'
+                                t('login.loginButton')
                             )}
                         </button>
                     </form>
@@ -189,14 +191,14 @@ export default function LoginPage() {
                     <form onSubmit={handleRegister} className="space-y-4">
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                                邮箱 <span className="text-red-500">*</span>
+                                {t('login.email')} <span className="text-red-500">{t('login.required')}</span>
                             </label>
                             <input
                                 type="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
-                                placeholder="your@email.com"
+                                placeholder={t('login.emailPlaceholder')}
                                 required
                                 autoComplete="email"
                             />
@@ -204,28 +206,28 @@ export default function LoginPage() {
 
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                                用户名 <span className="text-slate-400">(可选)</span>
+                                {t('login.username')} <span className="text-slate-400">{t('login.usernameOptional')}</span>
                             </label>
                             <input
                                 type="text"
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value)}
                                 className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
-                                placeholder="您的昵称"
+                                placeholder={t('login.usernamePlaceholder')}
                                 autoComplete="username"
                             />
                         </div>
 
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                                密码 <span className="text-red-500">*</span>
+                                {t('login.password')} <span className="text-red-500">{t('login.required')}</span>
                             </label>
                             <input
                                 type="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
-                                placeholder="至少 6 个字符"
+                                placeholder={t('login.passwordTooShort').replace('Password must be at least ', '').replace(' characters', '')}
                                 required
                                 autoComplete="new-password"
                             />
@@ -233,14 +235,14 @@ export default function LoginPage() {
 
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                                确认密码 <span className="text-red-500">*</span>
+                                {t('login.confirmPassword')} <span className="text-red-500">{t('login.required')}</span>
                             </label>
                             <input
                                 type="password"
                                 value={confirmPassword}
                                 onChange={(e) => setConfirmPassword(e.target.value)}
                                 className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
-                                placeholder="再次输入密码"
+                                placeholder={t('login.confirmPasswordPlaceholder')}
                                 required
                                 autoComplete="new-password"
                             />
@@ -254,22 +256,22 @@ export default function LoginPage() {
                             {isLoading ? (
                                 <>
                                     <Loader2 className="w-5 h-5 animate-spin" />
-                                    注册中...
+                                    {t('login.registering')}
                                 </>
                             ) : (
-                                '创建账户'
+                                t('login.registerButton')
                             )}
                         </button>
 
                         <p className="text-xs text-center text-slate-400 mt-2">
-                            第一个注册的用户将自动成为管理员
+                            {t('login.firstUserAdmin')}
                         </p>
                     </form>
                 )}
             </div>
 
             <div className="fixed bottom-6 text-center text-xs text-slate-400">
-                © 2024 Read it DEEP. AI Powered Reading.
+                {t('login.copyright')}
             </div>
         </div>
     );

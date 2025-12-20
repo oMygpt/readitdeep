@@ -1,10 +1,11 @@
 /**
- * Read it DEEP - 知识库页面 (Redesigned with List View & Tags)
+ * Read it DEEP - Library Page (Redesigned with List View & Tags)
  */
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
     Search,
     Loader2,
@@ -28,6 +29,7 @@ import UserMenu from '../components/UserMenu';
 import CategoryTagEditor from '../components/CategoryTagEditor';
 
 export default function LibraryPage() {
+    const { t } = useTranslation();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const [search, setSearch] = useState('');
@@ -189,7 +191,7 @@ export default function LibraryPage() {
                     <div className="p-1.5 bg-indigo-600 rounded-lg text-white shadow-sm shadow-indigo-200">
                         <BookOpen className="w-5 h-5" />
                     </div>
-                    <span className="font-bold text-lg tracking-tight text-slate-800">Read it Deep</span>
+                    <span className="font-bold text-lg tracking-tight text-slate-800">{t('common.appName')}</span>
                 </div>
 
                 {/* Search */}
@@ -198,7 +200,7 @@ export default function LibraryPage() {
                         <input
                             type="text"
                             className="w-full bg-white border border-slate-300 rounded-lg py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all shadow-sm"
-                            placeholder="Search library..."
+                            placeholder={t('library.searchPlaceholder')}
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                         />
@@ -210,7 +212,7 @@ export default function LibraryPage() {
                 <div className="px-6 mb-6">
                     <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
                         <Filter className="w-3 h-3" />
-                        Categories
+                        {t('library.categories')}
                     </h2>
                     <div className="space-y-1">
                         <div
@@ -220,7 +222,7 @@ export default function LibraryPage() {
                         >
                             <div className="flex items-center gap-2">
                                 <BookOpen className="w-4 h-4" />
-                                <span>All Papers</span>
+                                <span>{t('library.allPapers')}</span>
                             </div>
                             <span className="bg-slate-200 text-slate-500 text-xs px-2 py-0.5 rounded-full">
                                 {papers.length}
@@ -246,7 +248,7 @@ export default function LibraryPage() {
                                             setNewCategoryName(cat);
                                         }}
                                         className="p-1 text-slate-400 hover:text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                                        title="重命名分类"
+                                        title={t('library.renameCategory')}
                                     >
                                         <Edit2 className="w-3 h-3" />
                                     </button>
@@ -263,7 +265,7 @@ export default function LibraryPage() {
                 <div className="px-6 mb-6">
                     <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
                         <Tag className="w-3 h-3" />
-                        Tags
+                        {t('library.tags')}
                     </h2>
                     <div className="flex flex-wrap gap-2">
                         {Object.entries(allTags).map(([tag, count]) => (
@@ -279,7 +281,7 @@ export default function LibraryPage() {
                             </button>
                         ))}
                         {Object.keys(allTags).length === 0 && (
-                            <p className="text-xs text-slate-400">No tags yet</p>
+                            <p className="text-xs text-slate-400">{t('library.noTags')}</p>
                         )}
                     </div>
                 </div>
@@ -294,8 +296,8 @@ export default function LibraryPage() {
                             <Sparkles className="w-4 h-4" />
                         </div>
                         <div>
-                            <div className="font-semibold text-purple-900 text-sm">智能工作台</div>
-                            <div className="text-xs text-purple-600">汇总所有研究素材</div>
+                            <div className="font-semibold text-purple-900 text-sm">{t('library.smartWorkbench')}</div>
+                            <div className="text-xs text-purple-600">{t('library.workbenchDesc')}</div>
                         </div>
                     </Link>
                 </div>
@@ -303,9 +305,9 @@ export default function LibraryPage() {
                 {/* Suggestions */}
                 <div className="px-6 mt-auto mb-6">
                     <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-100">
-                        <h3 className="text-indigo-900 font-semibold text-sm mb-1">Deep Read AI</h3>
+                        <h3 className="text-indigo-900 font-semibold text-sm mb-1">{t('library.deepReadAI')}</h3>
                         <p className="text-xs text-indigo-700 leading-relaxed mb-3">
-                            Start by uploading a PDF. I will parse layout, formulas, and references for you.
+                            {t('library.deepReadAIDesc')}
                         </p>
                     </div>
                 </div>
@@ -313,7 +315,7 @@ export default function LibraryPage() {
                 {/* Copyright Footer */}
                 <div className="px-6 mb-8 text-center">
                     <p className="text-[10px] text-slate-400 font-medium">
-                        By A<sup style={{ fontSize: '0.6em' }}>3</sup> Team
+                        {t('common.byTeam')}
                     </p>
                 </div>
             </aside>
@@ -324,11 +326,11 @@ export default function LibraryPage() {
                     {/* Header */}
                     <div className="flex justify-between items-center mb-6">
                         <div>
-                            <h1 className="text-3xl font-serif font-bold text-slate-800 tracking-tight">Library</h1>
+                            <h1 className="text-3xl font-serif font-bold text-slate-800 tracking-tight">{t('library.title')}</h1>
                             <p className="text-slate-500 mt-1 text-sm">
-                                {filteredPapers.length} papers
-                                {selectedCategory && <span className="text-indigo-600"> in {selectedCategory}</span>}
-                                {selectedTag && <span className="text-purple-600"> tagged {selectedTag}</span>}
+                                {filteredPapers.length} {t('library.papers')}
+                                {selectedCategory && <span className="text-indigo-600"> {t('library.inCategory', { category: selectedCategory })}</span>}
+                                {selectedTag && <span className="text-purple-600"> {t('library.taggedWith', { tag: selectedTag })}</span>}
                             </p>
                         </div>
                         <div className="flex gap-3 items-center">
@@ -352,7 +354,7 @@ export default function LibraryPage() {
                                 className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg shadow-sm text-sm font-medium flex items-center gap-2 transition-all hover:shadow-md active:scale-95"
                             >
                                 <UploadCloud className="w-4 h-4" />
-                                <span className="hidden sm:inline">Import Paper</span>
+                                <span className="hidden sm:inline">{t('library.importPaper')}</span>
                             </button>
                             <input
                                 type="file"
@@ -368,7 +370,7 @@ export default function LibraryPage() {
                     {/* Active Filters */}
                     {(selectedCategory || selectedTag) && (
                         <div className="flex gap-2 mb-4 items-center">
-                            <span className="text-xs text-slate-400">Filters:</span>
+                            <span className="text-xs text-slate-400">{t('library.filters')}:</span>
                             {selectedCategory && (
                                 <span
                                     onClick={() => setSelectedCategory(null)}
@@ -386,7 +388,7 @@ export default function LibraryPage() {
                                 </span>
                             )}
                             <button onClick={clearFilters} className="text-xs text-slate-400 hover:text-slate-600 ml-2">
-                                Clear all
+                                {t('library.clearAll')}
                             </button>
                         </div>
                     )}
@@ -402,7 +404,7 @@ export default function LibraryPage() {
                     {uploadMutation.isPending && (
                         <div className="mb-4 p-4 bg-indigo-50 border border-indigo-200 rounded-lg flex items-center gap-3">
                             <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
-                            <span className="text-sm text-indigo-700">Uploading paper...</span>
+                            <span className="text-sm text-indigo-700">{t('library.uploadingPaper')}</span>
                         </div>
                     )}
 
@@ -411,11 +413,11 @@ export default function LibraryPage() {
                         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                             {/* Table Header */}
                             <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                                <div className="col-span-5">Title</div>
-                                <div className="col-span-2">Category</div>
-                                <div className="col-span-3">Tags</div>
-                                <div className="col-span-1">Status</div>
-                                <div className="col-span-1">Actions</div>
+                                <div className="col-span-5">{t('library.tableHeaders.title')}</div>
+                                <div className="col-span-2">{t('library.tableHeaders.category')}</div>
+                                <div className="col-span-3">{t('library.tableHeaders.tags')}</div>
+                                <div className="col-span-1">{t('library.tableHeaders.status')}</div>
+                                <div className="col-span-1">{t('library.tableHeaders.actions')}</div>
                             </div>
 
                             {/* Paper Rows */}
@@ -455,7 +457,7 @@ export default function LibraryPage() {
                                             }}
                                         >
                                             <span className="px-2 py-1 bg-slate-100 text-slate-600 text-xs rounded-full">
-                                                {paper.category || 'Uncategorized'}
+                                                {paper.category || t('library.uncategorized')}
                                             </span>
                                         </div>
 
@@ -470,7 +472,7 @@ export default function LibraryPage() {
                                                 <span className="text-xs text-slate-400">+{(paper.tags || []).length - 3}</span>
                                             )}
                                             {(!paper.tags || paper.tags.length === 0) && (
-                                                <span className="text-xs text-slate-300">No tags</span>
+                                                <span className="text-xs text-slate-300">{t('library.noTags')}</span>
                                             )}
                                         </div>
 
@@ -482,7 +484,7 @@ export default function LibraryPage() {
                                                         <Loader2 className="w-3 h-3 animate-spin" />
                                                     </span>
                                                     <span className="text-[10px] text-yellow-600 truncate max-w-[100px]" title={statusInfo?.message}>
-                                                        {statusInfo?.message || '处理中...'}
+                                                        {statusInfo?.message || t('library.processing')}
                                                     </span>
                                                 </div>
                                             )}
@@ -505,7 +507,7 @@ export default function LibraryPage() {
                                                     onClick={(e) => handleReanalyze(e, paper.id)}
                                                     disabled={reanalyzingId === paper.id}
                                                     className="p-1 text-amber-500 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors disabled:opacity-50"
-                                                    title="重新分析"
+                                                    title={t('library.reanalyze')}
                                                 >
                                                     <RefreshCw className={`w-4 h-4 ${reanalyzingId === paper.id ? 'animate-spin' : ''}`} />
                                                 </button>
@@ -529,8 +531,8 @@ export default function LibraryPage() {
                             {filteredPapers.length === 0 && !isLoading && (
                                 <div className="py-12 text-center text-slate-400">
                                     <BookOpen className="w-10 h-10 mx-auto mb-3 opacity-50" />
-                                    <p className="text-sm">No papers found</p>
-                                    <p className="text-xs mt-1">Try adjusting your filters or upload a new paper</p>
+                                    <p className="text-sm">{t('library.noPapersFound')}</p>
+                                    <p className="text-xs mt-1">{t('library.adjustFilters')}</p>
                                 </div>
                             )}
                         </div>
@@ -564,7 +566,7 @@ export default function LibraryPage() {
 
                                         <div className="flex flex-wrap gap-1 mb-3">
                                             <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs rounded-full">
-                                                {paper.category || 'Uncategorized'}
+                                                {paper.category || t('library.uncategorized')}
                                             </span>
                                             {(paper.tags || []).slice(0, 2).map((tag: string) => (
                                                 <span key={tag} className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full">
@@ -584,10 +586,10 @@ export default function LibraryPage() {
                                                             onClick={(e) => handleReanalyze(e, paper.id)}
                                                             disabled={reanalyzingId === paper.id}
                                                             className="text-xs text-amber-600 hover:text-amber-700 flex items-center gap-1 disabled:opacity-50"
-                                                            title="重新分析"
+                                                            title={t('library.reanalyze')}
                                                         >
                                                             <RefreshCw className={`w-3 h-3 ${reanalyzingId === paper.id ? 'animate-spin' : ''}`} />
-                                                            重试
+                                                            {t('library.retry')}
                                                         </button>
                                                     </>
                                                 )}
@@ -611,21 +613,21 @@ export default function LibraryPage() {
             {deleteConfirmId && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setDeleteConfirmId(null)}>
                     <div className="bg-white rounded-xl shadow-2xl p-6 max-w-sm mx-4" onClick={(e) => e.stopPropagation()}>
-                        <h3 className="text-lg font-semibold text-slate-800 mb-2">确认删除</h3>
-                        <p className="text-slate-600 mb-6">确定要删除这篇论文吗？此操作无法撤销。</p>
+                        <h3 className="text-lg font-semibold text-slate-800 mb-2">{t('library.deleteConfirm')}</h3>
+                        <p className="text-slate-600 mb-6">{t('library.deleteConfirmMessage')}</p>
                         <div className="flex gap-3 justify-end">
                             <button
                                 onClick={() => setDeleteConfirmId(null)}
                                 className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
                             >
-                                取消
+                                {t('common.cancel')}
                             </button>
                             <button
                                 onClick={handleDeleteConfirm}
                                 disabled={deleteMutation.isPending}
                                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
                             >
-                                {deleteMutation.isPending ? '删除中...' : '确认删除'}
+                                {deleteMutation.isPending ? t('library.deleting') : t('library.confirmDelete')}
                             </button>
                         </div>
                     </div>
@@ -647,15 +649,15 @@ export default function LibraryPage() {
             {renamingCategory && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setRenamingCategory(null)}>
                     <div className="bg-white rounded-xl shadow-2xl p-6 max-w-sm mx-4 w-full" onClick={(e) => e.stopPropagation()}>
-                        <h3 className="text-lg font-semibold text-slate-800 mb-4">重命名分类</h3>
+                        <h3 className="text-lg font-semibold text-slate-800 mb-4">{t('library.renameCategory')}</h3>
                         <p className="text-sm text-slate-500 mb-4">
-                            将所有 "{renamingCategory}" 分类下的论文移动到新分类：
+                            {t('library.renameCategoryDesc', { category: renamingCategory })}
                         </p>
                         <input
                             type="text"
                             value={newCategoryName}
                             onChange={(e) => setNewCategoryName(e.target.value)}
-                            placeholder="输入新分类名称"
+                            placeholder={t('library.newCategoryPlaceholder')}
                             className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent mb-4"
                             autoFocus
                         />
@@ -664,7 +666,7 @@ export default function LibraryPage() {
                                 onClick={() => setRenamingCategory(null)}
                                 className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
                             >
-                                取消
+                                {t('common.cancel')}
                             </button>
                             <button
                                 onClick={async () => {
@@ -678,7 +680,7 @@ export default function LibraryPage() {
                                         setNewCategoryName('');
                                     } catch (e) {
                                         console.error('Rename failed', e);
-                                        alert('重命名失败: ' + (e as Error).message);
+                                        alert(t('library.renameFailed') + ': ' + (e as Error).message);
                                     } finally {
                                         setIsRenaming(false);
                                     }
@@ -687,7 +689,7 @@ export default function LibraryPage() {
                                 className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 flex items-center gap-2"
                             >
                                 {isRenaming && <Loader2 className="w-4 h-4 animate-spin" />}
-                                {isRenaming ? '保存中...' : '确认'}
+                                {isRenaming ? t('library.renaming') : t('common.confirm')}
                             </button>
                         </div>
                     </div>

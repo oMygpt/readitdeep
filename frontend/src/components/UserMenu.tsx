@@ -1,11 +1,12 @@
 /**
- * Read it DEEP - 用户菜单组件
+ * Read it DEEP - User Menu Component
  * 
- * 显示当前用户信息、退出登录、管理员入口
+ * Shows current user info, logout, admin access, and language switcher
  */
 
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import {
     User,
@@ -13,15 +14,17 @@ import {
     Settings,
     ChevronDown,
     Shield,
+    Globe,
 } from 'lucide-react';
 
 export default function UserMenu() {
+    const { t, i18n } = useTranslation();
     const navigate = useNavigate();
     const { user, logout } = useAuth();
     const [isOpen, setIsOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
 
-    // 点击外部关闭菜单
+    // Close menu on outside click
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -38,6 +41,13 @@ export default function UserMenu() {
         logout();
         navigate('/login');
     };
+
+    const toggleLanguage = () => {
+        const newLang = i18n.language === 'zh' ? 'en' : 'zh';
+        i18n.changeLanguage(newLang);
+    };
+
+    const currentLanguage = i18n.language === 'zh' ? '中文' : 'English';
 
     return (
         <div className="relative" ref={menuRef}>
@@ -56,7 +66,7 @@ export default function UserMenu() {
 
             {isOpen && (
                 <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-slate-200 py-2 z-50">
-                    {/* 用户信息 */}
+                    {/* User Info */}
                     <div className="px-4 py-2 border-b border-slate-100">
                         <div className="text-sm font-medium text-slate-900">
                             {user.username || user.email.split('@')[0]}
@@ -65,13 +75,27 @@ export default function UserMenu() {
                         {user.role === 'admin' && (
                             <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 bg-brand-100 text-brand-700 text-xs rounded-full">
                                 <Shield className="w-3 h-3" />
-                                管理员
+                                {t('admin.userList.roleAdmin')}
                             </span>
                         )}
                     </div>
 
-                    {/* 菜单项 */}
+                    {/* Menu Items */}
                     <div className="py-1">
+                        {/* Language Switcher */}
+                        <button
+                            onClick={toggleLanguage}
+                            className="w-full flex items-center justify-between px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                        >
+                            <span className="flex items-center gap-3">
+                                <Globe className="w-4 h-4 text-slate-400" />
+                                {t('common.language')}
+                            </span>
+                            <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                                {currentLanguage}
+                            </span>
+                        </button>
+
                         <button
                             onClick={() => {
                                 setIsOpen(false);
@@ -80,7 +104,7 @@ export default function UserMenu() {
                             className="w-full flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                         >
                             <Settings className="w-4 h-4 text-slate-400" />
-                            个人设置
+                            {t('userMenu.settings')}
                         </button>
 
                         {user.role === 'admin' && (
@@ -92,7 +116,7 @@ export default function UserMenu() {
                                 className="w-full flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                             >
                                 <Settings className="w-4 h-4 text-slate-400" />
-                                管理员设置
+                                {t('userMenu.admin')}
                             </button>
                         )}
                         <button
@@ -100,7 +124,7 @@ export default function UserMenu() {
                             className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
                         >
                             <LogOut className="w-4 h-4" />
-                            退出登录
+                            {t('userMenu.logout')}
                         </button>
                     </div>
                 </div>
