@@ -152,4 +152,10 @@ DEFAULT_SYSTEM_CONFIG = {
         "value": "",
         "description": "Chat with PDF API Key"
     },
+    
+    # ==================== 订阅系统配置 ====================
+    "subscription_enabled": {
+        "value": True,
+        "description": "是否启用订阅配额限制功能，关闭后所有用户无限制使用"
+    },
 }

@@ -67,6 +67,9 @@ class SystemConfigUpdate(BaseModel):
     smart_chat_base_url: Optional[str] = None
     smart_chat_model: Optional[str] = None
     smart_chat_api_key: Optional[str] = None
+    
+    # 订阅系统
+    subscription_enabled: Optional[bool] = None
 
 
 class SystemConfigResponse(BaseModel):
@@ -117,6 +120,9 @@ class SystemConfigResponse(BaseModel):
     smart_chat_base_url: str = ""
     smart_chat_model: str = ""
     smart_chat_api_key_set: bool = False
+    
+    # 订阅系统
+    subscription_enabled: bool = True
 
 
 class UserCreate(BaseModel):
@@ -211,6 +217,10 @@ async def get_system_config(
     # Embedding 配置
     config.embedding_base_url = await get_config_value(db, "embedding_base_url") or ""
     config.embedding_model = await get_config_value(db, "embedding_model") or ""
+    
+    # 订阅系统配置
+    subscription_enabled = await get_config_value(db, "subscription_enabled")
+    config.subscription_enabled = subscription_enabled if subscription_enabled is not None else True
     
     return config
 

@@ -220,6 +220,14 @@
             "message": "Are you sure you want to delete user \"{{email}}\"? All their data will be deleted. This action cannot be undone.",
             "deleting": "Deleting...",
             "confirm": "Confirm Delete"
+        },
+        "subscription": {
+            "title": "Subscription Toggle",
+            "subtitle": "Control user quota limitation system",
+            "enabled": "Enabled",
+            "disabled": "Disabled",
+            "enabledDescription": "✅ Quota system enabled: Users are subject to usage limits based on their subscription plan (Free/Pro/Ultra).",
+            "disabledDescription": "⚠️ Quota system disabled: All users have unlimited access without subscription plan restrictions."
         }
     },
     "settings": {

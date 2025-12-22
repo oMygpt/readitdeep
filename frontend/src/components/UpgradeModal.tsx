@@ -88,6 +88,11 @@ export default function UpgradeModal({ isOpen, onClose }: UpgradeModalProps) {
 
     if (!isOpen) return null;
 
+    // 订阅功能关闭时隐藏整个弹窗
+    if (quotaStatus && !quotaStatus.subscription_enabled) {
+        return null;
+    }
+
     const handleRedeem = () => {
         if (!invitationCode.trim()) return;
         setRedeemMessage(null);
