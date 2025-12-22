@@ -26,7 +26,7 @@ import {
 import type { Node, Edge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Loader2, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
 import { graphApi } from '../lib/api';
 import type { PaperNode as ApiPaperNode } from '../lib/api';
 
@@ -45,13 +45,13 @@ function getNodeSize(citationCount: number | undefined): { width: number; fontSi
 
 // Hover Tooltip for paper details
 function PaperTooltip({ data, color }: { data: ApiPaperNode; color: 'blue' | 'emerald' }) {
-    const bgClass = color === 'blue' ? 'bg-blue-900' : 'bg-emerald-900';
-    const borderClass = color === 'blue' ? 'border-blue-400' : 'border-emerald-400';
+    const bgClass = color === 'blue' ? 'bg-info-dark' : 'bg-success-dark';
+    const borderClass = color === 'blue' ? 'border-info' : 'border-success';
 
     return (
         <div className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 ${bgClass} text-white rounded-lg shadow-xl border ${borderClass} opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50`}>
             {/* Arrow */}
-            <div className={`absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent ${color === 'blue' ? 'border-t-blue-900' : 'border-t-emerald-900'}`} />
+            <div className={`absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent ${color === 'blue' ? 'border-t-info-dark' : 'border-t-success-dark'}`} />
 
             {/* Title */}
             <div className="font-semibold text-sm leading-tight mb-2 select-text">
@@ -60,8 +60,8 @@ function PaperTooltip({ data, color }: { data: ApiPaperNode; color: 'blue' | 'em
 
             {/* Authors */}
             {data.authors && data.authors.length > 0 && (
-                <div className="text-[11px] text-slate-300 mb-1.5 select-text">
-                    <span className="text-slate-400">作者: </span>
+                <div className="text-[11px] text-content-dim mb-1.5 select-text">
+                    <span className="text-content-muted">作者: </span>
                     {data.authors.slice(0, 3).join(', ')}
                     {data.authors.length > 3 && ` +${data.authors.length - 3} 人`}
                 </div>
@@ -70,14 +70,14 @@ function PaperTooltip({ data, color }: { data: ApiPaperNode; color: 'blue' | 'em
             {/* Venue & Year */}
             <div className="flex items-center gap-3 text-[11px] select-text">
                 {data.venue && (
-                    <span className="text-slate-300">
-                        <span className="text-slate-400">收录: </span>
+                    <span className="text-content-dim">
+                        <span className="text-content-muted">收录: </span>
                         {data.venue}
                     </span>
                 )}
                 {data.year && (
-                    <span className="text-slate-300">
-                        <span className="text-slate-400">年份: </span>
+                    <span className="text-content-dim">
+                        <span className="text-content-muted">年份: </span>
                         {data.year}
                     </span>
                 )}
@@ -85,7 +85,7 @@ function PaperTooltip({ data, color }: { data: ApiPaperNode; color: 'blue' | 'em
 
             {/* Citation count */}
             {data.citation_count !== undefined && data.citation_count > 0 && (
-                <div className="text-[10px] text-slate-400 mt-1.5 select-text">
+                <div className="text-[10px] text-content-muted mt-1.5 select-text">
                     被引用 {data.citation_count.toLocaleString()} 次
                 </div>
             )}
@@ -96,7 +96,7 @@ function PaperTooltip({ data, color }: { data: ApiPaperNode; color: 'blue' | 'em
                     href={data.s2_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-[10px] text-slate-300 hover:text-white mt-2 underline"
+                    className="inline-flex items-center gap-1 text-[10px] text-content-muted hover:text-white mt-2 underline"
                     onClick={(e) => e.stopPropagation()}
                 >
                     在 Semantic Scholar 查看
@@ -111,8 +111,8 @@ function CurrentPaperNode({ data }: { data: { title: string; year?: number } }) 
     return (
         <div className="relative">
             {/* Glow effect */}
-            <div className="absolute inset-0 bg-gradient-to-r from-purple-500 to-amber-400 rounded-xl blur-md opacity-50 animate-pulse" />
-            <div className="relative px-5 py-4 bg-gradient-to-br from-purple-600 via-indigo-600 to-purple-700 text-white rounded-xl shadow-xl min-w-[220px] max-w-[280px] border-2 border-purple-300/30">
+            <div className="absolute inset-0 bg-gradient-to-r from-primary to-secondary rounded-xl blur-md opacity-50 animate-pulse" />
+            <div className="relative px-5 py-4 bg-gradient-to-br from-primary via-primary-hover to-secondary text-white rounded-xl shadow-xl min-w-[220px] max-w-[280px] border-2 border-primary/30">
                 <Handle type="target" position={Position.Top} className="!bg-white !w-3 !h-3" />
                 <div className="flex items-center gap-2 mb-2">
                     <span className="text-lg">🌳</span>
@@ -122,7 +122,7 @@ function CurrentPaperNode({ data }: { data: { title: string; year?: number } }) 
                     {data.title}
                 </div>
                 {data.year && (
-                    <div className="text-[10px] text-purple-200 mt-2">{data.year}</div>
+                    <div className="text-[10px] text-primary-content/80 mt-2">{data.year}</div>
                 )}
                 <Handle type="source" position={Position.Bottom} className="!bg-white !w-3 !h-3" />
             </div>
@@ -141,11 +141,11 @@ function CitingPaperNode({ data }: { data: ApiPaperNode & { onExpand?: () => voi
         >
             {/* Hover Tooltip */}
             <PaperTooltip data={data} color="blue" />
-            <div className="px-3 py-2 bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-400 rounded-lg shadow-md hover:shadow-lg hover:border-blue-500 transition-all">
-                <Handle type="target" position={Position.Top} className="!bg-blue-400 !w-2 !h-2" />
+            <div className="px-3 py-2 bg-gradient-to-br from-info/5 to-info/10 border-2 border-info rounded-lg shadow-md hover:shadow-lg hover:border-info-content transition-all">
+                <Handle type="target" position={Position.Top} className="!bg-info !w-2 !h-2" />
                 <div className="flex items-start justify-between gap-1">
                     <div
-                        className="font-medium text-blue-800 leading-tight line-clamp-2 flex-1"
+                        className="font-medium text-info-dark leading-tight line-clamp-2 flex-1"
                         style={{ fontSize: size.fontSize }}
                     >
                         {data.title}
@@ -153,26 +153,26 @@ function CitingPaperNode({ data }: { data: ApiPaperNode & { onExpand?: () => voi
                     {data.onExpand && (
                         <button
                             onClick={(e) => { e.stopPropagation(); data.onExpand?.(); }}
-                            className="p-1 text-blue-400 hover:text-blue-600 hover:bg-blue-100 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="p-1 text-info hover:text-info-dark hover:bg-info/10 rounded opacity-0 group-hover:opacity-100 transition-opacity"
                             title="展开二级引用"
                         >
                             <ChevronUp className="w-3 h-3" />
                         </button>
                     )}
                 </div>
-                <div className="flex items-center gap-2 mt-1 text-[9px] text-blue-500">
+                <div className="flex items-center gap-2 mt-1 text-[9px] text-info">
                     {data.year && <span className="font-medium">{data.year}</span>}
                     {data.citation_count !== undefined && data.citation_count > 0 && (
-                        <span className="bg-blue-200/50 px-1.5 py-0.5 rounded">
+                        <span className="bg-info/10 px-1.5 py-0.5 rounded">
                             引用 {data.citation_count.toLocaleString()}
                         </span>
                     )}
                     {data.venue && <span className="truncate max-w-[80px]">{data.venue}</span>}
                 </div>
-                <Handle type="source" position={Position.Bottom} className="!bg-blue-400 !w-2 !h-2" />
+                <Handle type="source" position={Position.Bottom} className="!bg-info !w-2 !h-2" />
             </div>
             {/* Indicator: Citing this paper */}
-            <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[8px] text-blue-400 flex items-center gap-0.5">
+            <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[8px] text-info flex items-center gap-0.5">
                 <ChevronDown className="w-2 h-2" /> 引用了
             </div>
         </div>
@@ -191,14 +191,14 @@ function ReferencePaperNode({ data }: { data: ApiPaperNode & { onExpand?: () => 
             {/* Hover Tooltip */}
             <PaperTooltip data={data} color="emerald" />
             {/* Indicator: Referenced by this paper */}
-            <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-[8px] text-emerald-400 flex items-center gap-0.5">
+            <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-[8px] text-success flex items-center gap-0.5">
                 <ChevronUp className="w-2 h-2" /> 被引用
             </div>
-            <div className="px-3 py-2 bg-gradient-to-br from-emerald-50 to-emerald-100 border-2 border-emerald-400 rounded-lg shadow-md hover:shadow-lg hover:border-emerald-500 transition-all">
-                <Handle type="target" position={Position.Top} className="!bg-emerald-400 !w-2 !h-2" />
+            <div className="px-3 py-2 bg-gradient-to-br from-success/5 to-success/10 border-2 border-success rounded-lg shadow-md hover:shadow-lg hover:border-success-content transition-all">
+                <Handle type="target" position={Position.Top} className="!bg-success !w-2 !h-2" />
                 <div className="flex items-start justify-between gap-1">
                     <div
-                        className="font-medium text-emerald-800 leading-tight line-clamp-2 flex-1"
+                        className="font-medium text-success-content leading-tight line-clamp-2 flex-1"
                         style={{ fontSize: size.fontSize }}
                     >
                         {data.title}
@@ -206,23 +206,23 @@ function ReferencePaperNode({ data }: { data: ApiPaperNode & { onExpand?: () => 
                     {data.onExpand && (
                         <button
                             onClick={(e) => { e.stopPropagation(); data.onExpand?.(); }}
-                            className="p-1 text-emerald-400 hover:text-emerald-600 hover:bg-emerald-100 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="p-1 text-success hover:text-success-content hover:bg-success/20 rounded opacity-0 group-hover:opacity-100 transition-opacity"
                             title="展开引用"
                         >
                             <ChevronDown className="w-3 h-3" />
                         </button>
                     )}
                 </div>
-                <div className="flex items-center gap-2 mt-1 text-[9px] text-emerald-500">
+                <div className="flex items-center gap-2 mt-1 text-[9px] text-success">
                     {data.year && <span className="font-medium">{data.year}</span>}
                     {data.citation_count !== undefined && data.citation_count > 0 && (
-                        <span className="bg-emerald-200/50 px-1.5 py-0.5 rounded">
+                        <span className="bg-success/10 px-1.5 py-0.5 rounded">
                             引用 {data.citation_count.toLocaleString()}
                         </span>
                     )}
                     {data.venue && <span className="truncate max-w-[80px]">{data.venue}</span>}
                 </div>
-                <Handle type="source" position={Position.Bottom} className="!bg-emerald-400 !w-2 !h-2" />
+                <Handle type="source" position={Position.Bottom} className="!bg-success !w-2 !h-2" />
             </div>
         </div>
     );
@@ -238,19 +238,33 @@ export default function PaperGraph({ paperId }: PaperGraphProps) {
     const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
     const [_expandedData, setExpandedData] = useState<Map<string, { nodes: ApiPaperNode[], edges: { source: string; target: string; relation: string }[] }>>(new Map());
     const [_isExpanding, setIsExpanding] = useState<string | null>(null);
+    const [forceRefresh, setForceRefresh] = useState(false);
 
     // Fetch graph data
-    const { data: graphData, isLoading, error } = useQuery({
-        queryKey: ['paper-graph', paperId],
+    const { data: graphData, isLoading, error, refetch } = useQuery({
+        queryKey: ['paper-graph', paperId, forceRefresh],
         queryFn: () => graphApi.get(paperId, {
             include_citations: true,
             include_references: true,
             include_recommendations: false,
-            limit: 50,  // Increased from 10 to show more citations/references
+            limit: 100,  // Max citations/references (API max is 100)
+            force_refresh: forceRefresh,  // Force re-fetch from API
         }),
         retry: false,
         staleTime: 5 * 60 * 1000,
     });
+
+    // Reset forceRefresh after fetch
+    useMemo(() => {
+        if (forceRefresh && graphData) {
+            setForceRefresh(false);
+        }
+    }, [forceRefresh, graphData]);
+
+    const handleRefresh = useCallback(() => {
+        setForceRefresh(true);
+        refetch();
+    }, [refetch]);
 
     const handleExpandNode = useCallback(async (nodeId: string, externalId: string) => {
         if (expandedNodes.has(nodeId)) {
@@ -364,8 +378,8 @@ export default function PaperGraph({ paperId }: PaperGraphProps) {
                 target: 'current',
                 type: 'smoothstep',
                 animated: true,
-                style: { stroke: '#3B82F6', strokeWidth: 2 },
-                markerEnd: { type: MarkerType.ArrowClosed, color: '#3B82F6', width: 15, height: 15 },
+                style: { stroke: 'rgb(var(--color-info))', strokeWidth: 2 },
+                markerEnd: { type: MarkerType.ArrowClosed, color: 'rgb(var(--color-info))', width: 15, height: 15 },
             });
         });
 
@@ -402,8 +416,8 @@ export default function PaperGraph({ paperId }: PaperGraphProps) {
                 target: node.id,
                 type: 'smoothstep',
                 animated: false,
-                style: { stroke: '#10B981', strokeWidth: 2, strokeDasharray: '5,5' },
-                markerEnd: { type: MarkerType.ArrowClosed, color: '#10B981', width: 15, height: 15 },
+                style: { stroke: 'rgb(var(--color-success))', strokeWidth: 2, strokeDasharray: '5,5' },
+                markerEnd: { type: MarkerType.ArrowClosed, color: 'rgb(var(--color-success))', width: 15, height: 15 },
             });
         });
 
@@ -434,10 +448,10 @@ export default function PaperGraph({ paperId }: PaperGraphProps) {
     // Loading state
     if (isLoading) {
         return (
-            <div className="h-[400px] flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl border border-slate-200">
+            <div className="h-[400px] flex items-center justify-center bg-gradient-to-br from-surface to-surface-elevated rounded-xl border border-border">
                 <div className="text-center">
-                    <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mx-auto mb-3" />
-                    <p className="text-sm text-slate-500">正在加载关系图谱...</p>
+                    <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-3" />
+                    <p className="text-sm text-content-muted">正在加载关系图谱...</p>
                 </div>
             </div>
         );
@@ -446,8 +460,8 @@ export default function PaperGraph({ paperId }: PaperGraphProps) {
     // Error state
     if (error) {
         return (
-            <div className="h-[200px] flex items-center justify-center bg-red-50 rounded-xl border border-red-100">
-                <p className="text-sm text-red-600">加载失败</p>
+            <div className="h-[200px] flex items-center justify-center bg-error/5 rounded-xl border border-error/20">
+                <p className="text-sm text-error">加载失败</p>
             </div>
         );
     }
@@ -455,10 +469,10 @@ export default function PaperGraph({ paperId }: PaperGraphProps) {
     // No external ID
     if (!graphData) {
         return (
-            <div className="h-[200px] flex items-center justify-center bg-amber-50 rounded-xl border border-amber-200">
+            <div className="h-[200px] flex items-center justify-center bg-warning/5 rounded-xl border border-warning/20">
                 <div className="text-center">
-                    <p className="text-sm text-amber-600">暂无图谱数据</p>
-                    <p className="text-xs text-amber-400 mt-1">需要 DOI 或 ArXiv ID</p>
+                    <p className="text-sm text-warning">暂无图谱数据</p>
+                    <p className="text-xs text-warning/70 mt-1">需要 DOI 或 ArXiv ID</p>
                 </div>
             </div>
         );
@@ -467,12 +481,12 @@ export default function PaperGraph({ paperId }: PaperGraphProps) {
     // No citations or references
     if (graphData.nodes.length === 0) {
         return (
-            <div className="h-[200px] flex items-center justify-center bg-slate-50 rounded-xl border border-slate-200">
+            <div className="h-[200px] flex items-center justify-center bg-surface-elevated rounded-xl border border-border">
                 <div className="text-center px-4">
-                    <p className="text-sm text-slate-600 line-clamp-1">📄 {graphData.current_paper.title}</p>
-                    <p className="text-xs text-slate-400 mt-2">Semantic Scholar 暂无引用/参考数据</p>
+                    <p className="text-sm text-content-main line-clamp-1">📄 {graphData.current_paper.title}</p>
+                    <p className="text-xs text-content-muted mt-2">Semantic Scholar 暂无引用/参考数据</p>
                     {graphData.current_paper.external_id && (
-                        <p className="text-xs text-indigo-500 mt-1">ID: {graphData.current_paper.external_id}</p>
+                        <p className="text-xs text-primary mt-1">ID: {graphData.current_paper.external_id}</p>
                     )}
                 </div>
             </div>
@@ -482,20 +496,28 @@ export default function PaperGraph({ paperId }: PaperGraphProps) {
     // Main graph view - height adapts to content
     return (
         <div
-            className="border border-slate-200 rounded-xl overflow-hidden bg-gradient-to-b from-blue-50/30 via-white to-emerald-50/30 relative transition-all duration-300"
+            className="border border-border rounded-xl overflow-hidden bg-gradient-to-b from-info/5 via-surface to-success/5 relative transition-all duration-300"
             style={{ height: graphHeight }}
         >
             {/* Legend */}
-            <div className="absolute top-3 left-3 z-10 bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-sm border border-slate-100">
+            <div className="absolute top-3 left-3 z-10 bg-surface/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-sm border border-border">
                 <div className="flex items-center gap-4 text-[10px]">
                     <div className="flex items-center gap-1">
-                        <div className="w-2 h-2 rounded-full bg-blue-400" />
-                        <span className="text-slate-500">引用此论文</span>
+                        <div className="w-2 h-2 rounded-full bg-info" />
+                        <span className="text-content-muted">引用此论文</span>
                     </div>
                     <div className="flex items-center gap-1">
-                        <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                        <span className="text-slate-500">被此论文引用</span>
+                        <div className="w-2 h-2 rounded-full bg-success" />
+                        <span className="text-content-muted">被此论文引用</span>
                     </div>
+                    <button
+                        onClick={handleRefresh}
+                        className="flex items-center gap-1 text-primary hover:text-primary-hover transition-colors"
+                        title="刷新图谱数据（最大100篇）"
+                    >
+                        <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
+                        <span>刷新(最大100)</span>
+                    </button>
                 </div>
             </div>
 
@@ -513,8 +535,8 @@ export default function PaperGraph({ paperId }: PaperGraphProps) {
                     type: 'smoothstep',
                 }}
             >
-                <Background color="#e2e8f0" gap={20} size={1} />
-                <Controls className="!bg-white/90 !backdrop-blur-sm !border-slate-200" />
+                <Background color="#cbd5e1" gap={20} size={1} />
+                <Controls className="!bg-surface/90 !backdrop-blur-sm !border-border" />
             </ReactFlow>
         </div>
     );

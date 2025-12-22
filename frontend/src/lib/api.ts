@@ -155,6 +155,7 @@ export interface TextLocation {
 
 export interface MethodItem {
     name: string;
+    category?: string;  // core/model_setup/baseline/evaluation/preprocessing
     description: string;
     location?: TextLocation;
 }
@@ -578,7 +579,63 @@ export const adminApi = {
     resetTokenStats: async (): Promise<void> => {
         await api.post('/admin/token-stats/reset');
     },
+
+    // 邀请码管理
+    getInvitationCodes: async (params?: {
+        skip?: number;
+        limit?: number;
+        grant_plan?: string;
+        is_used?: boolean;
+    }): Promise<AdminInvitationCodeListResponse> => {
+        const { data } = await api.get('/admin/invitation-codes', { params });
+        return data;
+    },
+
+    batchCreateInvitationCodes: async (options: {
+        count: number;
+        grant_plan: string;
+        grant_days: number;
+        expires_days: number;
+    }): Promise<{ success: boolean; count: number; codes: string[] }> => {
+        const { data } = await api.post('/admin/invitation-codes/batch', options);
+        return data;
+    },
+
+    deleteInvitationCode: async (code: string): Promise<void> => {
+        await api.delete(`/admin/invitation-codes/${code}`);
+    },
 };
+
+// 管理员邀请码类型
+export interface AdminInvitationCodeItem {
+    id: string;
+    code: string;
+    created_by: string;
+    creator_email?: string;
+    creator_plan: string;
+    grant_plan: string;
+    grant_days: number;
+    is_used: boolean;
+    used_by?: string;
+    used_by_email?: string;
+    used_at?: string;
+    is_expired: boolean;
+    expires_at?: string;
+    is_active: boolean;
+    created_at: string;
+}
+
+export interface AdminInvitationCodeListResponse {
+    items: AdminInvitationCodeItem[];
+    total: number;
+    stats: {
+        total: number;
+        used: number;
+        active: number;
+        expired: number;
+        by_plan: Record<string, { total: number; used: number }>;
+    };
+}
 
 // Token 统计类型
 export interface TokenStats {
@@ -597,3 +654,288 @@ export interface TokenStats {
         calls_count: number;
     }>;
 }
+
+// ==================== Quota API ====================
+
+export interface QuotaStatus {
+    plan: string;
+    plan_display: string;
+    expires_at: string | null;
+    papers: {
+        daily_used: number;
+        daily_limit: number;
+        monthly_used: number;
+        monthly_limit: number;
+    };
+    ai: {
+        daily_used: number;
+        daily_limit: number;
+    };
+    can_parse: boolean;
+    can_use_ai: boolean;
+}
+
+export interface PlanInfo {
+    name: string;
+    display: string;
+    price: number;
+    papers_daily: number;
+    papers_monthly: number;
+    ai_daily: number;
+}
+
+export interface RedeemResponse {
+    success: boolean;
+    message: string;
+    new_plan: string;
+    expires_at: string | null;
+}
+
+export interface InvitationCode {
+    code: string;
+    grant_plan: string;
+    grant_days: number;
+    is_used: boolean;
+    used_at: string | null;
+    is_expired: boolean;
+    expires_at: string | null;
+    created_at: string;
+}
+
+export const quotaApi = {
+    /**
+     * 获取当前用户配额状态
+     */
+    getStatus: async (): Promise<QuotaStatus> => {
+        const { data } = await api.get('/quota/status');
+        return data;
+    },
+
+    /**
+     * 获取所有可用计划
+     */
+    getPlans: async (): Promise<PlanInfo[]> => {
+        const { data } = await api.get('/quota/plans');
+        return data;
+    },
+
+    /**
+     * 兑换邀请码
+     */
+    redeemCode: async (code: string): Promise<RedeemResponse> => {
+        const { data } = await api.post('/quota/redeem', { code });
+        return data;
+    },
+
+    /**
+     * 生成邀请码
+     */
+    generateCode: async (options?: {
+        grant_plan?: string;
+        grant_days?: number;
+        expires_days?: number;
+    }): Promise<{ code: string; grant_plan: string; grant_days: number; expires_at: string | null; created_at: string }> => {
+        const { data } = await api.post('/quota/invitation-codes', options || {});
+        return data;
+    },
+
+    /**
+     * 获取我生成的邀请码列表
+     */
+    getMyCodes: async (): Promise<InvitationCode[]> => {
+        const { data } = await api.get('/quota/invitation-codes');
+        return data;
+    },
+
+    /**
+     * 删除邀请码
+     */
+    deleteCode: async (code: string): Promise<void> => {
+        await api.delete(`/quota/invitation-codes/${code}`);
+    },
+};
+
+// ==================== Prompts API ====================
+
+export interface PromptTypeItem {
+    name: string;
+    version_count: number;
+    active_version: string | null;
+}
+
+export interface PromptVersionItem {
+    version: string;
+    description: string | null;
+    is_active: boolean;
+    created_at: string | null;
+    updated_at: string | null;
+}
+
+export interface PromptDetail {
+    id: string;
+    prompt_type: string;
+    version: string;
+    description: string | null;
+    system_prompt: string;
+    user_prompt_template: string;
+    file_path: string | null;
+    created_at: string | null;
+    updated_at: string | null;
+    is_active: boolean;
+}
+
+export interface PromptHistoryItem {
+    id: string;
+    changed_at: string | null;
+    changed_by: string | null;
+    change_note: string | null;
+    description: string | null;
+}
+
+export interface PromptHistoryDetail {
+    id: string;
+    prompt_type: string;
+    version: string;
+    description: string | null;
+    system_prompt: string;
+    user_prompt_template: string;
+    changed_at: string | null;
+    change_note: string | null;
+}
+
+export interface PreviewPaper {
+    id: string;
+    title: string | null;
+    filename: string;
+}
+
+export interface PreviewResult {
+    result: string;
+    tokens_used: number | null;
+}
+
+export const promptsApi = {
+    /**
+     * 获取所有提示词类型
+     */
+    getTypes: async (): Promise<{ types: PromptTypeItem[] }> => {
+        const { data } = await api.get('/admin/prompts/types');
+        return data;
+    },
+
+    /**
+     * 获取指定类型的所有版本
+     */
+    getVersions: async (promptType: string): Promise<{
+        prompt_type: string;
+        versions: PromptVersionItem[];
+        active_version: string | null;
+    }> => {
+        const { data } = await api.get(`/admin/prompts/${promptType}/versions`);
+        return data;
+    },
+
+    /**
+     * 获取指定版本的完整内容
+     */
+    getDetail: async (promptType: string, version: string): Promise<PromptDetail> => {
+        const { data } = await api.get(`/admin/prompts/${promptType}/${version}`);
+        return data;
+    },
+
+    /**
+     * 更新提示词内容
+     */
+    updatePrompt: async (promptType: string, version: string, updateData: {
+        description?: string;
+        system_prompt: string;
+        user_prompt_template: string;
+        change_note?: string;
+    }): Promise<PromptDetail> => {
+        const { data } = await api.put(`/admin/prompts/${promptType}/${version}`, updateData);
+        return data;
+    },
+
+    /**
+     * 创建新版本
+     */
+    createVersion: async (promptType: string, createData: {
+        version: string;
+        description?: string;
+        system_prompt: string;
+        user_prompt_template: string;
+        base_version?: string;
+    }): Promise<PromptDetail> => {
+        const { data } = await api.post(`/admin/prompts/${promptType}`, createData);
+        return data;
+    },
+
+    /**
+     * 设置活跃版本
+     */
+    setActiveVersion: async (promptType: string, version: string): Promise<{
+        success: boolean;
+        prompt_type: string;
+        active_version: string;
+    }> => {
+        const { data } = await api.put(`/admin/prompts/${promptType}/active`, { version });
+        return data;
+    },
+
+    /**
+     * 获取版本编辑历史
+     */
+    getHistory: async (promptType: string, version: string): Promise<{
+        prompt_type: string;
+        version: string;
+        history: PromptHistoryItem[];
+    }> => {
+        const { data } = await api.get(`/admin/prompts/${promptType}/${version}/history`);
+        return data;
+    },
+
+    /**
+     * 获取历史记录详情
+     */
+    getHistoryDetail: async (promptType: string, version: string, historyId: string): Promise<PromptHistoryDetail> => {
+        const { data } = await api.get(`/admin/prompts/${promptType}/${version}/history/${historyId}`);
+        return data;
+    },
+
+    /**
+     * 回滚到指定历史版本
+     */
+    rollback: async (promptType: string, version: string, historyId: string): Promise<PromptDetail> => {
+        const { data } = await api.post(`/admin/prompts/${promptType}/${version}/rollback/${historyId}`);
+        return data;
+    },
+
+    /**
+     * 热重载所有提示词
+     */
+    reload: async (): Promise<{ success: boolean; message: string }> => {
+        const { data } = await api.post('/admin/prompts/reload');
+        return data;
+    },
+
+    /**
+     * 获取可预览的论文列表
+     */
+    getPreviewPapers: async (): Promise<{ papers: PreviewPaper[] }> => {
+        const { data } = await api.get('/admin/prompts/preview/papers');
+        return data;
+    },
+
+    /**
+     * 执行实时预览
+     */
+    preview: async (previewData: {
+        prompt_type: string;
+        system_prompt: string;
+        user_prompt_template: string;
+        paper_id: string;
+    }): Promise<PreviewResult> => {
+        const { data } = await api.post('/admin/prompts/preview', previewData);
+        return data;
+    },
+};

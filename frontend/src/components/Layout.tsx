@@ -16,13 +16,13 @@ export default function Layout() {
     ];
 
     return (
-        <div className="min-h-screen bg-slate-900 flex">
+        <div className="min-h-screen bg-background flex">
             {/* 侧边栏 */}
-            <aside className="w-64 bg-slate-800 border-r border-slate-700 flex flex-col">
+            <aside className="w-64 bg-surface border-r border-border flex flex-col">
                 {/* Logo */}
-                <div className="p-4 border-b border-slate-700">
+                <div className="p-4 border-b border-border">
                     <Link to="/" className="flex items-center gap-2 text-xl font-bold">
-                        <BookOpen className="w-6 h-6 text-indigo-500" />
+                        <BookOpen className="w-6 h-6 text-primary" />
                         <span className="bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
                             Read it DEEP
                         </span>
@@ -40,8 +40,8 @@ export default function Layout() {
                                     <Link
                                         to={item.path}
                                         className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${isActive
-                                                ? 'bg-indigo-600 text-white'
-                                                : 'text-slate-400 hover:bg-slate-700 hover:text-white'
+                                            ? 'bg-primary text-primary-content'
+                                            : 'text-content-muted hover:bg-surface-hover hover:text-content-main'
                                             }`}
                                     >
                                         <Icon className="w-5 h-5" />
@@ -54,10 +54,10 @@ export default function Layout() {
                 </nav>
 
                 {/* 上传按钮 */}
-                <div className="p-4 border-t border-slate-700">
+                <div className="p-4 border-t border-border">
                     <button
                         onClick={() => setShowUpload(true)}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition-colors"
+                        className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary hover:bg-primary-hover text-primary-content rounded-lg font-medium transition-colors"
                     >
                         <Upload className="w-5 h-5" />
                         上传论文
@@ -65,8 +65,8 @@ export default function Layout() {
                 </div>
 
                 {/* 设置 */}
-                <div className="p-4 border-t border-slate-700">
-                    <button className="flex items-center gap-3 px-3 py-2 text-slate-400 hover:text-white transition-colors">
+                <div className="p-4 border-t border-border">
+                    <button className="flex items-center gap-3 px-3 py-2 text-content-muted hover:text-content-main transition-colors">
                         <Settings className="w-5 h-5" />
                         设置
                     </button>

@@ -18,6 +18,7 @@ import logging
 
 from app.core.store import store
 from app.services.semantic_scholar import get_s2_service, S2_AVAILABLE, S2RateLimitError, S2ApiError
+from app.services.openalex import get_openalex_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -138,7 +139,14 @@ def _load_from_store(paper: dict) -> tuple[list[PaperNode], list[PaperEdge]]:
 
 
 async def _fetch_and_store_s2(paper_id: str, external_id: str, limit: int, fetch_citations: bool, fetch_references: bool) -> tuple[list[PaperNode], list[PaperEdge]]:
-    """Fetch from S2 API and store permanently"""
+    """
+    Fetch from S2 API with OpenAlex fallback and store permanently
+    
+    Strategy:
+    1. Try Semantic Scholar first
+    2. If S2 fails (rate limit / error), fallback to OpenAlex
+    3. Store results regardless of source
+    """
     paper = store.get(paper_id)
     if not paper:
         return [], []
@@ -147,26 +155,24 @@ async def _fetch_and_store_s2(paper_id: str, external_id: str, limit: int, fetch
     nodes: list[PaperNode] = []
     edges: list[PaperEdge] = []
     
-    s2 = get_s2_service()
-    
     # Fetch and store citations (if needed)
     if fetch_citations:
-        citations = await s2.get_citations(external_id, limit=limit)
+        citations_data = await _fetch_citations_with_fallback(external_id, limit)
         s2_graph["citations"] = []
         s2_graph["citations_fetched_at"] = datetime.now().isoformat()
         
-        for c in citations:
-            node_id = f"s2-{c.external_id}"
-            s2_url = _get_s2_url(c.external_id)
+        for c in citations_data:
+            node_id = f"s2-{c['external_id']}"
+            s2_url = _get_s2_url(c['external_id'])
             nodes.append(PaperNode(
                 id=node_id,
-                title=c.title,
-                authors=c.authors,
-                year=c.year,
-                venue=c.venue,
-                citation_count=c.citation_count,
+                title=c['title'],
+                authors=c.get('authors', []),
+                year=c.get('year'),
+                venue=c.get('venue'),
+                citation_count=c.get('citation_count'),
                 is_local=False,
-                external_id=c.external_id,
+                external_id=c['external_id'],
                 s2_url=s2_url,
             ))
             edges.append(PaperEdge(
@@ -174,35 +180,28 @@ async def _fetch_and_store_s2(paper_id: str, external_id: str, limit: int, fetch
                 target="current",
                 relation="cited_by",
             ))
-            s2_graph["citations"].append({
-                "external_id": c.external_id,
-                "title": c.title,
-                "authors": c.authors,
-                "year": c.year,
-                "venue": c.venue,
-                "citation_count": c.citation_count,
-            })
-        logger.info(f"Stored {len(citations)} citations for paper {paper_id}")
+            s2_graph["citations"].append(c)
+        logger.info(f"Stored {len(citations_data)} citations for paper {paper_id}")
     
     # Fetch and store references (permanent, only once)
     if fetch_references:
-        references = await s2.get_references(external_id, limit=limit)
+        references_data = await _fetch_references_with_fallback(external_id, limit)
         s2_graph["references"] = []
         s2_graph["references_fetched_at"] = datetime.now().isoformat()
         
-        for r in references:
-            node_id = f"s2-{r.external_id}"
-            s2_url = _get_s2_url(r.external_id)
+        for r in references_data:
+            node_id = f"s2-{r['external_id']}"
+            s2_url = _get_s2_url(r['external_id'])
             if not any(n.id == node_id for n in nodes):
                 nodes.append(PaperNode(
                     id=node_id,
-                    title=r.title,
-                    authors=r.authors,
-                    year=r.year,
-                    venue=r.venue,
-                    citation_count=r.citation_count,
+                    title=r['title'],
+                    authors=r.get('authors', []),
+                    year=r.get('year'),
+                    venue=r.get('venue'),
+                    citation_count=r.get('citation_count'),
                     is_local=False,
-                    external_id=r.external_id,
+                    external_id=r['external_id'],
                     s2_url=s2_url,
                 ))
             edges.append(PaperEdge(
@@ -210,21 +209,94 @@ async def _fetch_and_store_s2(paper_id: str, external_id: str, limit: int, fetch
                 target=node_id,
                 relation="cites",
             ))
-            s2_graph["references"].append({
-                "external_id": r.external_id,
-                "title": r.title,
-                "authors": r.authors,
-                "year": r.year,
-                "venue": r.venue,
-                "citation_count": r.citation_count,
-            })
-        logger.info(f"Stored {len(references)} references for paper {paper_id}")
+            s2_graph["references"].append(r)
+        logger.info(f"Stored {len(references_data)} references for paper {paper_id}")
     
     # Save to store
     paper["s2_graph"] = s2_graph
     store.update(paper_id, paper)
     
     return nodes, edges
+
+
+async def _fetch_citations_with_fallback(external_id: str, limit: int) -> list[dict]:
+    """
+    Fetch citations with S2 -> OpenAlex fallback
+    """
+    s2 = get_s2_service()
+    
+    try:
+        # Try Semantic Scholar first
+        citations = await s2.get_citations(external_id, limit=limit)
+        if citations:
+            logger.info(f"S2: Got {len(citations)} citations for {external_id}")
+            return [
+                {
+                    "external_id": c.external_id,
+                    "title": c.title,
+                    "authors": c.authors,
+                    "year": c.year,
+                    "venue": c.venue,
+                    "citation_count": c.citation_count,
+                }
+                for c in citations
+            ]
+    except (S2RateLimitError, S2ApiError) as e:
+        logger.warning(f"S2 failed for citations, trying OpenAlex: {e}")
+    except Exception as e:
+        logger.warning(f"S2 error for citations, trying OpenAlex: {e}")
+    
+    # Fallback to OpenAlex
+    try:
+        openalex = get_openalex_service()
+        citations = await openalex.get_citations(external_id, limit=limit)
+        if citations:
+            logger.info(f"OpenAlex: Got {len(citations)} citations for {external_id}")
+            return citations
+    except Exception as e:
+        logger.warning(f"OpenAlex also failed for citations: {e}")
+    
+    return []
+
+
+async def _fetch_references_with_fallback(external_id: str, limit: int) -> list[dict]:
+    """
+    Fetch references with S2 -> OpenAlex fallback
+    """
+    s2 = get_s2_service()
+    
+    try:
+        # Try Semantic Scholar first
+        references = await s2.get_references(external_id, limit=limit)
+        if references:
+            logger.info(f"S2: Got {len(references)} references for {external_id}")
+            return [
+                {
+                    "external_id": r.external_id,
+                    "title": r.title,
+                    "authors": r.authors,
+                    "year": r.year,
+                    "venue": r.venue,
+                    "citation_count": r.citation_count,
+                }
+                for r in references
+            ]
+    except (S2RateLimitError, S2ApiError) as e:
+        logger.warning(f"S2 failed for references, trying OpenAlex: {e}")
+    except Exception as e:
+        logger.warning(f"S2 error for references, trying OpenAlex: {e}")
+    
+    # Fallback to OpenAlex
+    try:
+        openalex = get_openalex_service()
+        references = await openalex.get_references(external_id, limit=limit)
+        if references:
+            logger.info(f"OpenAlex: Got {len(references)} references for {external_id}")
+            return references
+    except Exception as e:
+        logger.warning(f"OpenAlex also failed for references: {e}")
+    
+    return []
 
 
 @router.get("/{paper_id}/graph", response_model=PaperGraphResponse)

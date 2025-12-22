@@ -144,7 +144,7 @@ function ResultWindow({
     return (
         <div
             ref={windowRef}
-            className="fixed z-[100] bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden"
+            className="fixed z-[100] bg-surface rounded-xl shadow-2xl border border-border overflow-hidden"
             style={{
                 left: pos.x,
                 top: pos.y,
@@ -155,7 +155,7 @@ function ResultWindow({
             onMouseDown={handleMouseDown}
         >
             {/* Header - Drag Handle */}
-            <div className="drag-handle flex items-center justify-between px-3 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white cursor-move">
+            <div className="drag-handle flex items-center justify-between px-3 py-2 bg-gradient-to-r from-primary to-secondary text-primary-content cursor-move">
                 <div className="flex items-center gap-2">
                     <GripHorizontal className="w-4 h-4 opacity-60" />
                     <span className="text-lg">{icon}</span>
@@ -192,8 +192,8 @@ function ResultWindow({
                                     >
                                         <div
                                             className={`max-w-[80%] px-3 py-2 rounded-xl text-sm ${msg.role === 'user'
-                                                ? 'bg-indigo-500 text-white'
-                                                : 'bg-slate-100 text-slate-700'
+                                                ? 'bg-primary text-primary-content'
+                                                : 'bg-surface-elevated text-content-main'
                                                 }`}
                                         >
                                             <ReactMarkdown
@@ -207,14 +207,14 @@ function ResultWindow({
                                 ))}
                                 {isLoading && (
                                     <div className="flex justify-start">
-                                        <div className="bg-slate-100 px-4 py-2 rounded-xl">
-                                            <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+                                        <div className="bg-surface-elevated px-4 py-2 rounded-xl">
+                                            <Loader2 className="w-4 h-4 animate-spin text-content-muted" />
                                         </div>
                                     </div>
                                 )}
                             </div>
                             {/* Chat Input */}
-                            <div className="p-3 border-t border-slate-100">
+                            <div className="p-3 border-t border-border">
                                 <div className="flex gap-2">
                                     <input
                                         type="text"
@@ -222,12 +222,12 @@ function ResultWindow({
                                         onChange={(e) => setChatInput(e.target.value)}
                                         onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
                                         placeholder="输入问题..."
-                                        className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                        className="flex-1 px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-surface text-content-main"
                                     />
                                     <button
                                         onClick={handleSendChat}
                                         disabled={!chatInput.trim() || isLoading}
-                                        className="px-3 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                        className="px-3 py-2 bg-primary text-primary-content rounded-lg hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                     >
                                         <Send className="w-4 h-4" />
                                     </button>
@@ -239,11 +239,11 @@ function ResultWindow({
                         <div className="p-4">
                             {isLoading ? (
                                 <div className="flex items-center justify-center py-8">
-                                    <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
-                                    <span className="ml-2 text-slate-500">分析中...</span>
+                                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                                    <span className="ml-2 text-content-muted">分析中...</span>
                                 </div>
                             ) : (
-                                <div className="prose prose-sm prose-slate max-w-none">
+                                <div className="prose prose-sm prose-slate max-w-none text-content-main">
                                     <ReactMarkdown
                                         remarkPlugins={[remarkGfm, remarkMath]}
                                         rehypePlugins={[rehypeKatex]}
@@ -530,13 +530,13 @@ export default function SmartSelectionPopup({
                     transform: 'translateX(-50%)',
                 }}
             >
-                <div className="flex items-center gap-1 bg-white rounded-full shadow-xl border border-slate-200 px-2 py-1.5">
+                <div className="flex items-center gap-1 bg-surface rounded-full shadow-xl border border-border px-2 py-1.5">
                     {/* 智能分析按钮 */}
                     {actions.map((action) => (
                         <button
                             key={action.id}
                             onClick={() => handleAction(action)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 rounded-full transition-all"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-content-main hover:bg-primary/10 hover:text-primary rounded-full transition-all"
                             title={action.label}
                         >
                             <span className="text-base">{action.icon}</span>
@@ -545,12 +545,12 @@ export default function SmartSelectionPopup({
                     ))}
 
                     {/* 分隔线 */}
-                    <div className="w-px h-5 bg-slate-200 mx-1" />
+                    <div className="w-px h-5 bg-border mx-1" />
 
                     {/* 工作台快捷按钮 */}
                     <button
                         onClick={() => handleWorkbenchAdd('method')}
-                        className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50 rounded-full transition-all"
+                        className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 rounded-full transition-all"
                         title="添加到方法炼金台"
                     >
                         <span className="text-sm">🔬</span>
@@ -558,7 +558,7 @@ export default function SmartSelectionPopup({
                     </button>
                     <button
                         onClick={() => handleWorkbenchAdd('asset')}
-                        className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-emerald-600 hover:bg-emerald-50 rounded-full transition-all"
+                        className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-info hover:bg-info/10 rounded-full transition-all"
                         title="添加到资产仓库"
                     >
                         <span className="text-sm">📊</span>
@@ -566,7 +566,7 @@ export default function SmartSelectionPopup({
                     </button>
                     <button
                         onClick={() => handleWorkbenchAdd('note')}
-                        className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-purple-600 hover:bg-purple-50 rounded-full transition-all"
+                        className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-secondary hover:bg-secondary/10 rounded-full transition-all"
                         title="添加到智能笔记"
                     >
                         <span className="text-sm">💡</span>
@@ -574,12 +574,12 @@ export default function SmartSelectionPopup({
                     </button>
 
                     {/* 分隔线 */}
-                    <div className="w-px h-5 bg-slate-200 mx-1" />
+                    <div className="w-px h-5 bg-border mx-1" />
 
                     {/* 关闭按钮 */}
                     <button
                         onClick={onClose}
-                        className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+                        className="p-1.5 text-content-muted hover:text-content-main hover:bg-surface-elevated rounded-full transition-colors"
                     >
                         <X className="w-4 h-4" />
                     </button>
@@ -588,8 +588,8 @@ export default function SmartSelectionPopup({
                 {/* 工作台操作反馈 */}
                 {workbenchStatus && (
                     <div className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 rounded-lg text-xs font-medium shadow-lg animate-in fade-in zoom-in-95 ${workbenchStatus.success
-                        ? 'bg-green-500 text-white'
-                        : 'bg-red-500 text-white'
+                        ? 'bg-success text-success-content'
+                        : 'bg-error text-error-content'
                         }`}>
                         {workbenchStatus.success
                             ? `✓ 已添加到${workbenchStatus.type === 'method' ? '方法炼金台' : workbenchStatus.type === 'asset' ? '资产仓库' : '智能笔记'}`

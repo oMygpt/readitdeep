@@ -13,7 +13,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { adminApi, type SystemConfig, type User as AdminUser, type TokenStats } from '../lib/api';
+import { adminApi, type SystemConfig, type User as AdminUser, type TokenStats, type AdminInvitationCodeItem } from '../lib/api';
 import {
     Settings,
     Users,
@@ -39,9 +39,13 @@ import {
     ChevronRight,
     BarChart3,
     RefreshCw,
+    Gift,
+    Copy,
+    MessageSquare,
 } from 'lucide-react';
+import PromptManagement from '../components/PromptManagement';
 
-type Tab = 'config' | 'users';
+type Tab = 'config' | 'users' | 'invitations' | 'prompts';
 
 // 配置卡片组件
 interface ConfigCardProps {
@@ -196,6 +200,19 @@ export default function AdminPage() {
     const [tokenStats, setTokenStats] = useState<TokenStats | null>(null);
     const [isLoadingTokenStats, setIsLoadingTokenStats] = useState(false);
 
+    // 邀请码管理
+    const [invitationCodes, setInvitationCodes] = useState<AdminInvitationCodeItem[]>([]);
+    const [invitationStats, setInvitationStats] = useState<any>(null);
+    const [isLoadingInvitations, setIsLoadingInvitations] = useState(false);
+    const [showBatchCreate, setShowBatchCreate] = useState(false);
+    const [batchCreateForm, setBatchCreateForm] = useState({
+        count: 10,
+        grant_plan: 'pro',
+        grant_days: 30,
+        expires_days: 30,
+    });
+    const [createdCodes, setCreatedCodes] = useState<string[]>([]);
+
     // 权限检查
     useEffect(() => {
         if (user && user.role !== 'admin') {
@@ -246,10 +263,12 @@ export default function AdminPage() {
                     smart_chat_model: configData.smart_chat_model || '',
                     smart_chat_api_key: '',
                 });
-            } else {
+            } else if (activeTab === 'users') {
                 const usersData = await adminApi.listUsers();
                 setUsers(usersData.items);
                 setTotalUsers(usersData.total);
+            } else if (activeTab === 'invitations') {
+                await loadInvitationCodes();
             }
         } catch (error) {
             console.error('Failed to load data:', error);
@@ -278,6 +297,44 @@ export default function AdminPage() {
         } catch (error) {
             console.error('Failed to reset token stats:', error);
         }
+    };
+
+    const loadInvitationCodes = async () => {
+        setIsLoadingInvitations(true);
+        try {
+            const data = await adminApi.getInvitationCodes({ limit: 100 });
+            setInvitationCodes(data.items);
+            setInvitationStats(data.stats);
+        } catch (error) {
+            console.error('Failed to load invitation codes:', error);
+        } finally {
+            setIsLoadingInvitations(false);
+        }
+    };
+
+    const handleBatchCreateCodes = async () => {
+        try {
+            const result = await adminApi.batchCreateInvitationCodes(batchCreateForm);
+            setCreatedCodes(result.codes);
+            await loadInvitationCodes();
+        } catch (error) {
+            console.error('Failed to create codes:', error);
+            alert('生成失败');
+        }
+    };
+
+    const handleDeleteCode = async (code: string) => {
+        if (!confirm('确定要删除此邀请码？')) return;
+        try {
+            await adminApi.deleteInvitationCode(code);
+            await loadInvitationCodes();
+        } catch (error) {
+            console.error('Failed to delete code:', error);
+        }
+    };
+
+    const copyToClipboard = (text: string) => {
+        navigator.clipboard.writeText(text);
     };
 
     // 加载 token 统计
@@ -409,6 +466,26 @@ export default function AdminPage() {
                     >
                         <Users className="w-4 h-4" />
                         {t('admin.userManagement')} ({totalUsers})
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('invitations')}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${activeTab === 'invitations'
+                            ? 'bg-purple-600 text-white'
+                            : 'bg-white text-slate-700 hover:bg-slate-50'
+                            }`}
+                    >
+                        <Gift className="w-4 h-4" />
+                        邀请码管理 {invitationStats ? `(${invitationStats.total})` : ''}
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('prompts')}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${activeTab === 'prompts'
+                            ? 'bg-purple-600 text-white'
+                            : 'bg-white text-slate-700 hover:bg-slate-50'
+                            }`}
+                    >
+                        <MessageSquare className="w-4 h-4" />
+                        提示词管理
                     </button>
                 </div>
 
@@ -864,7 +941,7 @@ export default function AdminPage() {
                             )}
                         </div>
                     </div>
-                ) : (
+                ) : activeTab === 'users' ? (
                     /* 用户管理 */
                     <div className="space-y-4">
                         <div className="flex justify-between items-center">
@@ -958,7 +1035,215 @@ export default function AdminPage() {
                             </table>
                         </div>
                     </div>
-                )}
+                ) : activeTab === 'invitations' ? (
+                    <div className="space-y-6">
+                        {/* 邀请码统计 */}
+                        {invitationStats && (
+                            <div className="grid grid-cols-4 gap-4">
+                                <div className="bg-white rounded-xl p-4 border border-slate-200">
+                                    <div className="text-2xl font-bold text-slate-700">{invitationStats.total}</div>
+                                    <div className="text-sm text-slate-500">总邀请码</div>
+                                </div>
+                                <div className="bg-green-50 rounded-xl p-4 border border-green-200">
+                                    <div className="text-2xl font-bold text-green-700">{invitationStats.active}</div>
+                                    <div className="text-sm text-green-600">可用</div>
+                                </div>
+                                <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
+                                    <div className="text-2xl font-bold text-blue-700">{invitationStats.used}</div>
+                                    <div className="text-sm text-blue-600">已使用</div>
+                                </div>
+                                <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                                    <div className="text-2xl font-bold text-slate-500">{invitationStats.expired}</div>
+                                    <div className="text-sm text-slate-500">已过期</div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 批量生成 */}
+                        <div className="bg-white rounded-xl p-6 border border-slate-200">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-semibold text-slate-900 flex items-center gap-2">
+                                    <Gift className="w-5 h-5 text-purple-600" />
+                                    批量生成邀请码
+                                </h3>
+                                <button
+                                    onClick={() => setShowBatchCreate(!showBatchCreate)}
+                                    className="text-sm text-purple-600 hover:text-purple-700"
+                                >
+                                    {showBatchCreate ? '收起' : '展开'}
+                                </button>
+                            </div>
+
+                            {showBatchCreate && (
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-4 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">生成数量</label>
+                                            <input
+                                                type="number"
+                                                value={batchCreateForm.count}
+                                                onChange={(e) => setBatchCreateForm({ ...batchCreateForm, count: parseInt(e.target.value) || 1 })}
+                                                min={1}
+                                                max={100}
+                                                className="w-full px-3 py-2 border border-slate-200 rounded-lg"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">授予计划</label>
+                                            <select
+                                                value={batchCreateForm.grant_plan}
+                                                onChange={(e) => setBatchCreateForm({ ...batchCreateForm, grant_plan: e.target.value })}
+                                                className="w-full px-3 py-2 border border-slate-200 rounded-lg"
+                                            >
+                                                <option value="pro">Pro</option>
+                                                <option value="ultra">Ultra</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">授予天数</label>
+                                            <input
+                                                type="number"
+                                                value={batchCreateForm.grant_days}
+                                                onChange={(e) => setBatchCreateForm({ ...batchCreateForm, grant_days: parseInt(e.target.value) || 30 })}
+                                                min={1}
+                                                className="w-full px-3 py-2 border border-slate-200 rounded-lg"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">邀请码有效期(天)</label>
+                                            <input
+                                                type="number"
+                                                value={batchCreateForm.expires_days}
+                                                onChange={(e) => setBatchCreateForm({ ...batchCreateForm, expires_days: parseInt(e.target.value) || 30 })}
+                                                min={1}
+                                                className="w-full px-3 py-2 border border-slate-200 rounded-lg"
+                                            />
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={handleBatchCreateCodes}
+                                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                                    >
+                                        生成邀请码
+                                    </button>
+
+                                    {/* 显示生成的邀请码 */}
+                                    {createdCodes.length > 0 && (
+                                        <div className="mt-4 p-4 bg-green-50 rounded-lg border border-green-200">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <span className="text-sm font-medium text-green-700">已生成 {createdCodes.length} 个邀请码</span>
+                                                <button
+                                                    onClick={() => copyToClipboard(createdCodes.join('\n'))}
+                                                    className="flex items-center gap-1 text-sm text-green-600 hover:text-green-700"
+                                                >
+                                                    <Copy className="w-4 h-4" /> 复制全部
+                                                </button>
+                                            </div>
+                                            <div className="max-h-40 overflow-y-auto font-mono text-sm text-green-800">
+                                                {createdCodes.map((code, i) => (
+                                                    <div key={i} className="py-1">{code}</div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 邀请码列表 */}
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead className="bg-slate-50">
+                                        <tr>
+                                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500">邀请码</th>
+                                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500">计划</th>
+                                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500">天数</th>
+                                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500">状态</th>
+                                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500">创建者</th>
+                                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500">使用者</th>
+                                            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500">创建时间</th>
+                                            <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {isLoadingInvitations ? (
+                                            <tr>
+                                                <td colSpan={8} className="px-4 py-8 text-center">
+                                                    <Loader2 className="w-6 h-6 animate-spin text-purple-600 mx-auto" />
+                                                </td>
+                                            </tr>
+                                        ) : invitationCodes.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
+                                                    暂无邀请码
+                                                </td>
+                                            </tr>
+                                        ) : invitationCodes.map((code) => (
+                                            <tr key={code.id} className="hover:bg-slate-50">
+                                                <td className="px-4 py-3 font-mono text-sm text-slate-900">
+                                                    <div className="flex items-center gap-2">
+                                                        {code.code}
+                                                        <button
+                                                            onClick={() => copyToClipboard(code.code)}
+                                                            className="text-slate-400 hover:text-slate-600"
+                                                            title="复制"
+                                                        >
+                                                            <Copy className="w-3 h-3" />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${code.grant_plan === 'ultra'
+                                                        ? 'bg-purple-100 text-purple-700'
+                                                        : 'bg-blue-100 text-blue-700'
+                                                        }`}>
+                                                        {code.grant_plan.toUpperCase()}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3 text-sm text-slate-600">{code.grant_days}天</td>
+                                                <td className="px-4 py-3">
+                                                    {code.is_used ? (
+                                                        <span className="px-2 py-1 rounded-full text-xs bg-slate-100 text-slate-600">已使用</span>
+                                                    ) : code.is_expired ? (
+                                                        <span className="px-2 py-1 rounded-full text-xs bg-red-100 text-red-600">已过期</span>
+                                                    ) : !code.is_active ? (
+                                                        <span className="px-2 py-1 rounded-full text-xs bg-slate-100 text-slate-500">已禁用</span>
+                                                    ) : (
+                                                        <span className="px-2 py-1 rounded-full text-xs bg-green-100 text-green-700">可用</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-4 py-3 text-sm text-slate-600">{code.creator_email || '-'}</td>
+                                                <td className="px-4 py-3 text-sm text-slate-600">{code.used_by_email || '-'}</td>
+                                                <td className="px-4 py-3 text-sm text-slate-500">
+                                                    {new Date(code.created_at).toLocaleDateString()}
+                                                </td>
+                                                <td className="px-4 py-3 text-right">
+                                                    {!code.is_used && code.is_active && (
+                                                        <button
+                                                            onClick={() => handleDeleteCode(code.code)}
+                                                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                                                            title="删除"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                ) : activeTab === 'prompts' ? (
+                    <PromptManagement
+                        onMessage={(msg) => {
+                            setSaveMessage(msg);
+                            setTimeout(() => setSaveMessage(''), 3000);
+                        }}
+                    />
+                ) : null}
             </div>
 
             {/* 删除确认弹窗 */}

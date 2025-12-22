@@ -22,6 +22,7 @@ class TextLocation(TypedDict):
 class MethodItem(TypedDict):
     """研究方法条目"""
     name: str
+    category: Optional[str]  # core/model_setup/baseline/evaluation/preprocessing
     description: str
     location: Optional[TextLocation]
 

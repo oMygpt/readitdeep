@@ -85,26 +85,68 @@ async def analyze_method(
         
         content = response.content
         
-        # 尝试解析 JSON
+        # 健壮的 JSON 提取逻辑
+        analysis = None
+        
+        # 方法 1: 尝试从 ```json ... ``` 代码块提取
         json_match = re.search(r'```json\s*(.*?)\s*```', content, re.DOTALL)
         if json_match:
             try:
-                analysis = json.loads(json_match.group(1))
-            except json.JSONDecodeError:
-                analysis = {"error": "JSON parse failed", "raw": content} 
-        else:
-            # 尝试直接解析
+                analysis = json.loads(json_match.group(1).strip())
+            except json.JSONDecodeError as e:
+                logger.warning(f"JSON code block parse failed: {e}")
+        
+        # 方法 2: 尝试从 ``` ... ``` 代码块提取（无 json 标记）
+        if analysis is None:
+            json_match = re.search(r'```\s*(.*?)\s*```', content, re.DOTALL)
+            if json_match:
+                try:
+                    analysis = json.loads(json_match.group(1).strip())
+                except json.JSONDecodeError:
+                    pass
+        
+        # 方法 3: 尝试直接解析整个内容（去除前后空白）
+        if analysis is None:
             try:
-                analysis = json.loads(content)
+                analysis = json.loads(content.strip())
             except json.JSONDecodeError:
-                # 假如返回的不是JSON，尝试封装
-                analysis = {"method_name": "Analysis Result", "core_idea": content[:200], "full_text": content}
+                pass
+        
+        # 方法 4: 尝试提取从 { 开始到最后一个 } 的内容
+        if analysis is None:
+            brace_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if brace_match:
+                try:
+                    analysis = json.loads(brace_match.group(0))
+                except json.JSONDecodeError as e:
+                    logger.error(f"JSON brace extraction failed: {e}, extracted: {brace_match.group(0)[:200]}")
+        
+        # 最终回退: 封装为简单对象
+        if analysis is None:
+            logger.warning(f"All JSON parsing methods failed for workbench_method, raw content: {content[:300]}")
+            analysis = {"method_name": "Analysis Result", "core_idea": content[:200], "full_text": content}
+        
+        # 从新模板格式中提取信息
+        # 新模板返回: paper_type, methods[], hypotheses_or_goals[]
+        # 兼容旧格式: method_name, core_idea
+        if "methods" in analysis and isinstance(analysis["methods"], list) and len(analysis["methods"]) > 0:
+            # 新格式: 使用第一个方法作为主方法名
+            first_method = analysis["methods"][0]
+            method_name = first_method.get("name", "未命名方法")
+            core_idea = first_method.get("description", "")
+            # 如果有 paper_type，添加到描述中
+            if analysis.get("paper_type"):
+                core_idea = f"[{analysis['paper_type']}] {core_idea}"
+        else:
+            # 兼容旧格式或无方法情况
+            method_name = analysis.get("method_name", analysis.get("paper_type", "未命名方法"))
+            core_idea = analysis.get("core_idea", analysis.get("description", text[:100]))
         
         # 保存到工作台
         item = workbench_store.add_item(
             type="method",
-            title=analysis.get("method_name", "未命名方法"),
-            description=analysis.get("core_idea", text[:100]),
+            title=method_name,
+            description=core_idea,
             source_paper_id=paper_id,
             zone="methods",
             data={
@@ -165,18 +207,46 @@ async def analyze_asset(
         
         content = response.content
         
-        # 解析 JSON
+        # 健壮的 JSON 提取逻辑
+        analysis = None
+        
+        # 方法 1: 尝试从 ```json ... ``` 代码块提取
         json_match = re.search(r'```json\s*(.*?)\s*```', content, re.DOTALL)
         if json_match:
             try:
-                analysis = json.loads(json_match.group(1))
-            except json.JSONDecodeError:
-                analysis = {"assets": []}
-        else:
+                analysis = json.loads(json_match.group(1).strip())
+            except json.JSONDecodeError as e:
+                logger.warning(f"JSON code block parse failed in asset: {e}")
+        
+        # 方法 2: 尝试从 ``` ... ``` 代码块提取（无 json 标记）
+        if analysis is None:
+            json_match = re.search(r'```\s*(.*?)\s*```', content, re.DOTALL)
+            if json_match:
+                try:
+                    analysis = json.loads(json_match.group(1).strip())
+                except json.JSONDecodeError:
+                    pass
+        
+        # 方法 3: 尝试直接解析整个内容（去除前后空白）
+        if analysis is None:
             try:
-                analysis = json.loads(content)
+                analysis = json.loads(content.strip())
             except json.JSONDecodeError:
-                analysis = {"assets": []}
+                pass
+        
+        # 方法 4: 尝试提取从 { 开始到最后一个 } 的内容
+        if analysis is None:
+            brace_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if brace_match:
+                try:
+                    analysis = json.loads(brace_match.group(0))
+                except json.JSONDecodeError as e:
+                    logger.warning(f"JSON brace extraction failed in asset: {e}")
+        
+        # 最终回退: 空资产列表
+        if analysis is None:
+            logger.warning(f"All JSON parsing methods failed for workbench_asset, raw content: {content[:300]}")
+            analysis = {"assets": []}
         
         # 为每个识别到的资产创建条目
         created_items = []
@@ -254,6 +324,9 @@ def create_smart_note(
     }
 
 
+
+
+
 def update_note_reflection(item_id: str, reflection: str) -> dict:
     """
     更新笔记心得
@@ -276,4 +349,50 @@ def update_note_reflection(item_id: str, reflection: str) -> dict:
         return {
             "success": False,
             "error": "Item not found",
+        }
+
+
+async def analyze_summary(
+    text: str,
+    paper_id: str,
+    paper_title: str,
+) -> dict:
+    """
+    生成论文摘要 (Smart Summary)
+    """
+    llm = await get_llm_for_paper(paper_id)
+    
+    loader = get_prompt_loader()
+    prompt_file = loader.get_prompt("summary")
+    
+    if not prompt_file:
+        system_prompt = "你是一位专业的学术论文分析师。"
+        user_prompt = f"请为以下论文生成一份结构化的深度摘要:\n\n{text}"
+    else:
+        system_prompt = prompt_file.system_prompt
+        user_prompt = prompt_file.user_prompt_template.format(
+            content=text,  # Summary prompt uses {content}
+            text=text,     # Fallback if uses {text}
+            paper_title=paper_title,
+        )
+    
+    try:
+        callback = get_tracking_callback("agent_summary")
+        response = await llm.ainvoke([
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt),
+        ], config={"callbacks": [callback]})
+        
+        summary = response.content.strip()
+        
+        return {
+            "success": True,
+            "summary": summary,
+        }
+        
+    except Exception as e:
+        logger.error(f"Summary analysis failed: {e}")
+        return {
+            "success": False,
+            "error": str(e),
         }

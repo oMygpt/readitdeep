@@ -4,7 +4,7 @@ Read it DEEP - API v1 路由
 
 from fastapi import APIRouter
 
-from app.api.v1 import papers, library, monitor, analysis, graph, classification, translate, workbench, auth, admin
+from app.api.v1 import papers, library, monitor, analysis, graph, classification, translate, workbench, auth, admin, quota, prompts
 
 router = APIRouter()
 
@@ -13,6 +13,10 @@ router.include_router(auth.router, prefix="/auth", tags=["Auth"])
 
 # Admin (仅管理员)
 router.include_router(admin.router, prefix="/admin", tags=["Admin"])
+router.include_router(prompts.router, prefix="/admin/prompts", tags=["Prompts"])
+
+# Quota (配额与邀请码)
+router.include_router(quota.router, prefix="/quota", tags=["Quota"])
 
 # Papers 相关
 router.include_router(papers.router, prefix="/papers", tags=["Papers"])

@@ -27,6 +27,7 @@ import rehypeKatex from 'rehype-katex';
 import { papersApi } from '../lib/api';
 import type { TextLocation } from '../lib/api';
 import AnalysisPanel from '../components/AnalysisPanel';
+import StructurePanel from '../components/StructurePanel';
 import PaperGraph from '../components/PaperGraph';
 import Workbench from '../components/Workbench';
 import ExploreOverview from '../components/ExploreOverview';
@@ -48,7 +49,7 @@ export default function ReaderPage() {
     const [hoveredCitation, setHoveredCitation] = useState<{ id: string, x: number, y: number } | null>(null);
     const [showLeftSidebar, setShowLeftSidebar] = useState(true); // Left sidebar visibility
     const [showRightSidebar, setShowRightSidebar] = useState(true); // Right sidebar (Workbench) - auto open
-    const [sidebarTab, setSidebarTab] = useState<'analysis' | 'graph'>('analysis'); // Sidebar tab
+    const [sidebarTab, setSidebarTab] = useState<'analysis' | 'graph' | 'structure'>('analysis'); // Sidebar tab
     const [viewMode, setViewMode] = useState<'overview' | 'read'>('overview'); // Explore vs Read mode
     const mainContentRef = useRef<HTMLElement>(null);
 
@@ -997,15 +998,15 @@ export default function ReaderPage() {
             // Standard ReaditDeep (Zen) Style
             return `
                 ${commonStyles}
-                .markdown-content { font-family: 'Merriweather', 'Source Serif 4', 'Times New Roman', serif; color: #334155; font-style: normal; }
-                .markdown-content h1 { font-family: 'Merriweather', 'Source Serif 4', serif; font-size: 2.25rem; font-weight: 700; text-align: center; margin-bottom: 2.5rem; line-height: 1.3; color: #1e293b; }
-                .markdown-content h2 { font-family: 'Inter', sans-serif; font-size: 1.5rem; font-weight: 600; margin-top: 3rem; margin-bottom: 1.5rem; color: #1e293b; letter-spacing: -0.025em; }
-                .markdown-content h3 { font-family: 'Inter', sans-serif; font-size: 1.25rem; font-weight: 600; margin-top: 2rem; margin-bottom: 1rem; color: #334155; }
-                .markdown-content p { font-size: ${fontSize}rem; line-height: 1.8; text-align: justify; margin-bottom: 1.5rem; color: #334155; }
+                .markdown-content { font-family: 'Merriweather', 'Source Serif 4', 'Times New Roman', serif; color: var(--color-text-dim); font-style: normal; }
+                .markdown-content h1 { font-family: 'Merriweather', 'Source Serif 4', serif; font-size: 2.25rem; font-weight: 700; text-align: center; margin-bottom: 2.5rem; line-height: 1.3; color: var(--color-text-main); }
+                .markdown-content h2 { font-family: 'Inter', sans-serif; font-size: 1.5rem; font-weight: 600; margin-top: 3rem; margin-bottom: 1.5rem; color: var(--color-text-main); letter-spacing: -0.025em; }
+                .markdown-content h3 { font-family: 'Inter', sans-serif; font-size: 1.25rem; font-weight: 600; margin-top: 2rem; margin-bottom: 1rem; color: var(--color-text-dim); }
+                .markdown-content p { font-size: ${fontSize}rem; line-height: 1.8; text-align: justify; margin-bottom: 1.5rem; color: var(--color-text-dim); }
                 .markdown-content li { font-size: ${fontSize}rem; line-height: 1.8; margin-bottom: 0.5rem; }
                 .paper-header h1 { font-family: 'Merriweather', 'Source Serif 4', serif; font-weight: 700; letter-spacing: -0.025em; }
-                .abstract-box { position: relative; padding: 2rem; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 3rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05); }
-                .abstract-label { font-family: 'Inter', sans-serif; font-weight: 600; font-size: 0.875rem; color: #64748b; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 1rem; display: block; }
+                .abstract-box { position: relative; padding: 2rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; margin-bottom: 3rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05); }
+                .abstract-label { font-family: 'Inter', sans-serif; font-weight: 600; font-size: 0.875rem; color: var(--color-text-muted); letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 1rem; display: block; }
             `;
         }
     };
@@ -1025,21 +1026,21 @@ export default function ReaderPage() {
     }
 
     return (
-        <div className="flex flex-col h-screen bg-[#F7F8FA] text-slate-800 font-sans transition-colors duration-500 overflow-hidden relative">
+        <div className="flex flex-col h-screen bg-background text-content-main font-sans transition-colors duration-500 overflow-hidden relative">
             {/* Dynamic CSS Injection */}
             <style>{getStyles()}</style>
 
             {/* Top Navigation Toolbar */}
-            <header className={`h-16 border-b border-slate-200/60 bg-white flex items-center justify-between px-6 z-50 transition-all duration-300 shadow-sm ${isZen ? '-translate-y-full mb-[-64px]' : ''}`}>
+            <header className={`h-16 border-b border-border bg-surface flex items-center justify-between px-6 z-50 transition-all duration-300 shadow-sm ${isZen ? '-translate-y-full mb-[-64px]' : ''}`}>
                 <div className="flex items-center gap-3">
-                    <button onClick={() => navigate('/library')} className="p-2 -ml-2 text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-lg transition-colors">
+                    <button onClick={() => navigate('/library')} className="p-2 -ml-2 text-content-muted hover:text-content-main hover:bg-surface-elevated rounded-lg transition-colors">
                         <ChevronLeft className="w-5 h-5" />
                     </button>
                     <div className="flex items-center gap-2">
-                        <div className="p-1.5 bg-indigo-600 rounded-lg text-white shadow-sm shadow-indigo-200">
+                        <div className="p-1.5 bg-brand rounded-lg text-primary-content shadow-sm shadow-brand/20">
                             <BookOpen className="w-5 h-5" />
                         </div>
-                        <span className="font-bold text-lg tracking-tight text-slate-800 hidden sm:block">Read it Deep</span>
+                        <span className="font-bold text-lg tracking-tight text-content-main hidden sm:block">Read it Deep</span>
                     </div>
                 </div>
 
@@ -1151,7 +1152,7 @@ export default function ReaderPage() {
             <div className="flex-1 flex overflow-hidden relative">
                 {/* Left Sidebar - Analysis Panel */}
                 {!isZen && (
-                    <aside className={`${showLeftSidebar ? 'w-80' : 'w-0'} border-r border-slate-200/60 bg-white overflow-y-auto transition-all duration-300 flex-shrink-0`}>
+                    <aside className={`${showLeftSidebar ? 'w-80' : 'w-0'} border-r border-border bg-surface overflow-y-auto transition-all duration-300 flex-shrink-0`}>
                         {showLeftSidebar && paperId && (
                             <div className="flex flex-col h-full">
                                 {/* Tab Switcher */}
@@ -1163,6 +1164,12 @@ export default function ReaderPage() {
                                         📝 内容分析
                                     </button>
                                     <button
+                                        onClick={() => setSidebarTab('structure')}
+                                        className={`flex-1 py-2 text-xs font-medium rounded-t-lg transition-colors ${sidebarTab === 'structure' ? 'bg-white text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                                    >
+                                        📑 目录结构
+                                    </button>
+                                    <button
                                         onClick={() => setSidebarTab('graph')}
                                         className={`flex-1 py-2 text-xs font-medium rounded-t-lg transition-colors ${sidebarTab === 'graph' ? 'bg-white text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
                                     >
@@ -1172,12 +1179,19 @@ export default function ReaderPage() {
 
                                 {/* Tab Content */}
                                 <div className="flex-1 overflow-y-auto">
-                                    {sidebarTab === 'analysis' ? (
+                                    {sidebarTab === 'analysis' && (
                                         <AnalysisPanel
                                             paperId={paperId}
                                             onJumpToLine={handleJumpToLine}
                                         />
-                                    ) : (
+                                    )}
+                                    {sidebarTab === 'structure' && (
+                                        <StructurePanel
+                                            paperId={paperId}
+                                            onJumpToLine={handleJumpToLine}
+                                        />
+                                    )}
+                                    {sidebarTab === 'graph' && (
                                         <div className="p-2">
                                             <PaperGraph paperId={paperId} />
                                         </div>
@@ -1201,9 +1215,9 @@ export default function ReaderPage() {
                 )}
 
                 {/* Main Scrollable Area */}
-                <main ref={mainContentRef} className={`flex-1 overflow-y-auto scroll-smooth ${isZen ? 'bg-[#F7F8FA]' : 'bg-[#F7F8FA]'}`}>
+                <main ref={mainContentRef} className={`flex-1 overflow-y-auto scroll-smooth ${isZen ? 'bg-background' : 'bg-background'}`}>
                     {/* Paper Card Container */}
-                    <div className={`mx-auto transition-all duration-500 bg-white shadow-sm border border-slate-200/60 ${isZen ? 'max-w-[900px] my-0 sm:my-8 min-h-screen sm:rounded-xl shadow-lg' : 'max-w-[850px] my-8 min-h-[calc(100vh-8rem)] rounded-xl'}`}
+                    <div className={`mx-auto transition-all duration-500 bg-surface shadow-sm border border-border ${isZen ? 'max-w-[900px] my-0 sm:my-8 min-h-screen sm:rounded-xl shadow-lg' : 'max-w-[850px] my-8 min-h-[calc(100vh-8rem)] rounded-xl'}`}
                         onMouseOver={handleMouseOver}
                         onMouseOut={handleMouseOut}
                     >
@@ -1213,7 +1227,7 @@ export default function ReaderPage() {
                             {/* Paper Metadata Header */}
                             <div className="mb-14 border-b border-slate-100 pb-10 text-center paper-header">
                                 {/* Title */}
-                                <h1 className="font-serif font-bold text-4xl text-slate-900 tracking-tight leading-[1.2] mb-6">
+                                <h1 className="font-serif font-bold text-4xl text-content-main tracking-tight leading-[1.2] mb-6">
                                     {extractedTitle || paper?.title || paper?.filename || 'Untitled Document'}
                                 </h1>
 

@@ -7,11 +7,13 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Depends
+from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Depends, status
 from pydantic import BaseModel
+from sqlalchemy import select
 
 from app.config import get_settings
 from app.core.store import store
+from app.core.database import async_session_maker
 from app.models.user import User
 from app.api.v1.auth import get_current_user, get_optional_user
 
@@ -64,7 +66,8 @@ async def parse_paper_task(paper_id: str, file_path: str, file_content: bytes, f
     from app.services.mineru import MineruService
     from app.services.embedding import EmbeddingService
     from app.services.classification import suggest_tags
-    from app.services.workbench_analysis import analyze_method, analyze_asset
+    from app.services.classification import suggest_tags
+    from app.services.workbench_analysis import analyze_method, analyze_asset, analyze_summary
 
     # 获取配置
     async with async_session_maker() as db:
@@ -198,7 +201,19 @@ async def parse_paper_task(paper_id: str, file_path: str, file_content: bytes, f
                 # Save Summary from Method Analysis if available
                 if res_method.get("success"):
                     analysis_data = res_method.get("analysis", {})
-                    core_idea = analysis_data.get("core_idea") or analysis_data.get("description")
+                    # 兼容新模板结构: paper_type, methods[], hypotheses_or_goals[]
+                    if "methods" in analysis_data and isinstance(analysis_data["methods"], list) and len(analysis_data["methods"]) > 0:
+                        first_method = analysis_data["methods"][0]
+                        core_idea = first_method.get("description", "")
+                        paper_type = analysis_data.get("paper_type", "")
+                        if paper_type and core_idea:
+                            core_idea = f"[{paper_type}] {core_idea}"
+                        elif paper_type:
+                            core_idea = paper_type
+                    else:
+                        # 兼容旧格式
+                        core_idea = analysis_data.get("core_idea") or analysis_data.get("description")
+                    
                     if core_idea:
                         update_paper({"summary": core_idea})
 
@@ -225,6 +240,15 @@ async def parse_paper_task(paper_id: str, file_path: str, file_content: bytes, f
                     paper_id=paper_id, 
                     paper_title=filename
                 )
+                
+                # Summary Analysis (v1.1.0) - 此处覆盖 Method 中提取的简短 summary
+                res_summary = await analyze_summary(
+                    text=markdown_content[:8000],
+                    paper_id=paper_id,
+                    paper_title=filename
+                )
+                if res_summary.get("success"):
+                    update_paper({"summary": res_summary.get("summary")})
                 
                 update_paper({"status": "analyzed"})
             except Exception as e:
@@ -261,6 +285,19 @@ async def parse_paper_task(paper_id: str, file_path: str, file_content: bytes, f
 
         # Finalize
         update_paper({"status": "completed"})
+        
+        # ================== 更新用户配额使用量 ==================
+        if user_id:
+            try:
+                async with async_session_maker() as db:
+                    result = await db.execute(select(User).where(User.id == user_id))
+                    user = result.scalar_one_or_none()
+                    if user:
+                        user.increment_paper_usage()
+                        await db.commit()
+                        logger.info(f"Paper {paper_id}: Updated quota for user {user_id}")
+            except Exception as quota_err:
+                logger.error(f"Failed to update user quota: {quota_err}")
 
     except Exception as e:
         update_paper({
@@ -282,14 +319,35 @@ async def upload_paper(
     if not file.filename.lower().endswith(('.pdf', '.docx', '.tex')):
         raise HTTPException(400, "仅支持 .pdf, .docx, .tex 文件")
     
-    # 鉴权：如果是强制登录模式，这里可以检查 current_user
-    # 目前允许未登录上传，但未登录用户无法在 Library 看到（除非是公共库）
-    # 建议：如果没有 current_user，拒绝上传，或者标记为匿名
+    # 鉴权检查
     if not current_user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="请先登录",
         )
+    
+    # ================== 配额检查 ==================
+    # 重置每日/每月配额（如果需要）
+    async with async_session_maker() as db:
+        result = await db.execute(select(User).where(User.id == current_user.id))
+        user = result.scalar_one_or_none()
+        if user:
+            daily_reset = user.reset_daily_quota_if_needed()
+            monthly_reset = user.reset_monthly_quota_if_needed()
+            if daily_reset or monthly_reset:
+                await db.commit()
+            
+            # 检查配额
+            if not user.can_parse_paper:
+                quota_status = user.get_quota_status()
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={
+                        "error": "quota_exceeded",
+                        "message": "论文解析配额已用完，请升级或等待配额重置",
+                        "quota": quota_status,
+                    }
+                )
 
     # 1. 生成 ID
     paper_id = str(uuid.uuid4())
@@ -559,7 +617,7 @@ async def run_analysis_pipeline(paper_id: str, user_id: str):
     import re
     import logging
     from app.core.store import store
-    from app.services.workbench_analysis import analyze_method, analyze_asset
+    from app.services.workbench_analysis import analyze_method, analyze_asset, analyze_summary
     from app.services.classification import suggest_tags
 
     logger = logging.getLogger(__name__)
@@ -577,6 +635,14 @@ async def run_analysis_pipeline(paper_id: str, user_id: str):
     update_paper({"status": "analyzing"})
     logger.info(f"Re-running analysis for {paper_id}")
     
+    # 同步更新 analysis.status 以便前端轮询能感知到状态变化
+    paper_data = store.get(paper_id)
+    if paper_data:
+        analysis_data = paper_data.get("analysis") or {}
+        analysis_data["status"] = "analyzing"
+        analysis_data["started_at"] = datetime.utcnow().isoformat()
+        update_paper({"analysis": analysis_data})
+    
     markdown_content = paper.get("markdown_content", "")
     if not markdown_content:
         update_paper({"status": "failed", "error_message": "No content to analyze"})
@@ -592,7 +658,20 @@ async def run_analysis_pipeline(paper_id: str, user_id: str):
         
         if res_method.get("success"):
             analysis_data = res_method.get("analysis", {})
-            core_idea = analysis_data.get("core_idea") or analysis_data.get("description")
+            # 兼容新模板结构: paper_type, methods[], hypotheses_or_goals[]
+            # 旧模板结构: core_idea, description
+            if "methods" in analysis_data and isinstance(analysis_data["methods"], list) and len(analysis_data["methods"]) > 0:
+                first_method = analysis_data["methods"][0]
+                core_idea = first_method.get("description", "")
+                paper_type = analysis_data.get("paper_type", "")
+                if paper_type and core_idea:
+                    core_idea = f"[{paper_type}] {core_idea}"
+                elif paper_type:
+                    core_idea = paper_type
+            else:
+                # 兼容旧格式
+                core_idea = analysis_data.get("core_idea") or analysis_data.get("description")
+            
             if core_idea:
                 update_paper({"summary": core_idea})
 
@@ -617,8 +696,28 @@ async def run_analysis_pipeline(paper_id: str, user_id: str):
             paper_id=paper_id, 
             paper_title=paper.get("filename", "Untitled")
         )
+
+        # 4. Summary Analysis (v1.1.0)
+        res_summary = await analyze_summary(
+            text=markdown_content[:8000],
+            paper_id=paper_id,
+            paper_title=paper.get("filename", "Untitled")
+        )
+        if res_summary.get("success"):
+            update_paper({"summary": res_summary.get("summary")})
         
         update_paper({"status": "analyzed"})
+        
+        # 同步更新 analysis.status
+        paper_data = store.get(paper_id)
+        if paper_data:
+            analysis_data = paper_data.get("analysis") or {}
+            analysis_data["status"] = "completed"
+            analysis_data["completed_at"] = datetime.utcnow().isoformat()
+            # 同时也把 summary 存入 analysis (可选)
+            if res_summary.get("success"):
+                analysis_data["summary"] = res_summary.get("summary")
+            update_paper({"analysis": analysis_data})
         
         # 4. Classification with category consolidation
         from app.services.classification import find_similar_category, get_all_categories
