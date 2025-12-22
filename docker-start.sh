@@ -1,11 +1,14 @@
 #!/bin/bash
 # =============================================================================
-# Read it DEEP - Docker 一键启动脚本
+# Read it DEEP - Docker 一键启动脚本 (GHCR 版)
 # =============================================================================
+# 使用 GitHub Container Registry 预构建镜像，无需本地构建
+#
 # 用法:
 #   ./docker-start.sh                    # 默认端口 (Frontend: 3000, Backend: 8080)
 #   ./docker-start.sh 8000               # 自定义前端端口
 #   ./docker-start.sh 8000 9000          # 自定义前后端端口
+#   ./docker-start.sh 8000 9000 v1.0.0   # 指定镜像标签
 # =============================================================================
 
 set -e
@@ -19,12 +22,19 @@ BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
+# 固定仓库地址
+GHCR_REPO="ghcr.io/omygpt/readitdeep"
+
 # 解析参数
 FRONTEND_PORT=${1:-3000}
 BACKEND_PORT=${2:-8080}
-REDIS_PORT=${3:-6379}
+IMAGE_TAG=${3:-latest}
+REDIS_PORT=6379
 
-echo -e "${BLUE}🐳 Read it DEEP - Docker 部署${NC}"
+echo -e "${BLUE}🐳 Read it DEEP - Docker 部署 (GHCR)${NC}"
+echo ""
+echo "  镜像仓库: ${GHCR_REPO}"
+echo "  镜像标签: ${IMAGE_TAG}"
 echo ""
 
 # 检查 .env 文件
@@ -63,12 +73,21 @@ if [ -d "backend/data" ] && [ ! -f "readit_data/db/readitdeep.db" ]; then
     echo -e "${GREEN}   数据迁移完成${NC}"
 fi
 
+# 设置环境变量
+export FRONTEND_PORT
+export BACKEND_PORT
+export REDIS_PORT
+export IMAGE_TAG
+
+# 拉取最新镜像
+echo -e "${GREEN}▶ 拉取镜像...${NC}"
+echo "   - ${GHCR_REPO}-backend:${IMAGE_TAG}"
+echo "   - ${GHCR_REPO}-frontend:${IMAGE_TAG}"
+docker compose -f docker-compose.ghcr.yml pull
+
 # 启动 Docker Compose
 echo -e "${GREEN}▶ 启动 Docker 容器...${NC}"
-FRONTEND_PORT=$FRONTEND_PORT \
-BACKEND_PORT=$BACKEND_PORT \
-REDIS_PORT=$REDIS_PORT \
-docker compose up -d --build
+docker compose -f docker-compose.ghcr.yml up -d
 
 # 等待服务启动
 echo ""
@@ -76,7 +95,7 @@ echo -e "${GREEN}⏳ 等待服务就绪...${NC}"
 sleep 5
 
 # 检查服务状态
-if docker compose ps | grep -q "running"; then
+if docker compose -f docker-compose.ghcr.yml ps | grep -q "running"; then
     echo ""
     echo -e "${GREEN}✅ Read it DEEP 已启动!${NC}"
     echo ""
@@ -90,9 +109,11 @@ if docker compose ps | grep -q "running"; then
     echo "     ├── redis/    Redis 数据"
     echo "     └── logs/     分析日志"
     echo ""
+    echo "  🐳 镜像来源: ${GHCR_REPO}-*:${IMAGE_TAG}"
+    echo ""
     echo "使用 ./docker-stop.sh 停止服务"
-    echo "使用 docker compose logs -f 查看日志"
+    echo "使用 docker compose -f docker-compose.ghcr.yml logs -f 查看日志"
 else
     echo -e "${YELLOW}⚠️  部分服务可能未正常启动，请检查日志:${NC}"
-    docker compose logs --tail=50
+    docker compose -f docker-compose.ghcr.yml logs --tail=50
 fi
