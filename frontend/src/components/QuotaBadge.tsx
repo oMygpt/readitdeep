@@ -24,6 +24,7 @@ interface QuotaStatus {
     };
     can_parse: boolean;
     can_use_ai: boolean;
+    subscription_enabled: boolean;
 }
 
 interface QuotaBadgeProps {
@@ -44,6 +45,11 @@ export default function QuotaBadge({ onUpgradeClick, showDetails = false }: Quot
         return (
             <div className="animate-pulse bg-surface-elevated rounded-lg h-8 w-24" />
         );
+    }
+
+    // 订阅功能关闭时隐藏整个组件
+    if (!quota.subscription_enabled) {
+        return null;
     }
 
     const planColors = {

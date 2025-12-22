@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.models.user import User, PLAN_LIMITS
 from app.models.invitation_code import InvitationCode
+from app.models.system_config import SystemConfig
 from app.api.v1.auth import get_current_user
 
 router = APIRouter()
@@ -33,6 +34,7 @@ class QuotaStatusResponse(BaseModel):
     ai: dict
     can_parse: bool
     can_use_ai: bool
+    subscription_enabled: bool = True  # 订阅功能是否启用
 
 
 class RedeemRequest(BaseModel):
@@ -107,7 +109,17 @@ async def get_quota_status(
     
     status = current_user.get_quota_status()
     
-    return QuotaStatusResponse(**status)
+    # 获取订阅功能开关状态
+    result = await db.execute(
+        select(SystemConfig).where(SystemConfig.key == "subscription_enabled")
+    )
+    config = result.scalar_one_or_none()
+    subscription_enabled = config.value if config and config.value is not None else True
+    
+    return QuotaStatusResponse(
+        **status,
+        subscription_enabled=subscription_enabled
+    )
 
 
 @router.get("/plans", response_model=List[PlanInfo])

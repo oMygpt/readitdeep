@@ -220,6 +220,14 @@
             "message": "确定要删除用户 \"{{email}}\" 吗？所有相关数据将被删除。此操作无法撤销。",
             "deleting": "删除中...",
             "confirm": "确认删除"
+        },
+        "subscription": {
+            "title": "订阅功能开关",
+            "subtitle": "控制用户配额限制系统",
+            "enabled": "已开启",
+            "disabled": "已关闭",
+            "enabledDescription": "✅ 配额系统已启用：用户按订阅计划 (免费版/Pro/Ultra) 受到相应使用限制。",
+            "disabledDescription": "⚠️ 配额系统已关闭：所有用户无限制使用系统，不受订阅计划约束。"
         }
     },
     "settings": {

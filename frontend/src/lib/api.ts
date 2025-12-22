@@ -521,6 +521,9 @@ export interface SystemConfig {
     smart_chat_base_url: string;
     smart_chat_model: string;
     smart_chat_api_key_set: boolean;
+
+    // 订阅系统
+    subscription_enabled: boolean;
 }
 
 export interface UserListResponse {
@@ -673,6 +676,7 @@ export interface QuotaStatus {
     };
     can_parse: boolean;
     can_use_ai: boolean;
+    subscription_enabled: boolean;
 }
 
 export interface PlanInfo {

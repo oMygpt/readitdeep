@@ -181,6 +181,8 @@ export default function AdminPage() {
         smart_chat_base_url: '',
         smart_chat_model: '',
         smart_chat_api_key: '',
+        // 订阅系统
+        subscription_enabled: true,
     });
 
     const [config, setConfig] = useState<SystemConfig | null>(null);
@@ -262,6 +264,7 @@ export default function AdminPage() {
                     smart_chat_base_url: configData.smart_chat_base_url || '',
                     smart_chat_model: configData.smart_chat_model || '',
                     smart_chat_api_key: '',
+                    subscription_enabled: configData.subscription_enabled ?? true,
                 });
             } else if (activeTab === 'users') {
                 const usersData = await adminApi.listUsers();
@@ -579,6 +582,45 @@ export default function AdminPage() {
                             ) : (
                                 <div className="text-center py-8 text-slate-400">{t('admin.tokenStats.noData')}</div>
                             )}
+                        </div>
+
+                        {/* 订阅功能开关 */}
+                        <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+                                        <Shield className="w-5 h-5 text-emerald-600" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-semibold text-slate-900">{t('admin.subscription.title')}</h3>
+                                        <p className="text-sm text-slate-500">{t('admin.subscription.subtitle')}</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <span className={`text-sm font-medium ${configForm.subscription_enabled ? 'text-emerald-600' : 'text-slate-400'}`}>
+                                        {configForm.subscription_enabled ? t('admin.subscription.enabled') : t('admin.subscription.disabled')}
+                                    </span>
+                                    <button
+                                        onClick={() => setConfigForm({ ...configForm, subscription_enabled: !configForm.subscription_enabled })}
+                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ${configForm.subscription_enabled ? 'bg-emerald-500' : 'bg-slate-200'
+                                            }`}
+                                    >
+                                        <span
+                                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${configForm.subscription_enabled ? 'translate-x-6' : 'translate-x-1'
+                                                }`}
+                                        />
+                                    </button>
+                                </div>
+                            </div>
+                            <div className={`mt-4 p-3 rounded-lg text-sm ${configForm.subscription_enabled
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                    : 'bg-amber-50 text-amber-700 border border-amber-100'
+                                }`}>
+                                {configForm.subscription_enabled
+                                    ? t('admin.subscription.enabledDescription')
+                                    : t('admin.subscription.disabledDescription')
+                                }
+                            </div>
                         </div>
 
                         {/* 主 LLM 配置 */}
