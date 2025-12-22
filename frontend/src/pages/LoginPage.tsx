@@ -80,31 +80,31 @@ export default function LoginPage() {
 
     if (authLoading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-slate-50">
-                <Loader2 className="w-8 h-8 animate-spin text-brand-600" />
+            <div className="min-h-screen flex items-center justify-center bg-background">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 p-8 md:p-10">
+        <div className="min-h-screen flex items-center justify-center bg-background p-4">
+            <div className="w-full max-w-md bg-surface rounded-2xl shadow-xl border border-border p-8 md:p-10">
                 {/* Logo & Title */}
                 <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-50 rounded-2xl mb-4 group hover:bg-brand-100 transition-colors">
-                        <BookOpen className="w-8 h-8 text-brand-600" />
+                    <div className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-2xl mb-4 group hover:bg-primary/20 transition-colors">
+                        <BookOpen className="w-8 h-8 text-primary" />
                     </div>
-                    <h1 className="text-3xl font-serif font-bold text-slate-800 mb-2">{t('login.title')}</h1>
-                    <p className="text-slate-500">{t('login.subtitle')}</p>
+                    <h1 className="text-3xl font-serif font-bold text-content-main mb-2">{t('login.title')}</h1>
+                    <p className="text-content-muted">{t('login.subtitle')}</p>
                 </div>
 
                 {/* Mode Toggle */}
-                <div className="flex bg-slate-100 rounded-lg p-1 mb-6">
+                <div className="flex bg-surface-elevated rounded-lg p-1 mb-6">
                     <button
                         onClick={() => { setMode('login'); setError(''); setSuccess(''); }}
                         className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-medium transition-all ${mode === 'login'
-                            ? 'bg-white text-slate-800 shadow-sm'
-                            : 'text-slate-500 hover:text-slate-700'
+                            ? 'bg-surface text-content-main shadow-sm'
+                            : 'text-content-muted hover:text-content-main'
                             }`}
                     >
                         <LogIn className="w-4 h-4" />
@@ -113,8 +113,8 @@ export default function LoginPage() {
                     <button
                         onClick={() => { setMode('register'); setError(''); setSuccess(''); }}
                         className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-medium transition-all ${mode === 'register'
-                            ? 'bg-white text-slate-800 shadow-sm'
-                            : 'text-slate-500 hover:text-slate-700'
+                            ? 'bg-surface text-content-main shadow-sm'
+                            : 'text-content-muted hover:text-content-main'
                             }`}
                     >
                         <UserPlus className="w-4 h-4" />
@@ -124,13 +124,13 @@ export default function LoginPage() {
 
                 {/* Error/Success Messages */}
                 {error && (
-                    <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-100 rounded-lg text-red-600 text-sm">
+                    <div className="flex items-center gap-2 p-3 mb-4 bg-error/10 border border-error/20 rounded-lg text-error text-sm">
                         <AlertCircle className="w-4 h-4 flex-shrink-0" />
                         <span>{error}</span>
                     </div>
                 )}
                 {success && (
-                    <div className="flex items-center gap-2 p-3 mb-4 bg-green-50 border border-green-100 rounded-lg text-green-600 text-sm">
+                    <div className="flex items-center gap-2 p-3 mb-4 bg-success/10 border border-success/20 rounded-lg text-success text-sm">
                         <AlertCircle className="w-4 h-4 flex-shrink-0" />
                         <span>{success}</span>
                     </div>
@@ -140,14 +140,14 @@ export default function LoginPage() {
                 {mode === 'login' && (
                     <form onSubmit={handleLogin} className="space-y-4">
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                            <label className="block text-sm font-medium text-content-main mb-1.5">
                                 {t('login.email')}
                             </label>
                             <input
                                 type="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
+                                className="w-full px-4 py-3 bg-surface-elevated border border-border rounded-lg text-content-main placeholder-content-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                                 placeholder={t('login.emailPlaceholder')}
                                 required
                                 autoComplete="email"
@@ -155,14 +155,14 @@ export default function LoginPage() {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                            <label className="block text-sm font-medium text-content-main mb-1.5">
                                 {t('login.password')}
                             </label>
                             <input
                                 type="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
+                                className="w-full px-4 py-3 bg-surface-elevated border border-border rounded-lg text-content-main placeholder-content-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                                 placeholder={t('login.passwordPlaceholder')}
                                 required
                                 autoComplete="current-password"
@@ -172,7 +172,7 @@ export default function LoginPage() {
                         <button
                             type="submit"
                             disabled={isLoading}
-                            className="w-full py-3 px-4 bg-brand-600 text-white font-medium rounded-lg hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-md"
+                            className="w-full py-3 px-4 bg-primary text-primary-content font-medium rounded-lg hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-md"
                         >
                             {isLoading ? (
                                 <>
@@ -190,14 +190,14 @@ export default function LoginPage() {
                 {mode === 'register' && (
                     <form onSubmit={handleRegister} className="space-y-4">
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                                {t('login.email')} <span className="text-red-500">{t('login.required')}</span>
+                            <label className="block text-sm font-medium text-content-main mb-1.5">
+                                {t('login.email')} <span className="text-error">{t('login.required')}</span>
                             </label>
                             <input
                                 type="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
+                                className="w-full px-4 py-3 bg-surface-elevated border border-border rounded-lg text-content-main placeholder-content-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                                 placeholder={t('login.emailPlaceholder')}
                                 required
                                 autoComplete="email"
@@ -205,28 +205,28 @@ export default function LoginPage() {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                                {t('login.username')} <span className="text-slate-400">{t('login.usernameOptional')}</span>
+                            <label className="block text-sm font-medium text-content-main mb-1.5">
+                                {t('login.username')} <span className="text-content-muted">{t('login.usernameOptional')}</span>
                             </label>
                             <input
                                 type="text"
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value)}
-                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
+                                className="w-full px-4 py-3 bg-surface-elevated border border-border rounded-lg text-content-main placeholder-content-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                                 placeholder={t('login.usernamePlaceholder')}
                                 autoComplete="username"
                             />
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                                {t('login.password')} <span className="text-red-500">{t('login.required')}</span>
+                            <label className="block text-sm font-medium text-content-main mb-1.5">
+                                {t('login.password')} <span className="text-error">{t('login.required')}</span>
                             </label>
                             <input
                                 type="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
+                                className="w-full px-4 py-3 bg-surface-elevated border border-border rounded-lg text-content-main placeholder-content-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                                 placeholder={t('login.passwordTooShort').replace('Password must be at least ', '').replace(' characters', '')}
                                 required
                                 autoComplete="new-password"
@@ -234,14 +234,14 @@ export default function LoginPage() {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                                {t('login.confirmPassword')} <span className="text-red-500">{t('login.required')}</span>
+                            <label className="block text-sm font-medium text-content-main mb-1.5">
+                                {t('login.confirmPassword')} <span className="text-error">{t('login.required')}</span>
                             </label>
                             <input
                                 type="password"
                                 value={confirmPassword}
                                 onChange={(e) => setConfirmPassword(e.target.value)}
-                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
+                                className="w-full px-4 py-3 bg-surface-elevated border border-border rounded-lg text-content-main placeholder-content-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                                 placeholder={t('login.confirmPasswordPlaceholder')}
                                 required
                                 autoComplete="new-password"
@@ -251,7 +251,7 @@ export default function LoginPage() {
                         <button
                             type="submit"
                             disabled={isLoading}
-                            className="w-full py-3 px-4 bg-brand-600 text-white font-medium rounded-lg hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-md"
+                            className="w-full py-3 px-4 bg-primary text-primary-content font-medium rounded-lg hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-md"
                         >
                             {isLoading ? (
                                 <>
@@ -263,14 +263,14 @@ export default function LoginPage() {
                             )}
                         </button>
 
-                        <p className="text-xs text-center text-slate-400 mt-2">
+                        <p className="text-xs text-center text-content-muted mt-2">
                             {t('login.firstUserAdmin')}
                         </p>
                     </form>
                 )}
             </div>
 
-            <div className="fixed bottom-6 text-center text-xs text-slate-400">
+            <div className="fixed bottom-6 text-center text-xs text-content-muted">
                 {t('login.copyright')}
             </div>
         </div>

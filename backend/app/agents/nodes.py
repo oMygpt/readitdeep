@@ -157,6 +157,7 @@ async def method_agent_node(state: PaperAnalysisState) -> dict:
             location = find_text_location(content, m.get("location", ""))
             methods.append({
                 "name": m.get("name", ""),
+                "category": m.get("category", ""),
                 "description": m.get("description", ""),
                 "location": location
             })

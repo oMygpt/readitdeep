@@ -53,27 +53,27 @@ export default function UserMenu() {
         <div className="relative" ref={menuRef}>
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+                className="flex items-center gap-2 px-3 py-2 bg-surface border border-border rounded-lg hover:bg-surface-elevated transition-colors"
             >
-                <div className="w-7 h-7 bg-brand-600 rounded-full flex items-center justify-center">
-                    <User className="w-4 h-4 text-white" />
+                <div className="w-7 h-7 bg-primary rounded-full flex items-center justify-center">
+                    <User className="w-4 h-4 text-primary-content" />
                 </div>
-                <span className="text-sm font-medium text-slate-700 max-w-[100px] truncate">
+                <span className="text-sm font-medium text-content-main max-w-[100px] truncate">
                     {user.username || user.email.split('@')[0]}
                 </span>
-                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-4 h-4 text-content-dim transition-transform ${isOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {isOpen && (
-                <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-slate-200 py-2 z-50">
+                <div className="absolute right-0 mt-2 w-56 bg-surface rounded-xl shadow-lg border border-border py-2 z-50">
                     {/* User Info */}
-                    <div className="px-4 py-2 border-b border-slate-100">
-                        <div className="text-sm font-medium text-slate-900">
+                    <div className="px-4 py-2 border-b border-border">
+                        <div className="text-sm font-medium text-content-main">
                             {user.username || user.email.split('@')[0]}
                         </div>
-                        <div className="text-xs text-slate-500 truncate">{user.email}</div>
+                        <div className="text-xs text-content-dim truncate">{user.email}</div>
                         {user.role === 'admin' && (
-                            <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 bg-brand-100 text-brand-700 text-xs rounded-full">
+                            <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 bg-primary/10 text-primary text-xs rounded-full">
                                 <Shield className="w-3 h-3" />
                                 {t('admin.userList.roleAdmin')}
                             </span>
@@ -85,13 +85,13 @@ export default function UserMenu() {
                         {/* Language Switcher */}
                         <button
                             onClick={toggleLanguage}
-                            className="w-full flex items-center justify-between px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                            className="w-full flex items-center justify-between px-4 py-2 text-sm text-content-main hover:bg-surface-elevated transition-colors"
                         >
                             <span className="flex items-center gap-3">
-                                <Globe className="w-4 h-4 text-slate-400" />
+                                <Globe className="w-4 h-4 text-content-dim" />
                                 {t('common.language')}
                             </span>
-                            <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                            <span className="text-xs text-content-dim bg-surface-elevated px-2 py-0.5 rounded">
                                 {currentLanguage}
                             </span>
                         </button>
@@ -101,9 +101,9 @@ export default function UserMenu() {
                                 setIsOpen(false);
                                 navigate('/settings');
                             }}
-                            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-content-main hover:bg-surface-elevated transition-colors"
                         >
-                            <Settings className="w-4 h-4 text-slate-400" />
+                            <Settings className="w-4 h-4 text-content-dim" />
                             {t('userMenu.settings')}
                         </button>
 
@@ -113,15 +113,15 @@ export default function UserMenu() {
                                     setIsOpen(false);
                                     navigate('/admin');
                                 }}
-                                className="w-full flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                                className="w-full flex items-center gap-3 px-4 py-2 text-sm text-content-main hover:bg-surface-elevated transition-colors"
                             >
-                                <Settings className="w-4 h-4 text-slate-400" />
+                                <Settings className="w-4 h-4 text-content-dim" />
                                 {t('userMenu.admin')}
                             </button>
                         )}
                         <button
                             onClick={handleLogout}
-                            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-error hover:bg-error/10 transition-colors"
                         >
                             <LogOut className="w-4 h-4" />
                             {t('userMenu.logout')}

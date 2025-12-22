@@ -19,17 +19,28 @@ from langchain_core.messages import SystemMessage, HumanMessage
 
 from app.config import get_settings
 from app.core.store import store
+from app.core.database import async_session_maker
+from app.core.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-# LLM 实例
-llm = ChatOpenAI(
-    base_url=settings.llm_base_url,
-    api_key=settings.llm_api_key or "dummy",
-    model=settings.llm_model,
-    temperature=0.3,
-)
+
+async def get_llm_for_classification(paper_id: str):
+    """根据论文归属获取配置好的 LLM 实例用于分类"""
+    paper = store.get(paper_id)
+    user_id = paper.get("user_id") if paper else None
+    
+    async with async_session_maker() as db:
+        config = await ConfigManager.get_effective_config(db, user_id)
+        
+    return ChatOpenAI(
+        base_url=config.get("llm_base_url") or settings.llm_base_url,
+        api_key=config.get("llm_api_key") or settings.llm_api_key or "dummy",
+        model=config.get("llm_model") or settings.llm_model,
+        temperature=0.3,
+        request_timeout=90,
+    )
 
 
 @dataclass
@@ -135,6 +146,7 @@ async def suggest_tags(paper_id: str) -> list[TagSuggestion]:
     prompt = CLASSIFICATION_PROMPT.format(content=content)
     
     try:
+        llm = await get_llm_for_classification(paper_id)
         response = await llm.ainvoke([
             SystemMessage(content="你是一个学术论文分类专家，擅长识别论文的研究领域和技术方向。"),
             HumanMessage(content=prompt)

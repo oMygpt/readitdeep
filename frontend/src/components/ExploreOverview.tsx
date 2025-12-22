@@ -50,22 +50,22 @@ export default function ExploreOverview({
     const isLoading = isAnalysisLoading;
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+        <div className="min-h-screen bg-background">
             {/* Header */}
-            <header className="bg-white/80 backdrop-blur-sm border-b border-slate-200 sticky top-0 z-50">
+            <header className="bg-surface/80 backdrop-blur-sm border-b border-border sticky top-0 z-50">
                 <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
                     <div className="flex items-center gap-4">
                         <button
                             onClick={onBack}
-                            className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                            className="p-2 text-content-muted hover:text-content-main hover:bg-surface-elevated rounded-lg transition-colors"
                         >
                             <ArrowLeft className="w-5 h-5" />
                         </button>
                         <div>
-                            <h1 className="text-xl font-bold text-slate-800 line-clamp-1">
+                            <h1 className="text-xl font-bold text-content-main line-clamp-1">
                                 {paperTitle}
                             </h1>
-                            <p className="text-sm text-slate-500 flex items-center gap-1">
+                            <p className="text-sm text-content-muted flex items-center gap-1">
                                 <Sparkles className="w-3 h-3" />
                                 Explore Mode
                             </p>
@@ -73,7 +73,7 @@ export default function ExploreOverview({
                     </div>
                     <button
                         onClick={onStartReading}
-                        className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium shadow-lg shadow-indigo-200"
+                        className="flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-content rounded-lg hover:bg-primary-hover transition-colors font-medium shadow-lg shadow-primary/20"
                     >
                         <BookOpen className="w-4 h-4" />
                         开始深度阅读
@@ -88,8 +88,8 @@ export default function ExploreOverview({
                 {isLoading && (
                     <div className="flex items-center justify-center py-20">
                         <div className="text-center">
-                            <Loader2 className="w-10 h-10 animate-spin text-indigo-500 mx-auto mb-4" />
-                            <p className="text-slate-500">正在加载分析结果...</p>
+                            <Loader2 className="w-10 h-10 animate-spin text-primary mx-auto mb-4" />
+                            <p className="text-content-muted">正在加载分析结果...</p>
                         </div>
                     </div>
                 )}
@@ -97,12 +97,12 @@ export default function ExploreOverview({
                 {!isLoading && (
                     <>
                         {/* Citation Graph */}
-                        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                            <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
-                                <div className="p-2 bg-blue-100 rounded-lg">
-                                    <Network className="w-5 h-5 text-blue-600" />
+                        <section className="bg-surface rounded-2xl border border-border shadow-sm overflow-hidden">
+                            <div className="px-6 py-4 border-b border-border flex items-center gap-3">
+                                <div className="p-2 bg-info/10 rounded-lg">
+                                    <Network className="w-5 h-5 text-info" />
                                 </div>
-                                <h2 className="text-lg font-bold text-slate-800">论文关系图谱 <span className="text-xs font-normal text-slate-400">v0.1</span></h2>
+                                <h2 className="text-lg font-bold text-content-main">论文关系图谱 <span className="text-xs font-normal text-content-dim">v0.1</span></h2>
                             </div>
                             {/* Height adapts: min 300px, grows based on content */}
                             <div className="min-h-[300px]">
@@ -111,62 +111,62 @@ export default function ExploreOverview({
                         </section>
 
                         {/* Summary */}
-                        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                            <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
-                                <div className="p-2 bg-emerald-100 rounded-lg">
-                                    <FileText className="w-5 h-5 text-emerald-600" />
+                        <section className="bg-surface rounded-2xl border border-border shadow-sm overflow-hidden">
+                            <div className="px-6 py-4 border-b border-border flex items-center gap-3">
+                                <div className="p-2 bg-success/10 rounded-lg">
+                                    <FileText className="w-5 h-5 text-success" />
                                 </div>
-                                <h2 className="text-lg font-bold text-slate-800">论文摘要</h2>
+                                <h2 className="text-lg font-bold text-content-main">论文摘要</h2>
                             </div>
                             <div className="px-6 py-5">
                                 {analysis?.summary ? (
-                                    <div className="prose prose-slate max-w-none text-slate-700 leading-relaxed">
+                                    <div className="prose prose-slate max-w-none text-content-main leading-relaxed">
                                         <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                             {analysis.summary}
                                         </ReactMarkdown>
                                     </div>
                                 ) : (
-                                    <p className="text-slate-400 italic">暂无摘要分析</p>
+                                    <p className="text-content-dim italic">暂无摘要分析</p>
                                 )}
                             </div>
                         </section>
 
                         {/* Methods */}
-                        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                            <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
-                                <div className="p-2 bg-purple-100 rounded-lg">
-                                    <FlaskConical className="w-5 h-5 text-purple-600" />
+                        <section className="bg-surface rounded-2xl border border-border shadow-sm overflow-hidden">
+                            <div className="px-6 py-4 border-b border-border flex items-center gap-3">
+                                <div className="p-2 bg-primary/10 rounded-lg">
+                                    <FlaskConical className="w-5 h-5 text-primary" />
                                 </div>
-                                <h2 className="text-lg font-bold text-slate-800">研究方法</h2>
+                                <h2 className="text-lg font-bold text-content-main">研究方法</h2>
                             </div>
                             <div className="px-6 py-5">
                                 {analysis?.methods && analysis.methods.length > 0 ? (
                                     <div className="space-y-4">
                                         {analysis.methods.map((method, idx) => (
-                                            <div key={idx} className="p-4 bg-purple-50 rounded-lg border border-purple-100">
-                                                <h4 className="font-semibold text-purple-900 mb-2">{method.name}</h4>
-                                                <p className="text-slate-700 leading-relaxed">{method.description}</p>
+                                            <div key={idx} className="p-4 bg-surface-elevated rounded-lg border border-border">
+                                                <h4 className="font-semibold text-primary mb-2">{method.name}</h4>
+                                                <p className="text-content-main leading-relaxed">{method.description}</p>
                                             </div>
                                         ))}
                                     </div>
                                 ) : (
-                                    <p className="text-slate-400 italic">暂无方法分析</p>
+                                    <p className="text-content-dim italic">暂无方法分析</p>
                                 )}
                             </div>
                         </section>
 
                         {/* Datasets & Code */}
-                        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                            <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
-                                <div className="p-2 bg-amber-100 rounded-lg">
-                                    <Database className="w-5 h-5 text-amber-600" />
+                        <section className="bg-surface rounded-2xl border border-border shadow-sm overflow-hidden">
+                            <div className="px-6 py-4 border-b border-border flex items-center gap-3">
+                                <div className="p-2 bg-warning/10 rounded-lg">
+                                    <Database className="w-5 h-5 text-warning" />
                                 </div>
-                                <h2 className="text-lg font-bold text-slate-800">数据集与代码</h2>
+                                <h2 className="text-lg font-bold text-content-main">数据集与代码</h2>
                             </div>
                             <div className="px-6 py-5 grid md:grid-cols-2 gap-6">
                                 {/* Datasets */}
                                 <div>
-                                    <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-2">
+                                    <h3 className="text-sm font-semibold text-content-muted uppercase tracking-wide mb-3 flex items-center gap-2">
                                         <Database className="w-4 h-4" />
                                         Datasets
                                     </h3>
@@ -175,13 +175,13 @@ export default function ExploreOverview({
                                             {analysis.datasets.map((item, idx) => (
                                                 <li
                                                     key={idx}
-                                                    className="p-3 bg-slate-50 rounded-lg border border-slate-100"
+                                                    className="p-3 bg-surface-elevated rounded-lg border border-border"
                                                 >
-                                                    <div className="font-medium text-slate-800">
+                                                    <div className="font-medium text-content-main">
                                                         {item.name}
                                                     </div>
                                                     {item.description && (
-                                                        <p className="text-sm text-slate-500 mt-1">
+                                                        <p className="text-sm text-content-muted mt-1">
                                                             {item.description}
                                                         </p>
                                                     )}
@@ -190,7 +190,7 @@ export default function ExploreOverview({
                                                             href={item.url}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
-                                                            className="text-xs text-indigo-600 hover:underline flex items-center gap-1 mt-2"
+                                                            className="text-xs text-primary hover:underline flex items-center gap-1 mt-2"
                                                         >
                                                             <ExternalLink className="w-3 h-3" />
                                                             {item.url}
@@ -200,13 +200,13 @@ export default function ExploreOverview({
                                             ))}
                                         </ul>
                                     ) : (
-                                        <p className="text-slate-400 italic text-sm">未识别到数据集</p>
+                                        <p className="text-content-dim italic text-sm">未识别到数据集</p>
                                     )}
                                 </div>
 
                                 {/* Code */}
                                 <div>
-                                    <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-2">
+                                    <h3 className="text-sm font-semibold text-content-muted uppercase tracking-wide mb-3 flex items-center gap-2">
                                         <Code className="w-4 h-4" />
                                         Code Repositories
                                     </h3>
@@ -215,10 +215,10 @@ export default function ExploreOverview({
                                             {analysis.code_refs.map((item, idx) => (
                                                 <li
                                                     key={idx}
-                                                    className="p-3 bg-slate-50 rounded-lg border border-slate-100"
+                                                    className="p-3 bg-surface-elevated rounded-lg border border-border"
                                                 >
-                                                    <div className="font-medium text-slate-800 flex items-center gap-2">
-                                                        <Code className="w-4 h-4 text-slate-400" />
+                                                    <div className="font-medium text-content-main flex items-center gap-2">
+                                                        <Code className="w-4 h-4 text-content-dim" />
                                                         Repository
                                                     </div>
                                                     {item.repo_url && (
@@ -226,14 +226,14 @@ export default function ExploreOverview({
                                                             href={item.repo_url}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
-                                                            className="text-xs text-indigo-600 hover:underline flex items-center gap-1 mt-2"
+                                                            className="text-xs text-primary hover:underline flex items-center gap-1 mt-2"
                                                         >
                                                             <ExternalLink className="w-3 h-3" />
                                                             {item.repo_url}
                                                         </a>
                                                     )}
                                                     {item.description && (
-                                                        <p className="text-sm text-slate-500 mt-1">
+                                                        <p className="text-sm text-content-muted mt-1">
                                                             {item.description}
                                                         </p>
                                                     )}
@@ -241,7 +241,7 @@ export default function ExploreOverview({
                                             ))}
                                         </ul>
                                     ) : (
-                                        <p className="text-slate-400 italic text-sm">未识别到代码仓库</p>
+                                        <p className="text-content-dim italic text-sm">未识别到代码仓库</p>
                                     )}
                                 </div>
                             </div>
@@ -251,7 +251,7 @@ export default function ExploreOverview({
                         <div className="text-center py-8">
                             <button
                                 onClick={onStartReading}
-                                className="inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all font-semibold text-lg shadow-xl shadow-indigo-200 hover:shadow-2xl hover:-translate-y-0.5"
+                                className="inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-primary to-secondary text-primary-content rounded-xl hover:from-primary-hover hover:to-secondary-hover transition-all font-semibold text-lg shadow-xl shadow-primary/20 hover:shadow-2xl hover:-translate-y-0.5"
                             >
                                 <BookOpen className="w-5 h-5" />
                                 🚀 开始深度阅读

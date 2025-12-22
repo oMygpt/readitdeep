@@ -27,6 +27,8 @@ import { Link } from 'react-router-dom';
 import { libraryApi, papersApi, monitorApi, analysisApi } from '../lib/api';
 import UserMenu from '../components/UserMenu';
 import CategoryTagEditor from '../components/CategoryTagEditor';
+import QuotaBadge from '../components/QuotaBadge';
+import UpgradeModal from '../components/UpgradeModal';
 
 export default function LibraryPage() {
     const { t } = useTranslation();
@@ -44,6 +46,7 @@ export default function LibraryPage() {
     const [newCategoryName, setNewCategoryName] = useState('');
     const [isRenaming, setIsRenaming] = useState(false);
     const [reanalyzingId, setReanalyzingId] = useState<string | null>(null);
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
     // Polling for updates (暂停轮询当编辑弹窗打开时)
     const { data: libraryData, isLoading } = useQuery({
@@ -144,9 +147,16 @@ export default function LibraryPage() {
         if (file) {
             try {
                 await uploadMutation.mutateAsync(file);
-            } catch (err) {
+                // Refresh quota after upload
+                queryClient.invalidateQueries({ queryKey: ['quota-status'] });
+            } catch (err: any) {
                 console.error("Upload failed", err);
-                alert("Upload failed");
+                // Check if it's a quota error
+                if (err.response?.status === 403 && err.response?.data?.detail?.error === 'quota_exceeded') {
+                    setShowUpgradeModal(true);
+                } else {
+                    alert("Upload failed");
+                }
             } finally {
                 if (fileInputRef.current) fileInputRef.current.value = '';
             }
@@ -183,15 +193,15 @@ export default function LibraryPage() {
     };
 
     return (
-        <div className="flex h-screen bg-slate-50 text-slate-800 font-sans">
+        <div className="flex h-screen bg-background text-content-main font-sans">
             {/* Left Sidebar */}
-            <aside className="w-72 bg-slate-50 border-r border-slate-200 hidden lg:flex flex-col pt-8 overflow-y-auto">
+            <aside className="w-72 bg-surface border-r border-border hidden lg:flex flex-col pt-8 overflow-y-auto">
                 {/* Logo */}
                 <div className="px-6 mb-8 flex items-center gap-2">
-                    <div className="p-1.5 bg-indigo-600 rounded-lg text-white shadow-sm shadow-indigo-200">
+                    <div className="p-1.5 bg-primary rounded-lg text-primary-content shadow-sm shadow-primary/30">
                         <BookOpen className="w-5 h-5" />
                     </div>
-                    <span className="font-bold text-lg tracking-tight text-slate-800">{t('common.appName')}</span>
+                    <span className="font-bold text-lg tracking-tight text-content-main">{t('common.appName')}</span>
                 </div>
 
                 {/* Search */}
@@ -199,12 +209,12 @@ export default function LibraryPage() {
                     <div className="relative">
                         <input
                             type="text"
-                            className="w-full bg-white border border-slate-300 rounded-lg py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all shadow-sm"
+                            className="w-full bg-surface-elevated border border-border rounded-lg py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all shadow-sm text-content-main placeholder:text-content-dim"
                             placeholder={t('library.searchPlaceholder')}
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                         />
-                        <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                        <Search className="w-4 h-4 text-content-muted absolute left-3 top-2.5" />
                     </div>
                 </div>
 
@@ -217,7 +227,7 @@ export default function LibraryPage() {
                     <div className="space-y-1">
                         <div
                             onClick={clearFilters}
-                            className={`flex items-center justify-between px-3 py-2 rounded-md cursor-pointer text-sm font-medium transition-colors ${!selectedCategory ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-slate-200 text-slate-600'
+                            className={`flex items-center justify-between px-3 py-2 rounded-md cursor-pointer text-sm font-medium transition-colors ${!selectedCategory ? 'bg-primary/20 text-primary' : 'hover:bg-surface-active text-content-muted'
                                 }`}
                         >
                             <div className="flex items-center gap-2">
@@ -290,9 +300,9 @@ export default function LibraryPage() {
                 <div className="px-6 mb-6">
                     <Link
                         to="/workbench"
-                        className="flex items-center gap-3 px-3 py-3 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl border border-purple-100 hover:shadow-md transition-all group"
+                        className="flex items-center gap-3 px-3 py-3 bg-gradient-to-r from-primary/10 to-secondary/10 rounded-xl border border-primary/20 hover:shadow-md transition-all group"
                     >
-                        <div className="p-2 bg-purple-600 rounded-lg text-white group-hover:scale-105 transition-transform">
+                        <div className="p-2 bg-primary rounded-lg text-primary-content group-hover:scale-105 transition-transform">
                             <Sparkles className="w-4 h-4" />
                         </div>
                         <div>
@@ -302,14 +312,13 @@ export default function LibraryPage() {
                     </Link>
                 </div>
 
-                {/* Suggestions */}
-                <div className="px-6 mt-auto mb-6">
-                    <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-100">
-                        <h3 className="text-indigo-900 font-semibold text-sm mb-1">{t('library.deepReadAI')}</h3>
-                        <p className="text-xs text-indigo-700 leading-relaxed mb-3">
-                            {t('library.deepReadAIDesc')}
-                        </p>
-                    </div>
+                {/* Quota Status in Sidebar */}
+                <div className="px-6 mb-6">
+                    <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <Sparkles className="w-3 h-3" />
+                        {t('library.quota') || '配额状态'}
+                    </h2>
+                    <QuotaBadge onUpgradeClick={() => setShowUpgradeModal(true)} showDetails={true} />
                 </div>
 
                 {/* Copyright Footer */}
@@ -326,14 +335,17 @@ export default function LibraryPage() {
                     {/* Header */}
                     <div className="flex justify-between items-center mb-6">
                         <div>
-                            <h1 className="text-3xl font-serif font-bold text-slate-800 tracking-tight">{t('library.title')}</h1>
-                            <p className="text-slate-500 mt-1 text-sm">
+                            <h1 className="text-3xl font-serif font-bold text-content-main tracking-tight">{t('library.title')}</h1>
+                            <p className="text-content-muted mt-1 text-sm">
                                 {filteredPapers.length} {t('library.papers')}
-                                {selectedCategory && <span className="text-indigo-600"> {t('library.inCategory', { category: selectedCategory })}</span>}
-                                {selectedTag && <span className="text-purple-600"> {t('library.taggedWith', { tag: selectedTag })}</span>}
+                                {selectedCategory && <span className="text-primary"> {t('library.inCategory', { category: selectedCategory })}</span>}
+                                {selectedTag && <span className="text-secondary"> {t('library.taggedWith', { tag: selectedTag })}</span>}
                             </p>
                         </div>
                         <div className="flex gap-3 items-center">
+                            {/* Quota Badge */}
+                            <QuotaBadge onUpgradeClick={() => setShowUpgradeModal(true)} />
+
                             {/* View Mode Toggle */}
                             <div className="flex bg-slate-100 rounded-lg p-1">
                                 <button
@@ -351,7 +363,7 @@ export default function LibraryPage() {
                             </div>
                             <button
                                 onClick={() => fileInputRef.current?.click()}
-                                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg shadow-sm text-sm font-medium flex items-center gap-2 transition-all hover:shadow-md active:scale-95"
+                                className="bg-primary hover:bg-primary-hover text-primary-content px-4 py-2 rounded-lg shadow-sm text-sm font-medium flex items-center gap-2 transition-all hover:shadow-md active:scale-95"
                             >
                                 <UploadCloud className="w-4 h-4" />
                                 <span className="hidden sm:inline">{t('library.importPaper')}</span>
@@ -410,9 +422,9 @@ export default function LibraryPage() {
 
                     {/* List View */}
                     {viewMode === 'list' && (
-                        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                        <div className="bg-surface rounded-xl border border-border overflow-hidden">
                             {/* Table Header */}
-                            <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                            <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-surface-elevated border-b border-border text-xs font-semibold text-content-dim uppercase tracking-wider">
                                 <div className="col-span-5">{t('library.tableHeaders.title')}</div>
                                 <div className="col-span-2">{t('library.tableHeaders.category')}</div>
                                 <div className="col-span-3">{t('library.tableHeaders.tags')}</div>
@@ -431,15 +443,15 @@ export default function LibraryPage() {
                                     <div
                                         key={paper.id}
                                         onClick={() => isCompleted && navigate(`/read/${paper.id}`)}
-                                        className={`grid grid-cols-12 gap-4 px-4 py-3 border-b border-slate-100 items-center transition-colors ${isProcessing ? 'bg-slate-50 cursor-wait' : 'hover:bg-slate-50 cursor-pointer'
+                                        className={`grid grid-cols-12 gap-4 px-4 py-3 border-b border-border items-center transition-colors ${isProcessing ? 'bg-surface-hover/50 cursor-wait' : 'hover:bg-surface-hover cursor-pointer'
                                             }`}
                                     >
                                         {/* Title */}
                                         <div className="col-span-5 flex items-center gap-3">
-                                            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isProcessing ? 'bg-yellow-400 animate-pulse' : isFailed ? 'bg-red-400' : 'bg-green-400'
+                                            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isProcessing ? 'bg-warning animate-pulse' : isFailed ? 'bg-error' : 'bg-success'
                                                 }`} />
                                             <div className="min-w-0">
-                                                <div className="font-medium text-slate-800 truncate group-hover:text-indigo-600">
+                                                <div className="font-medium text-content-main truncate group-hover:text-primary">
                                                     {paper.title || paper.filename}
                                                 </div>
                                                 <div className="text-xs text-slate-400 truncate">
@@ -502,11 +514,11 @@ export default function LibraryPage() {
 
                                         {/* Actions */}
                                         <div className="col-span-1 flex items-center justify-end gap-2">
-                                            {isFailed && (
+                                            {(isFailed || isCompleted) && (
                                                 <button
                                                     onClick={(e) => handleReanalyze(e, paper.id)}
                                                     disabled={reanalyzingId === paper.id}
-                                                    className="p-1 text-amber-500 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors disabled:opacity-50"
+                                                    className={`p-1 ${isFailed ? 'text-amber-500 hover:text-amber-600 hover:bg-amber-50' : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50'} rounded transition-colors disabled:opacity-50`}
                                                     title={t('library.reanalyze')}
                                                 >
                                                     <RefreshCw className={`w-4 h-4 ${reanalyzingId === paper.id ? 'animate-spin' : ''}`} />
@@ -550,26 +562,26 @@ export default function LibraryPage() {
                                     <div
                                         key={paper.id}
                                         onClick={() => isCompleted && navigate(`/read/${paper.id}`)}
-                                        className={`bg-white rounded-xl p-4 shadow-sm border border-slate-200 transition-all ${isProcessing ? 'cursor-not-allowed opacity-90' : 'cursor-pointer hover:shadow-lg hover:border-indigo-200'
+                                        className={`bg-surface rounded-xl p-4 shadow-sm border border-border transition-all ${isProcessing ? 'cursor-not-allowed opacity-90' : 'cursor-pointer hover:shadow-lg hover:border-primary/50'
                                             }`}
                                     >
                                         <div className="flex items-start gap-3 mb-3">
-                                            <div className={`w-2 h-2 rounded-full mt-2 ${isProcessing ? 'bg-yellow-400 animate-pulse' : isFailed ? 'bg-red-400' : 'bg-green-400'
+                                            <div className={`w-2 h-2 rounded-full mt-2 ${isProcessing ? 'bg-warning animate-pulse' : isFailed ? 'bg-error' : 'bg-success'
                                                 }`} />
                                             <div className="flex-1 min-w-0">
-                                                <h3 className="font-medium text-slate-800 line-clamp-2 mb-1">
+                                                <h3 className="font-medium text-content-main line-clamp-2 mb-1">
                                                     {paper.title || paper.filename}
                                                 </h3>
-                                                <p className="text-xs text-slate-400">{new Date(paper.created_at).toLocaleDateString()}</p>
+                                                <p className="text-xs text-content-muted">{new Date(paper.created_at).toLocaleDateString()}</p>
                                             </div>
                                         </div>
 
                                         <div className="flex flex-wrap gap-1 mb-3">
-                                            <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs rounded-full">
+                                            <span className="px-2 py-0.5 bg-surface-elevated text-content-dim text-xs rounded-full">
                                                 {paper.category || t('library.uncategorized')}
                                             </span>
                                             {(paper.tags || []).slice(0, 2).map((tag: string) => (
-                                                <span key={tag} className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full">
+                                                <span key={tag} className="px-2 py-0.5 bg-secondary/10 text-secondary text-xs rounded-full">
                                                     {tag}
                                                 </span>
                                             ))}
@@ -577,7 +589,19 @@ export default function LibraryPage() {
 
                                         <div className="flex items-center justify-between pt-2 border-t border-slate-100">
                                             <div className="flex items-center gap-2">
-                                                {isCompleted && <CheckCircle className="w-4 h-4 text-green-500" />}
+                                                {isCompleted && (
+                                                    <>
+                                                        <CheckCircle className="w-4 h-4 text-green-500" />
+                                                        <button
+                                                            onClick={(e) => handleReanalyze(e, paper.id)}
+                                                            disabled={reanalyzingId === paper.id}
+                                                            className="text-xs text-slate-500 hover:text-indigo-600 flex items-center gap-1 disabled:opacity-50"
+                                                            title={t('library.reanalyze')}
+                                                        >
+                                                            <RefreshCw className={`w-3 h-3 ${reanalyzingId === paper.id ? 'animate-spin' : ''}`} />
+                                                        </button>
+                                                    </>
+                                                )}
                                                 {isProcessing && <Loader2 className="w-4 h-4 animate-spin text-yellow-500" />}
                                                 {isFailed && (
                                                     <>
@@ -695,6 +719,12 @@ export default function LibraryPage() {
                     </div>
                 </div>
             )}
+
+            {/* Upgrade Modal */}
+            <UpgradeModal
+                isOpen={showUpgradeModal}
+                onClose={() => setShowUpgradeModal(false)}
+            />
         </div>
     );
 }

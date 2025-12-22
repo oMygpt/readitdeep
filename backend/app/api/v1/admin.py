@@ -580,3 +580,238 @@ async def reset_token_stats(
     """重置 Token 用量统计 (仅管理员)"""
     token_tracker.reset()
     return {"message": "Token 统计已重置"}
+
+
+# ================== 邀请码管理 API ==================
+
+from datetime import datetime, timedelta
+from app.models.invitation_code import InvitationCode
+import secrets
+import uuid
+
+
+class AdminInvitationCodeItem(BaseModel):
+    """管理员邀请码项"""
+    id: str
+    code: str
+    created_by: str
+    creator_email: Optional[str] = None
+    creator_plan: str
+    grant_plan: str
+    grant_days: int
+    is_used: bool
+    used_by: Optional[str] = None
+    used_by_email: Optional[str] = None
+    used_at: Optional[str] = None
+    is_expired: bool
+    expires_at: Optional[str] = None
+    is_active: bool
+    created_at: str
+
+
+class AdminInvitationCodeListResponse(BaseModel):
+    """管理员邀请码列表响应"""
+    items: List[AdminInvitationCodeItem]
+    total: int
+    stats: dict
+
+
+class BatchInvitationCodeCreate(BaseModel):
+    """批量创建邀请码"""
+    count: int = 10
+    grant_plan: str = "pro"
+    grant_days: int = 30
+    expires_days: int = 30
+
+
+@router.get("/invitation-codes", response_model=AdminInvitationCodeListResponse)
+async def list_all_invitation_codes(
+    skip: int = 0,
+    limit: int = 100,
+    grant_plan: Optional[str] = None,
+    is_used: Optional[bool] = None,
+    admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    管理员获取所有邀请码列表
+    
+    支持按计划和使用状态筛选
+    """
+    query = select(InvitationCode).order_by(InvitationCode.created_at.desc())
+    
+    if grant_plan:
+        query = query.where(InvitationCode.grant_plan == grant_plan)
+    if is_used is not None:
+        if is_used:
+            query = query.where(InvitationCode.used_by != None)
+        else:
+            query = query.where(InvitationCode.used_by == None)
+    
+    # 总数
+    count_query = select(func.count(InvitationCode.id))
+    if grant_plan:
+        count_query = count_query.where(InvitationCode.grant_plan == grant_plan)
+    if is_used is not None:
+        if is_used:
+            count_query = count_query.where(InvitationCode.used_by != None)
+        else:
+            count_query = count_query.where(InvitationCode.used_by == None)
+    
+    count_result = await db.execute(count_query)
+    total = count_result.scalar()
+    
+    # 分页
+    query = query.offset(skip).limit(limit)
+    result = await db.execute(query)
+    codes = result.scalars().all()
+    
+    # 获取用户邮箱映射
+    user_ids = set()
+    for c in codes:
+        if c.created_by:
+            user_ids.add(c.created_by)
+        if c.used_by:
+            user_ids.add(c.used_by)
+    
+    user_email_map = {}
+    if user_ids:
+        user_result = await db.execute(select(User).where(User.id.in_(user_ids)))
+        users = user_result.scalars().all()
+        user_email_map = {u.id: u.email for u in users}
+    
+    # 统计
+    all_codes_result = await db.execute(select(InvitationCode))
+    all_codes = all_codes_result.scalars().all()
+    
+    stats = {
+        "total": len(all_codes),
+        "used": sum(1 for c in all_codes if c.is_used),
+        "active": sum(1 for c in all_codes if c.is_valid),
+        "expired": sum(1 for c in all_codes if c.is_expired and not c.is_used),
+        "by_plan": {},
+    }
+    for c in all_codes:
+        plan = c.grant_plan
+        if plan not in stats["by_plan"]:
+            stats["by_plan"][plan] = {"total": 0, "used": 0}
+        stats["by_plan"][plan]["total"] += 1
+        if c.is_used:
+            stats["by_plan"][plan]["used"] += 1
+    
+    items = [
+        AdminInvitationCodeItem(
+            id=c.id,
+            code=c.code,
+            created_by=c.created_by,
+            creator_email=user_email_map.get(c.created_by),
+            creator_plan=c.creator_plan,
+            grant_plan=c.grant_plan,
+            grant_days=c.grant_days,
+            is_used=c.is_used,
+            used_by=c.used_by,
+            used_by_email=user_email_map.get(c.used_by) if c.used_by else None,
+            used_at=c.used_at.isoformat() if c.used_at else None,
+            is_expired=c.is_expired,
+            expires_at=c.expires_at.isoformat() if c.expires_at else None,
+            is_active=c.is_active,
+            created_at=c.created_at.isoformat(),
+        )
+        for c in codes
+    ]
+    
+    return AdminInvitationCodeListResponse(
+        items=items,
+        total=total,
+        stats=stats,
+    )
+
+
+@router.post("/invitation-codes/batch")
+async def batch_create_invitation_codes(
+    data: BatchInvitationCodeCreate,
+    admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    管理员批量生成邀请码
+    """
+    if data.count < 1 or data.count > 100:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="生成数量必须在 1-100 之间"
+        )
+    
+    if data.grant_plan not in ("pro", "ultra"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="grant_plan 必须是 'pro' 或 'ultra'"
+        )
+    
+    created_codes = []
+    expires_at = datetime.utcnow() + timedelta(days=data.expires_days) if data.expires_days > 0 else None
+    
+    for _ in range(data.count):
+        code = f"READIT-{secrets.token_hex(4).upper()}"
+        
+        # 确保唯一
+        while True:
+            check = await db.execute(
+                select(InvitationCode).where(InvitationCode.code == code)
+            )
+            if not check.scalar_one_or_none():
+                break
+            code = f"READIT-{secrets.token_hex(4).upper()}"
+        
+        invitation = InvitationCode(
+            id=str(uuid.uuid4()),
+            code=code,
+            created_by=admin.id,
+            creator_plan="admin",
+            grant_plan=data.grant_plan,
+            grant_days=data.grant_days,
+            expires_at=expires_at,
+        )
+        db.add(invitation)
+        created_codes.append(code)
+    
+    await db.commit()
+    
+    return {
+        "success": True,
+        "count": len(created_codes),
+        "codes": created_codes,
+        "grant_plan": data.grant_plan,
+        "grant_days": data.grant_days,
+        "expires_at": expires_at.isoformat() if expires_at else None,
+    }
+
+
+@router.delete("/invitation-codes/{code}")
+async def admin_delete_invitation_code(
+    code: str,
+    admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    管理员删除（禁用）邀请码
+    """
+    result = await db.execute(
+        select(InvitationCode).where(InvitationCode.code == code.upper())
+    )
+    invitation = result.scalar_one_or_none()
+    
+    if not invitation:
+        raise HTTPException(status_code=404, detail="邀请码不存在")
+    
+    if invitation.is_used:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="已使用的邀请码无法删除"
+        )
+    
+    invitation.is_active = False
+    await db.commit()
+    
+    return {"success": True, "message": "邀请码已删除"}
+

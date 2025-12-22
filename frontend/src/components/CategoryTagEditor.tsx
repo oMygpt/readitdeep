@@ -39,8 +39,18 @@ export default function CategoryTagEditor({
                 libraryApi.getCategories(),
                 fetch('/api/v1/library/tags').then(r => r.json())
             ]);
-            setAllCategories(cats.map((c: { name: string }) => c.name).filter((n: string) => n !== 'Uncategorized'));
-            setAllTags(tagStats.map((t: { name: string }) => t.name));
+            // Defensive check: ensure cats is an array before mapping
+            setAllCategories(
+                Array.isArray(cats)
+                    ? cats.map((c: { name: string }) => c.name).filter((n: string) => n !== 'Uncategorized')
+                    : []
+            );
+            // Defensive check: ensure tagStats is an array before mapping
+            setAllTags(
+                Array.isArray(tagStats)
+                    ? tagStats.map((t: { name: string }) => t.name)
+                    : []
+            );
         } catch (e) {
             console.error('Failed to load options', e);
         }
@@ -81,19 +91,19 @@ export default function CategoryTagEditor({
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
             <div
-                className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md mx-4"
+                className="bg-surface rounded-xl shadow-2xl p-6 w-full max-w-md mx-4"
                 onClick={e => e.stopPropagation()}
             >
                 <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-lg font-semibold text-slate-800">编辑分类和标签</h3>
-                    <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded-lg">
-                        <X className="w-5 h-5 text-slate-400" />
+                    <h3 className="text-lg font-semibold text-content-main">编辑分类和标签</h3>
+                    <button onClick={onClose} className="p-1 hover:bg-surface-elevated rounded-lg">
+                        <X className="w-5 h-5 text-content-muted" />
                     </button>
                 </div>
 
                 {/* 分类选择 */}
                 <div className="mb-6">
-                    <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-2">
+                    <label className="flex items-center gap-2 text-sm font-medium text-content-main mb-2">
                         <Folder className="w-4 h-4" />
                         分类
                     </label>
@@ -103,7 +113,7 @@ export default function CategoryTagEditor({
                             value={category}
                             onChange={(e) => setCategory(e.target.value)}
                             placeholder="输入或选择分类"
-                            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                            className="w-full px-3 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary bg-surface text-content-main"
                             list="category-options"
                         />
                         <datalist id="category-options">
@@ -118,8 +128,8 @@ export default function CategoryTagEditor({
                                 key={cat}
                                 onClick={() => setCategory(cat)}
                                 className={`px-2 py-1 text-xs rounded-full transition-colors ${category === cat
-                                        ? 'bg-indigo-600 text-white'
-                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                    ? 'bg-primary text-primary-content'
+                                    : 'bg-surface-elevated text-content-muted hover:bg-surface-active'
                                     }`}
                             >
                                 {cat}
@@ -130,7 +140,7 @@ export default function CategoryTagEditor({
 
                 {/* 标签编辑 */}
                 <div className="mb-6">
-                    <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-2">
+                    <label className="flex items-center gap-2 text-sm font-medium text-content-main mb-2">
                         <Tag className="w-4 h-4" />
                         标签
                     </label>
@@ -140,16 +150,16 @@ export default function CategoryTagEditor({
                         {tags.map(tag => (
                             <span
                                 key={tag}
-                                className="px-2 py-1 bg-purple-100 text-purple-700 text-sm rounded-full flex items-center gap-1"
+                                className="px-2 py-1 bg-secondary/10 text-secondary text-sm rounded-full flex items-center gap-1"
                             >
                                 {tag}
-                                <button onClick={() => handleRemoveTag(tag)} className="hover:text-purple-900">
+                                <button onClick={() => handleRemoveTag(tag)} className="hover:text-secondary-hover">
                                     <X className="w-3 h-3" />
                                 </button>
                             </span>
                         ))}
                         {tags.length === 0 && (
-                            <span className="text-sm text-slate-400">暂无标签</span>
+                            <span className="text-sm text-content-dim">暂无标签</span>
                         )}
                     </div>
 
@@ -161,7 +171,7 @@ export default function CategoryTagEditor({
                             onChange={(e) => setNewTag(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleAddTag()}
                             placeholder="添加新标签"
-                            className="flex-1 px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-purple-500 text-sm"
+                            className="flex-1 px-3 py-2 border border-border rounded-lg focus:ring-2 focus:ring-secondary text-sm bg-surface text-content-main"
                             list="tag-options"
                         />
                         <datalist id="tag-options">
@@ -171,7 +181,7 @@ export default function CategoryTagEditor({
                         </datalist>
                         <button
                             onClick={handleAddTag}
-                            className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                            className="px-3 py-2 bg-secondary text-secondary-content rounded-lg hover:bg-secondary-hover transition-colors"
                         >
                             <Plus className="w-4 h-4" />
                         </button>
@@ -183,7 +193,7 @@ export default function CategoryTagEditor({
                             <button
                                 key={tag}
                                 onClick={() => setTags([...tags, tag])}
-                                className="px-2 py-1 text-xs bg-slate-100 text-slate-600 rounded-full hover:bg-purple-100 hover:text-purple-700 transition-colors"
+                                className="px-2 py-1 text-xs bg-surface-elevated text-content-muted rounded-full hover:bg-secondary/10 hover:text-secondary transition-colors"
                             >
                                 + {tag}
                             </button>
@@ -195,14 +205,14 @@ export default function CategoryTagEditor({
                 <div className="flex gap-3 justify-end">
                     <button
                         onClick={onClose}
-                        className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                        className="px-4 py-2 text-content-main hover:bg-surface-elevated rounded-lg transition-colors"
                     >
                         取消
                     </button>
                     <button
                         onClick={handleSave}
                         disabled={saving}
-                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                        className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-content rounded-lg hover:bg-primary-hover transition-colors disabled:opacity-50"
                     >
                         <Check className="w-4 h-4" />
                         {saving ? '保存中...' : '保存'}

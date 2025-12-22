@@ -58,13 +58,13 @@ export default function UploadModal({ onClose }: UploadModalProps) {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className="bg-slate-800 rounded-2xl border border-slate-700 w-full max-w-lg p-6 animate-slide-up">
+            <div className="bg-surface-elevated rounded-2xl border border-border w-full max-w-lg p-6 animate-slide-up">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-6">
                     <h2 className="text-xl font-semibold">上传论文</h2>
                     <button
                         onClick={onClose}
-                        className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+                        className="p-2 hover:bg-surface-hover rounded-lg transition-colors"
                     >
                         <X className="w-5 h-5" />
                     </button>
@@ -77,29 +77,29 @@ export default function UploadModal({ onClose }: UploadModalProps) {
                     onDragOver={handleDrag}
                     onDrop={handleDrop}
                     className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${dragActive
-                            ? 'border-indigo-500 bg-indigo-500/10'
-                            : 'border-slate-600 hover:border-slate-500'
+                        ? 'border-primary bg-primary/10'
+                        : 'border-border hover:border-content-muted'
                         }`}
                 >
                     {selectedFile ? (
                         <div className="flex flex-col items-center gap-3">
-                            <FileText className="w-12 h-12 text-indigo-400" />
+                            <FileText className="w-12 h-12 text-primary" />
                             <p className="font-medium">{selectedFile.name}</p>
-                            <p className="text-sm text-slate-400">
+                            <p className="text-sm text-content-muted">
                                 {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
                             </p>
                             <button
                                 onClick={() => setSelectedFile(null)}
-                                className="text-sm text-slate-400 hover:text-white"
+                                className="text-sm text-content-muted hover:text-content-main"
                             >
                                 更换文件
                             </button>
                         </div>
                     ) : (
                         <>
-                            <Upload className="w-12 h-12 text-slate-500 mx-auto mb-4" />
-                            <p className="text-slate-300 mb-2">拖拽文件到此处，或点击选择</p>
-                            <p className="text-sm text-slate-500">支持 PDF、LaTeX、Word 格式</p>
+                            <Upload className="w-12 h-12 text-content-muted mx-auto mb-4" />
+                            <p className="text-content-dim mb-2">拖拽文件到此处，或点击选择</p>
+                            <p className="text-sm text-content-muted">支持 PDF、LaTeX、Word 格式</p>
                             <input
                                 type="file"
                                 accept=".pdf,.tex,.docx,.doc"
@@ -111,16 +111,16 @@ export default function UploadModal({ onClose }: UploadModalProps) {
                 </div>
 
                 {/* Info */}
-                <div className="mt-4 p-3 bg-slate-700/50 rounded-lg">
-                    <p className="text-sm text-slate-400">
+                <div className="mt-4 p-3 bg-surface rounded-lg">
+                    <p className="text-sm text-content-muted">
                         📝 上传后将使用 Mineru API 解析，预计需要 1-2 分钟
                     </p>
                 </div>
 
                 {/* Error */}
                 {uploadMutation.isError && (
-                    <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
-                        <p className="text-sm text-red-400">
+                    <div className="mt-4 p-3 bg-error/10 border border-error/30 rounded-lg">
+                        <p className="text-sm text-error">
                             上传失败: {(uploadMutation.error as Error).message}
                         </p>
                     </div>
@@ -130,14 +130,14 @@ export default function UploadModal({ onClose }: UploadModalProps) {
                 <div className="flex justify-end gap-3 mt-6">
                     <button
                         onClick={onClose}
-                        className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
+                        className="px-4 py-2 text-content-muted hover:text-content-main transition-colors"
                     >
                         取消
                     </button>
                     <button
                         onClick={handleUpload}
                         disabled={!selectedFile || uploadMutation.isPending}
-                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg font-medium transition-colors"
+                        className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-hover disabled:bg-surface-hover disabled:text-content-muted text-white rounded-lg font-medium transition-colors"
                     >
                         {uploadMutation.isPending ? (
                             <>

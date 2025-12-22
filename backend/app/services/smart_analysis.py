@@ -129,8 +129,40 @@ async def smart_analyze(
     """
     智能分析选中文本
     """
+    from sqlalchemy import select
+    from app.models.user import User
+    
     if action_type not in ACTION_TO_PROMPT:
         return {"success": False, "error": f"未知的分析类型: {action_type}"}
+    
+    # ================== AI 配额检查 ==================
+    paper = store.get(paper_id)
+    user_id = paper.get("user_id") if paper else None
+    
+    if user_id:
+        try:
+            async with async_session_maker() as db:
+                result = await db.execute(select(User).where(User.id == user_id))
+                user = result.scalar_one_or_none()
+                if user:
+                    # 重置配额
+                    user.reset_daily_quota_if_needed()
+                    
+                    # 检查配额
+                    if not user.can_use_ai:
+                        quota_status = user.get_quota_status()
+                        return {
+                            "success": False,
+                            "error": "AI 配额已用完，请升级会员或等待配额重置",
+                            "quota_exceeded": True,
+                            "quota": quota_status,
+                        }
+                    
+                    # 预扣 AI 使用量
+                    user.increment_ai_usage()
+                    await db.commit()
+        except Exception as quota_err:
+            logger.error(f"AI quota check failed: {quota_err}")
     
     try:
         # 获取 LLM (支持 per-action 配置)
@@ -224,10 +256,37 @@ async def smart_analyze_stream(
     Yields SSE-formatted chunks for real-time streaming response
     """
     import json
+    from sqlalchemy import select
+    from app.models.user import User
     
     if action_type not in ACTION_TO_PROMPT:
         yield f"data: {json.dumps({'error': f'未知的分析类型: {action_type}'})}\n\n"
         return
+    
+    # ================== AI 配额检查 ==================
+    paper = store.get(paper_id)
+    user_id = paper.get("user_id") if paper else None
+    
+    if user_id:
+        try:
+            async with async_session_maker() as db:
+                result = await db.execute(select(User).where(User.id == user_id))
+                user = result.scalar_one_or_none()
+                if user:
+                    # 重置配额
+                    user.reset_daily_quota_if_needed()
+                    
+                    # 检查配额
+                    if not user.can_use_ai:
+                        quota_status = user.get_quota_status()
+                        yield f"data: {json.dumps({'error': 'AI 配额已用完，请升级会员或等待配额重置', 'quota_exceeded': True, 'quota': quota_status})}\n\n"
+                        return
+                    
+                    # 预扣 AI 使用量
+                    user.increment_ai_usage()
+                    await db.commit()
+        except Exception as quota_err:
+            logger.error(f"AI quota check failed: {quota_err}")
     
     try:
         # 获取 LLM (支持 per-action 配置)
