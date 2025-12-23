@@ -140,7 +140,11 @@ class OpenAlexService:
             return None
     
     async def get_paper_by_arxiv(self, arxiv_id: str) -> Optional[OpenAlexPaper]:
-        """通过 arXiv ID 获取论文"""
+        """通过 arXiv ID 获取论文
+        
+        OpenAlex 不支持直接用 arXiv ID 过滤，但支持用 arXiv DOI 格式：
+        10.48550/arxiv.{arxiv_id}
+        """
         try:
             client = await self._get_client()
             
@@ -148,27 +152,23 @@ class OpenAlexService:
             if arxiv_id.lower().startswith("arxiv:"):
                 arxiv_id = arxiv_id.split(":", 1)[1]
             
-            response = await client.get(
-                "/works",
-                params={
-                    "filter": f"ids.arxiv:{arxiv_id}",
-                    "mailto": self.email,
-                }
-            )
+            # 方法1: 使用 arXiv DOI 格式直接获取
+            arxiv_doi = f"10.48550/arxiv.{arxiv_id}"
+            response = await client.get(f"/works/https://doi.org/{arxiv_doi}")
             
-            response.raise_for_status()
-            data = response.json()
-            results = data.get("results", [])
+            if response.status_code == 200:
+                return self._paper_from_dict(response.json())
             
-            if not results:
-                logger.info(f"OpenAlex: Paper not found by arXiv: {arxiv_id}")
-                return None
+            # 方法2: 如果DOI方式失败，尝试标题搜索（备用）
+            logger.info(f"OpenAlex: arXiv DOI not found, trying title search for {arxiv_id}")
             
-            return self._paper_from_dict(results[0])
+            # 无法获取标题时返回 None
+            return None
             
         except Exception as e:
             logger.warning(f"OpenAlex get_paper_by_arxiv error for {arxiv_id}: {e}")
             return None
+
     
     async def get_paper(self, identifier: str) -> Optional[OpenAlexPaper]:
         """
