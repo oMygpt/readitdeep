@@ -57,9 +57,10 @@ async def start_translation_task(paper_id: str) -> Dict[str, Any]:
     启动后台翻译任务
     
     这是主入口 - 翻译会在后台继续，即使客户端断开
+    支持续传：失败后可从上次成功的 chunk 继续
     
     Returns:
-        {"success": True/False, "status": "...", "message": "..."}
+        {"success": True/False, "status": "...", "message": "...", "resume_from": N}
     """
     paper = store.get(paper_id)
     if not paper:
@@ -67,10 +68,21 @@ async def start_translation_task(paper_id: str) -> Dict[str, Any]:
     
     # 检查是否已经在翻译或已翻译
     translation_status = paper.get("translation_status", "not_started")
+    
     if translation_status == "translating":
         return {"success": True, "status": "translating", "message": "翻译正在进行中"}
+    
     if translation_status == "completed" and paper.get("translated_content"):
         return {"success": True, "status": "completed", "message": "翻译已完成"}
+    
+    # ========== Checkpointing: 检测续传 ==========
+    resume_from = 0
+    existing_chunks = paper.get("translation_chunks", [])
+    if translation_status == "failed" and existing_chunks:
+        # 计算已完成的 chunk 数
+        done_count = sum(1 for c in existing_chunks if c.get("status") == "done")
+        resume_from = done_count
+        logger.info(f"Paper {paper_id}: Resuming translation from chunk {resume_from}")
     
     content = paper.get("markdown_content", "")
     if not content:
@@ -80,9 +92,10 @@ async def start_translation_task(paper_id: str) -> Dict[str, Any]:
     store.set(paper_id, {
         **paper,
         "translation_status": "translating",
-        "translation_progress": 0,
-        "translation_chunks_total": 0,
-        "translation_chunks_done": 0,
+        "translation_progress": 0 if resume_from == 0 else paper.get("translation_progress", 0),
+        "translation_chunks_total": paper.get("translation_chunks_total", 0),
+        "translation_chunks_done": resume_from,
+        "translation_error": None,  # 清除之前的错误
     })
     
     # 创建后台任务
@@ -92,13 +105,21 @@ async def start_translation_task(paper_id: str) -> Dict[str, Any]:
     # 任务完成时清理
     task.add_done_callback(lambda t: _active_translation_tasks.pop(paper_id, None))
     
-    logger.info(f"Started background translation for paper {paper_id}")
-    return {"success": True, "status": "translating", "message": "翻译已开始"}
+    if resume_from > 0:
+        logger.info(f"Resumed translation for paper {paper_id} from chunk {resume_from}")
+        return {"success": True, "status": "resuming", "message": f"从第 {resume_from+1} 块续传", "resume_from": resume_from}
+    else:
+        logger.info(f"Started background translation for paper {paper_id}")
+        return {"success": True, "status": "translating", "message": "翻译已开始"}
 
 
 async def _translate_paper_background(paper_id: str) -> None:
     """
-    后台翻译论文 - 增量保存，不依赖客户端连接
+    后台翻译论文 - 增量保存，支持续传
+    
+    Checkpointing:
+    - 每个 chunk 单独保存状态 (done/pending/failed)
+    - 失败后可从上次成功的 chunk 继续
     """
     try:
         paper = store.get(paper_id)
@@ -109,16 +130,40 @@ async def _translate_paper_background(paper_id: str) -> None:
         chunks = _split_content(content, max_chars=3000)
         total_chunks = len(chunks)
         
+        # ========== Checkpointing: 加载已有状态 ==========
+        existing_chunks = paper.get("translation_chunks", [])
+        translated_parts = []
+        resume_index = 0
+        
+        if existing_chunks and len(existing_chunks) == total_chunks:
+            # 有已存在的 checkpoint，加载已完成的部分
+            for ch in existing_chunks:
+                if ch.get("status") == "done" and ch.get("content"):
+                    translated_parts.append(ch["content"])
+                    resume_index = ch["index"] + 1
+                else:
+                    break  # 遇到未完成的停止
+            if resume_index > 0:
+                logger.info(f"Paper {paper_id}: Loaded {resume_index} completed chunks from checkpoint")
+        else:
+            # 初始化 chunk 状态
+            existing_chunks = [
+                {"index": i, "status": "pending", "content": ""}
+                for i in range(total_chunks)
+            ]
+        
         # 更新 chunk 总数
         store.set(paper_id, {
             **store.get(paper_id),
             "translation_chunks_total": total_chunks,
+            "translation_chunks": existing_chunks,
         })
         
-        translated_parts = []
         llm = get_translation_llm()
         
-        for i, chunk in enumerate(chunks):
+        # 从 resume_index 开始翻译
+        for i in range(resume_index, total_chunks):
+            chunk = chunks[i]
             prompt = TRANSLATION_PROMPT.format(content=chunk)
             chunk_result = []
             
@@ -129,13 +174,29 @@ async def _translate_paper_background(paper_id: str) -> None:
                 ]):
                     if token.content:
                         chunk_result.append(token.content)
+                
+                # 标记当前 chunk 为 done
+                chunk_content = "".join(chunk_result)
+                existing_chunks[i] = {"index": i, "status": "done", "content": chunk_content}
+                translated_parts.append(chunk_content)
+                
             except Exception as e:
                 logger.error(f"Translation error for chunk {i}: {e}")
-                chunk_result.append(f"\n\n[翻译错误: {str(e)}]\n\n")
+                # 标记当前 chunk 为 failed
+                existing_chunks[i] = {"index": i, "status": "failed", "content": "", "error": str(e)}
+                # 保存状态后抛出异常
+                current_paper = store.get(paper_id)
+                if current_paper:
+                    store.set(paper_id, {
+                        **current_paper,
+                        "translation_chunks": existing_chunks,
+                        "translation_status": "failed",
+                        "translation_error": f"Chunk {i} failed: {str(e)}",
+                        "translated_content": "\n\n".join(translated_parts),
+                    })
+                raise  # 保留已完成的 chunks，下次可续传
             
-            translated_parts.append("".join(chunk_result))
-            
-            # 增量保存进度
+            # 增量保存进度 + checkpoint
             current_paper = store.get(paper_id)
             if current_paper:
                 progress = int(((i + 1) / total_chunks) * 100)
@@ -144,7 +205,7 @@ async def _translate_paper_background(paper_id: str) -> None:
                     "translation_status": "translating",
                     "translation_progress": progress,
                     "translation_chunks_done": i + 1,
-                    # 增量保存已翻译内容
+                    "translation_chunks": existing_chunks,  # 保存 checkpoint
                     "translated_content": "\n\n".join(translated_parts),
                 })
         
@@ -156,15 +217,17 @@ async def _translate_paper_background(paper_id: str) -> None:
                 "translation_status": "completed",
                 "translation_progress": 100,
                 "is_translated": True,
+                "translation_chunks": existing_chunks,
                 "translated_content": "\n\n".join(translated_parts),
             })
         
-        logger.info(f"Paper {paper_id}: Background translation completed")
+        logger.info(f"Paper {paper_id}: Background translation completed ({total_chunks} chunks)")
         
     except Exception as e:
         logger.error(f"Background translation failed for {paper_id}: {e}")
         paper = store.get(paper_id)
-        if paper:
+        if paper and paper.get("translation_status") != "failed":
+            # 只在未已标记为 failed 时更新
             store.set(paper_id, {
                 **paper,
                 "translation_status": "failed",

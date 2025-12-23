@@ -4,9 +4,13 @@ Read it DEEP - API v1 路由
 
 from fastapi import APIRouter
 
-from app.api.v1 import papers, library, monitor, analysis, graph, classification, translate, workbench, auth, admin, quota, prompts
+from app.api.v1 import papers, library, monitor, analysis, graph, classification, translate, workbench, auth, admin, quota, prompts, authors
 
 router = APIRouter()
+
+# Authors (作者论文)
+router.include_router(authors.router, prefix="/papers", tags=["Authors"])
+
 
 # Auth (公开端点)
 router.include_router(auth.router, prefix="/auth", tags=["Auth"])

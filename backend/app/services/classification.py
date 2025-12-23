@@ -3,8 +3,8 @@ Read it DEEP - 智能论文分类服务
 
 功能:
 - LLM 自动分析论文内容并建议标签
-- 不预定义分类，根据内容动态建议
-- 支持多标签
+- 预定义 Category 列表，由 LLM 从中选择
+- 自由 Tags，由 LLM 动态生成
 - 用户可确认/修改/添加标签
 """
 
@@ -24,6 +24,24 @@ from app.core.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+
+# 预定义 Category 列表 (v1.1.0)
+PREDEFINED_CATEGORIES = [
+    "Machine Learning",
+    "Natural Language Processing",
+    "Computer Vision",
+    "Reinforcement Learning",
+    "Speech & Audio",
+    "Robotics",
+    "Data Mining",
+    "AI for Science",
+    "AI Safety & Ethics",
+    "Systems & Infrastructure",
+    "Multimodal",
+    "Generative AI",
+    "Other",
+]
 
 
 async def get_llm_for_classification(paper_id: str):
@@ -51,19 +69,37 @@ class TagSuggestion:
     reason: str         # 建议原因
 
 
-CLASSIFICATION_PROMPT = """请分析以下学术论文内容，为其推荐合适的分类标签。
+@dataclass
+class ClassificationResult:
+    """分类结果 (v1.1.0)"""
+    category: str              # 主分类（来自预定义列表）
+    tags: list[TagSuggestion]  # 标签建议列表
 
-## 要求
-1. 根据论文的研究领域、方法、应用场景推荐 2-5 个标签
-2. 标签应该简洁（2-4个中文字或英文词组）
-3. 优先使用学术领域通用术语
+
+# v1.1.0 Prompt: 同时输出 category + tags
+CLASSIFICATION_PROMPT = """请分析以下学术论文内容，完成分类和标签推荐。
+
+## 分类规则 (Category)
+从以下预定义列表中选择 **1个** 最匹配的主分类：
+- Machine Learning: 机器学习基础理论、优化算法、模型架构
+- Natural Language Processing: 文本处理、语言模型、对话系统、翻译
+- Computer Vision: 图像识别、目标检测、视频分析、3D视觉
+- Reinforcement Learning: 强化学习、决策优化、多智能体
+- Speech & Audio: 语音识别、语音合成、音频处理
+- Robotics: 机器人控制、运动规划、人机交互
+- Data Mining: 数据分析、推荐系统、知识图谱
+- AI for Science: 科学计算、生物AI、化学AI、物理模拟
+- AI Safety & Ethics: 安全对齐、可解释性、公平性、隐私
+- Systems & Infrastructure: 分布式训练、模型压缩、推理优化
+- Multimodal: 多模态融合、视觉语言、跨模态检索
+- Generative AI: 生成模型、扩散模型、创意AI
+- Other: 不属于以上类别
+
+## 标签规则 (Tags)
+1. 推荐 2-5 个细粒度标签
+2. 标签可自由生成，不受预定义限制
+3. 标签应简洁（2-4个中文字或英文词组）
 4. 每个标签需说明推荐理由
-
-## 标签类型参考
-- 研究领域：如 "深度学习", "NLP", "计算机视觉", "强化学习"
-- 任务类型：如 "文本分类", "目标检测", "机器翻译", "对话系统"
-- 技术方法：如 "Transformer", "GNN", "Diffusion", "RLHF"
-- 应用场景：如 "医疗AI", "金融风控", "自动驾驶"
 
 ## 论文内容
 {content}
@@ -72,6 +108,7 @@ CLASSIFICATION_PROMPT = """请分析以下学术论文内容，为其推荐合�
 请以 JSON 格式返回：
 ```json
 {{
+  "category": "从上方列表选择一个（英文）",
   "tags": [
     {{"name": "标签名", "confidence": 0.95, "reason": "推荐理由"}}
   ]
@@ -120,11 +157,11 @@ def get_all_categories() -> list[str]:
 
 async def suggest_tags(paper_id: str) -> list[TagSuggestion]:
     """
-    为论文生成标签建议
+    为论文生成 Category + Tags (v1.1.0)
     
     规则:
-    - 只保留置信度 >= 0.85 的标签
-    - 最多 3 个标签
+    - Category: 从 PREDEFINED_CATEGORIES 中选择
+    - Tags: 只保留置信度 >= 0.85 的标签，最多 3 个
     - 自动确认为正式标签
     
     Args:
@@ -148,14 +185,31 @@ async def suggest_tags(paper_id: str) -> list[TagSuggestion]:
     try:
         llm = await get_llm_for_classification(paper_id)
         response = await llm.ainvoke([
-            SystemMessage(content="你是一个学术论文分类专家，擅长识别论文的研究领域和技术方向。"),
+            SystemMessage(content="你是一个学术论文分类专家。请根据论文内容选择最匹配的分类，并推荐相关标签。"),
             HumanMessage(content=prompt)
         ])
         
         # 解析 JSON 响应
         result = _parse_json_response(response.content)
-        tags_raw = result.get("tags", [])
         
+        # ========== v1.1.0: 解析 Category ==========
+        category = result.get("category", "Other")
+        # 验证 category 是否在预定义列表中
+        if category not in PREDEFINED_CATEGORIES:
+            logger.warning(f"Paper {paper_id}: Unknown category '{category}', fallback to 'Other'")
+            # 尝试模糊匹配
+            category_lower = category.lower()
+            matched = False
+            for predefined in PREDEFINED_CATEGORIES:
+                if predefined.lower() in category_lower or category_lower in predefined.lower():
+                    category = predefined
+                    matched = True
+                    break
+            if not matched:
+                category = "Other"
+        
+        # ========== 解析 Tags ==========
+        tags_raw = result.get("tags", [])
         suggestions = []
         for tag in tags_raw:
             suggestions.append(TagSuggestion(
@@ -171,22 +225,22 @@ async def suggest_tags(paper_id: str) -> list[TagSuggestion]:
         MIN_CONFIDENCE = 0.85
         MAX_TAGS = 3
         high_confidence_tags = [s for s in suggestions if s.confidence >= MIN_CONFIDENCE][:MAX_TAGS]
-        
-        # 更新论文的标签 (自动确认)
         confirmed_tag_names = [s.name for s in high_confidence_tags]
         
+        # ========== 更新论文: category + tags ==========
         store.set(paper_id, {
             **paper,
-            "tags": confirmed_tag_names,  # 直接设为正式标签
-            "suggested_tags": [s.name for s in suggestions],  # 保留所有建议供参考
+            "category": category,  # v1.1.0: 直接使用 LLM 返回的 category
+            "tags": confirmed_tag_names,
+            "suggested_tags": [s.name for s in suggestions],
             "tag_suggestions": [
                 {"name": s.name, "confidence": s.confidence, "reason": s.reason}
                 for s in suggestions
             ],
-            "tags_confirmed": True,  # 自动确认
+            "tags_confirmed": True,
         })
         
-        logger.info(f"Paper {paper_id}: Auto-confirmed {len(confirmed_tag_names)} tags (confidence >= {MIN_CONFIDENCE})")
+        logger.info(f"Paper {paper_id}: Category='{category}', Tags={confirmed_tag_names}")
         return high_confidence_tags
         
     except Exception as e:

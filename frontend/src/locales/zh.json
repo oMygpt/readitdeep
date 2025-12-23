@@ -287,6 +287,16 @@
         "citedBy": "被引用",
         "references": "参考文献"
     },
+    "authors": {
+        "title": "作者论文",
+        "subtitle": "查看论文作者的主要研究成果",
+        "works": "发表论文",
+        "citations": "被引用",
+        "affiliation": "所属机构",
+        "noData": "暂无作者信息",
+        "loading": "正在加载作者信息...",
+        "viewProfile": "在 OpenAlex 查看完整资料"
+    },
     "explore": {
         "title": "探索",
         "overview": "论文概览",
