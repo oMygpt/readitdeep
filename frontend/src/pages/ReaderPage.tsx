@@ -49,7 +49,7 @@ export default function ReaderPage() {
     const [hoveredCitation, setHoveredCitation] = useState<{ id: string, x: number, y: number } | null>(null);
     const [showLeftSidebar, setShowLeftSidebar] = useState(true); // Left sidebar visibility
     const [showRightSidebar, setShowRightSidebar] = useState(true); // Right sidebar (Workbench) - auto open
-    const [sidebarTab, setSidebarTab] = useState<'analysis' | 'graph' | 'structure'>('analysis'); // Sidebar tab
+    const [sidebarTab, setSidebarTab] = useState<'analysis' | 'graph' | 'structure'>('structure'); // Sidebar tab - 默认显示目录结构
     const [viewMode, setViewMode] = useState<'overview' | 'read'>('overview'); // Explore vs Read mode
     const mainContentRef = useRef<HTMLElement>(null);
 

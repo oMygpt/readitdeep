@@ -14,7 +14,6 @@ import {
     BookOpen,
     Loader2,
     FileText,
-    FlaskConical,
     Database,
     Code,
     Network,
@@ -110,28 +109,178 @@ export default function ExploreOverview({
                             </div>
                         </section>
 
-                        {/* Summary */}
+                        {/* Paper Overview */}
                         <section className="bg-surface rounded-2xl border border-border shadow-sm overflow-hidden">
                             <div className="px-6 py-4 border-b border-border flex items-center gap-3">
-                                <div className="p-2 bg-success/10 rounded-lg">
+                                <div className="p-2 bg-gradient-to-br from-success/20 to-primary/10 rounded-lg">
                                     <FileText className="w-5 h-5 text-success" />
                                 </div>
-                                <h2 className="text-lg font-bold text-content-main">论文摘要</h2>
+                                <div>
+                                    <h2 className="text-lg font-bold text-content-main">Paper Overview</h2>
+                                    <p className="text-xs text-content-dim">AI-generated summary of key findings</p>
+                                </div>
                             </div>
-                            <div className="px-6 py-5">
+                            <div className="px-6 py-6">
                                 {analysis?.summary ? (
-                                    <div className="prose prose-slate max-w-none text-content-main leading-relaxed">
-                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                    <div className="prose prose-slate max-w-none">
+                                        <ReactMarkdown
+                                            remarkPlugins={[remarkGfm]}
+                                            components={{
+                                                // H1 标题 - 主标题样式，带图标和渐变背景
+                                                h1: ({ children }) => (
+                                                    <h1 className="text-xl font-bold text-content-main mt-0 mb-5 pb-3 border-b border-border flex items-center gap-3">
+                                                        <span className="text-2xl">📄</span>
+                                                        <span>{children}</span>
+                                                    </h1>
+                                                ),
+                                                // H2 标题 - 带 emoji 和背景的段落标题
+                                                h2: ({ children }) => (
+                                                    <h2 className="text-base font-bold text-content-main mt-8 mb-4 p-3 bg-gradient-to-r from-surface-elevated to-transparent rounded-lg border-l-4 border-primary flex items-center gap-2">
+                                                        {children}
+                                                    </h2>
+                                                ),
+                                                // H3 标题 - 次级标题
+                                                h3: ({ children }) => (
+                                                    <h3 className="text-sm font-semibold text-content-main mt-5 mb-2 flex items-center gap-2">
+                                                        <span className="w-2 h-2 bg-secondary rounded-full"></span>
+                                                        {children}
+                                                    </h3>
+                                                ),
+                                                // H4 标题
+                                                h4: ({ children }) => (
+                                                    <h4 className="text-sm font-medium text-content-muted mt-4 mb-2 uppercase tracking-wide">
+                                                        {children}
+                                                    </h4>
+                                                ),
+                                                // 段落 - 优化行高和间距
+                                                p: ({ children }) => (
+                                                    <p className="text-content-main leading-relaxed mb-4 text-[15px] tracking-wide">
+                                                        {children}
+                                                    </p>
+                                                ),
+                                                // 无序列表
+                                                ul: ({ children }) => (
+                                                    <ul className="my-4 ml-0 space-y-2">
+                                                        {children}
+                                                    </ul>
+                                                ),
+                                                // 有序列表
+                                                ol: ({ children }) => (
+                                                    <ol className="my-4 ml-0 space-y-2 list-decimal list-inside">
+                                                        {children}
+                                                    </ol>
+                                                ),
+                                                // 列表项 - 带图标样式
+                                                li: ({ children }) => (
+                                                    <li className="text-content-main leading-relaxed text-[15px] flex items-start gap-2 pl-0">
+                                                        <span className="text-primary mt-1.5 flex-shrink-0">•</span>
+                                                        <span className="flex-1">{children}</span>
+                                                    </li>
+                                                ),
+                                                // 强调文字 - 主题色高亮
+                                                strong: ({ children }) => (
+                                                    <strong className="font-semibold text-primary bg-primary/5 px-1 rounded">
+                                                        {children}
+                                                    </strong>
+                                                ),
+                                                // 斜体
+                                                em: ({ children }) => (
+                                                    <em className="italic text-content-muted">
+                                                        {children}
+                                                    </em>
+                                                ),
+                                                // 引用块 - 卡片式设计
+                                                blockquote: ({ children }) => (
+                                                    <blockquote className="my-5 p-4 bg-gradient-to-r from-primary/10 to-primary/5 border-l-4 border-primary rounded-r-xl text-content-main not-italic shadow-sm">
+                                                        <div className="flex items-start gap-3">
+                                                            <span className="text-primary text-lg flex-shrink-0">💡</span>
+                                                            <div className="flex-1 [&>p]:mb-0">{children}</div>
+                                                        </div>
+                                                    </blockquote>
+                                                ),
+                                                // 行内代码
+                                                code: ({ children, className }) => {
+                                                    const isBlock = className?.includes('language-');
+                                                    if (isBlock) {
+                                                        return (
+                                                            <code className={`block bg-slate-900 text-slate-100 p-4 rounded-lg text-sm font-mono overflow-x-auto ${className}`}>
+                                                                {children}
+                                                            </code>
+                                                        );
+                                                    }
+                                                    return (
+                                                        <code className="text-primary bg-primary/10 px-1.5 py-0.5 rounded text-sm font-mono">
+                                                            {children}
+                                                        </code>
+                                                    );
+                                                },
+                                                // 代码块
+                                                pre: ({ children }) => (
+                                                    <pre className="my-4 rounded-xl overflow-hidden shadow-md">
+                                                        {children}
+                                                    </pre>
+                                                ),
+                                                // 表格 - 现代化设计
+                                                table: ({ children }) => (
+                                                    <div className="my-5 overflow-x-auto rounded-xl border border-border shadow-sm">
+                                                        <table className="w-full text-sm">
+                                                            {children}
+                                                        </table>
+                                                    </div>
+                                                ),
+                                                thead: ({ children }) => (
+                                                    <thead className="bg-gradient-to-r from-surface-elevated to-surface border-b border-border">
+                                                        {children}
+                                                    </thead>
+                                                ),
+                                                th: ({ children }) => (
+                                                    <th className="px-4 py-3 text-left font-semibold text-content-main text-sm">
+                                                        {children}
+                                                    </th>
+                                                ),
+                                                td: ({ children }) => (
+                                                    <td className="px-4 py-3 text-content-main border-b border-border/50 text-[14px] leading-relaxed">
+                                                        {children}
+                                                    </td>
+                                                ),
+                                                tr: ({ children }) => (
+                                                    <tr className="hover:bg-surface-elevated/50 transition-colors">
+                                                        {children}
+                                                    </tr>
+                                                ),
+                                                // 分割线
+                                                hr: () => (
+                                                    <hr className="my-6 border-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+                                                ),
+                                                // 链接
+                                                a: ({ href, children }) => (
+                                                    <a
+                                                        href={href}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="text-primary hover:text-primary-hover underline underline-offset-2 decoration-primary/30 hover:decoration-primary transition-colors"
+                                                    >
+                                                        {children}
+                                                    </a>
+                                                ),
+                                            }}
+                                        >
                                             {analysis.summary}
                                         </ReactMarkdown>
                                     </div>
                                 ) : (
-                                    <p className="text-content-dim italic">暂无摘要分析</p>
+                                    <div className="text-center py-8">
+                                        <div className="w-12 h-12 bg-surface-elevated rounded-full flex items-center justify-center mx-auto mb-3">
+                                            <FileText className="w-6 h-6 text-content-dim" />
+                                        </div>
+                                        <p className="text-content-dim">No summary available yet</p>
+                                        <p className="text-xs text-content-dim mt-1">Analysis will appear after processing</p>
+                                    </div>
                                 )}
                             </div>
                         </section>
 
-                        {/* Methods */}
+                        {/* Methods - HIDDEN (保留代码，暂时不显示)
                         <section className="bg-surface rounded-2xl border border-border shadow-sm overflow-hidden">
                             <div className="px-6 py-4 border-b border-border flex items-center gap-3">
                                 <div className="p-2 bg-primary/10 rounded-lg">
@@ -154,6 +303,7 @@ export default function ExploreOverview({
                                 )}
                             </div>
                         </section>
+                        */}
 
                         {/* Datasets & Code */}
                         <section className="bg-surface rounded-2xl border border-border shadow-sm overflow-hidden">
