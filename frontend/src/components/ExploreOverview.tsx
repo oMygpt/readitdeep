@@ -20,11 +20,13 @@ import {
     ChevronRight,
     ExternalLink,
     Sparkles,
+    Users,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { analysisApi } from '../lib/api';
 import PaperGraph from './PaperGraph';
+import AuthorWorks from './AuthorWorks';
 
 interface ExploreOverviewProps {
     paperId: string;
@@ -107,6 +109,20 @@ export default function ExploreOverview({
                             <div className="min-h-[300px]">
                                 <PaperGraph paperId={paperId} />
                             </div>
+                        </section>
+
+                        {/* Author Works */}
+                        <section className="bg-surface rounded-2xl border border-border shadow-sm overflow-hidden">
+                            <div className="px-6 py-4 border-b border-border flex items-center gap-3">
+                                <div className="p-2 bg-purple-500/10 rounded-lg">
+                                    <Users className="w-5 h-5 text-purple-500" />
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-bold text-content-main">作者论文</h2>
+                                    <p className="text-xs text-content-dim">查看论文作者的主要研究成果</p>
+                                </div>
+                            </div>
+                            <AuthorWorks paperId={paperId} />
                         </section>
 
                         {/* Paper Overview */}

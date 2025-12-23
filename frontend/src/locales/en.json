@@ -287,6 +287,16 @@
         "citedBy": "Cited By",
         "references": "References"
     },
+    "authors": {
+        "title": "Author Works",
+        "subtitle": "Explore the authors' main research publications",
+        "works": "Publications",
+        "citations": "Citations",
+        "affiliation": "Affiliation",
+        "noData": "No author information available",
+        "loading": "Loading author information...",
+        "viewProfile": "View full profile on OpenAlex"
+    },
     "explore": {
         "title": "Explore",
         "overview": "Paper Overview",

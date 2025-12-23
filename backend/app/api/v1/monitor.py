@@ -104,3 +104,86 @@ async def list_active_tasks() -> dict:
     ]
     
     return {"tasks": active_tasks, "count": len(active_tasks)}
+
+
+# ==================== SSE Streaming ====================
+import asyncio
+import json
+from fastapi.responses import StreamingResponse
+
+
+async def status_event_generator(paper_id: str):
+    """
+    SSE 事件生成器 - 实时推送论文处理进度
+    
+    前端使用 EventSource 连接此端点，接收实时更新：
+    - event: progress
+    - data: {"status": "analyzing", "progress": 70, "message": "..."}
+    """
+    last_status = None
+    retry_count = 0
+    max_retries = 300  # 最多等待 5 分钟 (300 * 1秒)
+    
+    while retry_count < max_retries:
+        paper = store.get(paper_id)
+        if not paper:
+            yield f"event: error\ndata: {json.dumps({'error': 'Paper not found'})}\n\n"
+            break
+        
+        current_status = paper.get("status")
+        
+        # 只在状态变化时发送事件（减少网络流量）
+        if current_status != last_status:
+            message = STATUS_MESSAGE.get(current_status, "处理中...")
+            if current_status == "failed" and paper.get("error_message"):
+                message = f"解析失败: {paper.get('error_message')}"
+            
+            event_data = {
+                "status": current_status,
+                "progress": STATUS_PROGRESS.get(current_status, 0),
+                "message": message,
+                "updated_at": paper.get("updated_at", datetime.utcnow()).isoformat() if hasattr(paper.get("updated_at", datetime.utcnow()), 'isoformat') else str(paper.get("updated_at", ""))
+            }
+            
+            yield f"event: progress\ndata: {json.dumps(event_data, ensure_ascii=False)}\n\n"
+            last_status = current_status
+            
+            # 如果已完成或失败，发送完成事件并结束
+            if current_status in ["completed", "failed"]:
+                yield f"event: done\ndata: {json.dumps({'final_status': current_status})}\n\n"
+                break
+        
+        await asyncio.sleep(1)  # 每秒检查一次
+        retry_count += 1
+    
+    # 超时
+    if retry_count >= max_retries:
+        yield f"event: timeout\ndata: {json.dumps({'error': 'Timeout waiting for completion'})}\n\n"
+
+
+@router.get("/{paper_id}/stream")
+async def stream_task_status(paper_id: str):
+    """
+    SSE 实时进度流
+    
+    前端连接方式:
+    ```javascript
+    const eventSource = new EventSource(`/api/v1/monitor/${paperId}/stream`);
+    eventSource.addEventListener('progress', (e) => {
+      const data = JSON.parse(e.data);
+      console.log(data.status, data.progress, data.message);
+    });
+    eventSource.addEventListener('done', () => {
+      eventSource.close();
+    });
+    ```
+    """
+    return StreamingResponse(
+        status_event_generator(paper_id),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Nginx 禁用缓冲
+        }
+    )

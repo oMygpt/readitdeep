@@ -35,6 +35,17 @@ class OpenAlexPaper:
     abstract: Optional[str] = None
 
 
+@dataclass
+class OpenAlexAuthor:
+    """OpenAlex 作者数据"""
+    openalex_id: str  # https://openalex.org/A123456
+    display_name: str
+    works_count: int
+    cited_by_count: int
+    affiliation: Optional[str] = None
+    orcid: Optional[str] = None
+
+
 class OpenAlexApiError(Exception):
     """OpenAlex API 错误"""
     def __init__(self, message: str, status_code: int = 500):
@@ -319,6 +330,174 @@ class OpenAlexService:
             
         except Exception as e:
             logger.warning(f"OpenAlex get_references error for {identifier}: {e}")
+            return []
+    
+    def _author_from_dict(self, data: dict) -> OpenAlexAuthor:
+        """Convert OpenAlex author API response to OpenAlexAuthor"""
+        # Extract affiliation (last known institution)
+        affiliation = None
+        last_known_institutions = data.get("last_known_institutions", [])
+        if last_known_institutions:
+            affiliation = last_known_institutions[0].get("display_name")
+        
+        # Extract ORCID
+        orcid = None
+        ids = data.get("ids", {})
+        if ids.get("orcid"):
+            orcid = ids["orcid"].replace("https://orcid.org/", "")
+        
+        return OpenAlexAuthor(
+            openalex_id=data.get("id", ""),
+            display_name=data.get("display_name") or "",
+            works_count=data.get("works_count", 0),
+            cited_by_count=data.get("cited_by_count", 0),
+            affiliation=affiliation,
+            orcid=orcid,
+        )
+    
+    async def get_authors_from_paper(self, identifier: str) -> List[OpenAlexAuthor]:
+        """
+        从论文获取作者信息
+        
+        Args:
+            identifier: DOI 或 arXiv ID
+        
+        Returns:
+            作者列表，每个作者包含详细信息
+        """
+        try:
+            # 先获取论文数据
+            paper = await self.get_paper(identifier)
+            if not paper:
+                logger.info(f"OpenAlex: Cannot find paper for authors: {identifier}")
+                return []
+            
+            work_id = paper.openalex_id.split("/")[-1]
+            
+            # 获取完整论文数据（包含作者详情）
+            client = await self._get_client()
+            response = await client.get(
+                f"/works/{work_id}",
+                params={"select": "authorships"}
+            )
+            
+            response.raise_for_status()
+            data = response.json()
+            
+            authors = []
+            for authorship in data.get("authorships", []):
+                author_data = authorship.get("author", {})
+                if not author_data.get("id"):
+                    continue
+                
+                # 获取作者详细信息
+                author_id = author_data["id"].split("/")[-1]
+                try:
+                    author_response = await client.get(f"/authors/{author_id}")
+                    if author_response.status_code == 200:
+                        author_detail = author_response.json()
+                        authors.append(self._author_from_dict(author_detail))
+                except Exception as e:
+                    logger.warning(f"OpenAlex: Failed to get author {author_id}: {e}")
+                    # 使用基本信息
+                    authors.append(OpenAlexAuthor(
+                        openalex_id=author_data.get("id", ""),
+                        display_name=author_data.get("display_name", ""),
+                        works_count=0,
+                        cited_by_count=0,
+                    ))
+            
+            logger.info(f"OpenAlex: Found {len(authors)} authors for {identifier}")
+            return authors
+            
+        except Exception as e:
+            logger.warning(f"OpenAlex get_authors_from_paper error for {identifier}: {e}")
+            return []
+    
+    async def get_author_works(
+        self, 
+        author_id: str, 
+        limit: int = 10,
+        sort_by: str = "cited_by_count:desc"
+    ) -> List[OpenAlexPaper]:
+        """
+        获取作者的论文列表
+        
+        Args:
+            author_id: OpenAlex 作者 ID (例如 "A123456" 或完整 URL)
+            limit: 最大返回数量
+            sort_by: 排序方式 (默认按引用数降序)
+        
+        Returns:
+            论文列表
+        """
+        try:
+            client = await self._get_client()
+            
+            # Normalize ID
+            if author_id.startswith("https://openalex.org/"):
+                author_id = author_id.split("/")[-1]
+            
+            response = await client.get(
+                "/works",
+                params={
+                    "filter": f"authorships.author.id:{author_id}",
+                    "per-page": limit,
+                    "sort": sort_by,
+                    "mailto": self.email,
+                }
+            )
+            
+            response.raise_for_status()
+            data = response.json()
+            
+            results = []
+            for item in data.get("results", []):
+                if item.get("title"):
+                    results.append(self._paper_from_dict(item))
+            
+            logger.info(f"OpenAlex: Found {len(results)} works for author {author_id}")
+            return results
+            
+        except Exception as e:
+            logger.warning(f"OpenAlex get_author_works error for {author_id}: {e}")
+            return []
+    
+    async def search_author(self, name: str, limit: int = 5) -> List[OpenAlexAuthor]:
+        """
+        按名称搜索作者
+        
+        Args:
+            name: 作者名称
+            limit: 最大返回数量
+        
+        Returns:
+            匹配的作者列表
+        """
+        try:
+            client = await self._get_client()
+            
+            response = await client.get(
+                "/authors",
+                params={
+                    "search": name,
+                    "per-page": limit,
+                    "mailto": self.email,
+                }
+            )
+            
+            response.raise_for_status()
+            data = response.json()
+            
+            results = []
+            for item in data.get("results", []):
+                results.append(self._author_from_dict(item))
+            
+            logger.info(f"OpenAlex: Found {len(results)} authors matching '{name}'")
+            return results
+            
+        except Exception as e:
+            logger.warning(f"OpenAlex search_author error for '{name}': {e}")
             return []
     
     async def close(self):

@@ -144,6 +144,81 @@ export const monitorApi = {
         const { data } = await api.get('/monitor');
         return data;
     },
+
+    /**
+     * SSE 实时进度流
+     * 
+     * 用法:
+     * ```typescript
+     * const cleanup = monitorApi.streamStatus(paperId, {
+     *   onProgress: (data) => console.log(data.status, data.progress),
+     *   onDone: () => console.log('Completed'),
+     *   onError: (err) => console.error(err),
+     * });
+     * // 清理时调用
+     * cleanup();
+     * ```
+     */
+    streamStatus: (
+        paperId: string,
+        callbacks: {
+            onProgress?: (data: { status: string; progress: number; message: string }) => void;
+            onDone?: (finalStatus: string) => void;
+            onError?: (error: string) => void;
+        }
+    ): (() => void) => {
+        const eventSource = new EventSource(`/api/v1/monitor/${paperId}/stream`);
+
+        eventSource.addEventListener('progress', (e: MessageEvent) => {
+            try {
+                const data = JSON.parse(e.data);
+                callbacks.onProgress?.(data);
+            } catch (err) {
+                console.error('Failed to parse progress event:', err);
+            }
+        });
+
+        eventSource.addEventListener('done', (e: MessageEvent) => {
+            try {
+                const data = JSON.parse(e.data);
+                callbacks.onDone?.(data.final_status);
+            } catch {
+                callbacks.onDone?.('completed');
+            }
+            eventSource.close();
+        });
+
+        eventSource.addEventListener('error', (e: MessageEvent) => {
+            try {
+                const data = JSON.parse(e.data);
+                callbacks.onError?.(data.error);
+            } catch {
+                callbacks.onError?.('Connection error');
+            }
+            eventSource.close();
+        });
+
+        eventSource.addEventListener('timeout', (e: MessageEvent) => {
+            try {
+                const data = JSON.parse(e.data);
+                callbacks.onError?.(data.error);
+            } catch {
+                callbacks.onError?.('Timeout');
+            }
+            eventSource.close();
+        });
+
+        // EventSource 连接错误处理
+        eventSource.onerror = () => {
+            callbacks.onError?.('SSE connection failed');
+            eventSource.close();
+        };
+
+        // 返回清理函数
+        return () => {
+            eventSource.close();
+        };
+    },
 };
 
 // Analysis API Types
@@ -254,6 +329,40 @@ export const graphApi = {
     expand: async (paperId: string, nodeExternalId: string, limit?: number): Promise<PaperGraphData> => {
         const { data } = await api.get(`/papers/${paperId}/graph/expand/${encodeURIComponent(nodeExternalId)}`, {
             params: { limit: limit || 5 }
+        });
+        return data;
+    },
+};
+
+// Author API Types
+export interface AuthorWork {
+    title: string;
+    year?: number;
+    venue?: string;
+    citation_count?: number;
+    doi?: string;
+    openalex_url: string;
+}
+
+export interface AuthorWithWorks {
+    openalex_id: string;
+    display_name: string;
+    affiliation?: string;
+    works_count: number;
+    cited_by_count: number;
+    orcid?: string;
+    top_works: AuthorWork[];
+}
+
+export interface AuthorsWorksResponse {
+    paper_id: string;
+    authors: AuthorWithWorks[];
+}
+
+export const authorsApi = {
+    getAuthorsWorks: async (paperId: string, worksLimit?: number): Promise<AuthorsWorksResponse> => {
+        const { data } = await api.get(`/papers/${paperId}/authors-works`, {
+            params: { works_limit: worksLimit }
         });
         return data;
     },

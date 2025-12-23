@@ -259,29 +259,10 @@ async def parse_paper_task(paper_id: str, file_path: str, file_content: bytes, f
         # 5. Classification
         update_paper({"status": "classifying"})
         
-        # Import category utilities
-        from app.services.classification import suggest_tags, find_similar_category, get_all_categories
+        # v1.1.0: suggest_tags now returns category + tags from LLM directly
+        from app.services.classification import suggest_tags
         
-        tags = await suggest_tags(paper_id)
-        
-        # 自动设置 category（合并相似分类）
-        if tags:
-            paper = store.get(paper_id)
-            if paper and not paper.get("category"):
-                top_tag = tags[0].name if hasattr(tags[0], 'name') else str(tags[0])
-                
-                # 检查是否有相似的已有分类
-                existing_categories = get_all_categories()
-                similar_category = find_similar_category(top_tag, existing_categories)
-                
-                if similar_category:
-                    # 合并到已有分类
-                    update_paper({"category": similar_category})
-                    logger.info(f"Paper {paper_id}: Merged into existing category '{similar_category}'")
-                else:
-                    # 创建新分类
-                    update_paper({"category": top_tag})
-                    logger.info(f"Paper {paper_id}: Created new category '{top_tag}'")
+        await suggest_tags(paper_id)  # category is saved inside this function
 
         # Finalize
         update_paper({"status": "completed"})
@@ -719,21 +700,8 @@ async def run_analysis_pipeline(paper_id: str, user_id: str):
                 analysis_data["summary"] = res_summary.get("summary")
             update_paper({"analysis": analysis_data})
         
-        # 4. Classification with category consolidation
-        from app.services.classification import find_similar_category, get_all_categories
-        tags = await suggest_tags(paper_id)
-        
-        if tags:
-            paper = store.get(paper_id)
-            if paper and not paper.get("category"):
-                top_tag = tags[0].name if hasattr(tags[0], 'name') else str(tags[0])
-                existing_categories = get_all_categories()
-                similar_category = find_similar_category(top_tag, existing_categories)
-                
-                if similar_category:
-                    update_paper({"category": similar_category})
-                else:
-                    update_paper({"category": top_tag})
+        # 4. Classification - v1.1.0: category is now handled inside suggest_tags
+        await suggest_tags(paper_id)
         
         # Final
         update_paper({"status": "completed"})
@@ -794,3 +762,87 @@ async def trigger_analysis_endpoint(
         )
         return {"status": "triggered", "message": "PDF 重新解析任务已启动"}
 
+
+# ==================== Reference Analysis ====================
+
+class ReferenceAnalysisResponse(BaseModel):
+    """引用分析响应"""
+    paper_id: str
+    references: list[dict]
+    ai_summary: str
+    status: str
+    error: Optional[str] = None
+
+
+@router.post("/{paper_id}/references/analyze", response_model=ReferenceAnalysisResponse)
+async def analyze_paper_references(
+    paper_id: str,
+    limit: int = 5,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    用户触发的引用论文分析
+    
+    - 调用 OpenAlex 获取该论文引用的 top N 论文
+    - LLM 生成"相关工作总结"
+    - 结果缓存在 store 中
+    
+    Args:
+        paper_id: 论文 ID
+        limit: 获取的引用数量 (默认 5，最大 10)
+    """
+    paper = store.get(paper_id)
+    if not paper:
+        raise HTTPException(404, "论文不存在")
+    
+    # 权限检查
+    if paper.get("user_id") != current_user.id and not current_user.is_admin:
+        raise HTTPException(403, "无权访问此论文")
+    
+    # 限制数量
+    limit = min(limit, 10)
+    
+    from app.services.reference_analysis import analyze_references
+    
+    result = await analyze_references(paper_id, limit=limit)
+    
+    return ReferenceAnalysisResponse(
+        paper_id=result.paper_id,
+        references=result.references,
+        ai_summary=result.ai_summary,
+        status=result.status,
+        error=result.error
+    )
+
+
+@router.get("/{paper_id}/references/analysis")
+async def get_paper_reference_analysis(
+    paper_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    获取已缓存的引用分析结果
+    
+    如果没有缓存，返回 null
+    """
+    paper = store.get(paper_id)
+    if not paper:
+        raise HTTPException(404, "论文不存在")
+    
+    # 权限检查
+    if paper.get("user_id") != current_user.id and not current_user.is_admin:
+        raise HTTPException(403, "无权访问此论文")
+    
+    from app.services.reference_analysis import get_cached_reference_analysis
+    
+    cached = get_cached_reference_analysis(paper_id)
+    if cached:
+        return {
+            "paper_id": paper_id,
+            "references": cached.get("references", []),
+            "ai_summary": cached.get("ai_summary", ""),
+            "status": cached.get("status", "completed"),
+            "cached": True
+        }
+    
+    return {"paper_id": paper_id, "cached": False, "message": "未找到缓存的分析结果"}
