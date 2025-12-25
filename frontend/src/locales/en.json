@@ -85,6 +85,9 @@
         "retry": "Retry",
         "smartWorkbench": "Smart Workbench",
         "workbenchDesc": "Aggregate all research materials",
+        "teams": "Team Collaboration",
+        "teamsDesc": "Shared research & collaboration",
+        "shareToTeam": "Share to Team",
         "deepReadAI": "Deep Read AI",
         "deepReadAIDesc": "Start by uploading a PDF. I will parse layout, formulas, and references for you.",
         "tableHeaders": {

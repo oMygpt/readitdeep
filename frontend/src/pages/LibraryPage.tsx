@@ -22,6 +22,10 @@ import {
     ChevronRight,
     Edit2,
     RefreshCw,
+    Users,
+    Share2,
+    CheckSquare,
+    Square,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { libraryApi, papersApi, monitorApi, analysisApi } from '../lib/api';
@@ -29,6 +33,7 @@ import UserMenu from '../components/UserMenu';
 import CategoryTagEditor from '../components/CategoryTagEditor';
 import QuotaBadge from '../components/QuotaBadge';
 import UpgradeModal from '../components/UpgradeModal';
+import ShareToTeamModal from '../components/ShareToTeamModal';
 
 export default function LibraryPage() {
     const { t } = useTranslation();
@@ -47,6 +52,10 @@ export default function LibraryPage() {
     const [isRenaming, setIsRenaming] = useState(false);
     const [reanalyzingId, setReanalyzingId] = useState<string | null>(null);
     const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+    const [sharingPaper, setSharingPaper] = useState<{ id: string; title: string } | null>(null);
+    // Bulk selection state
+    const [selectedPaperIds, setSelectedPaperIds] = useState<Set<string>>(new Set());
+    const [bulkShareMode, setBulkShareMode] = useState(false);
 
     // Polling for updates (暂停轮询当编辑弹窗打开时)
     const { data: libraryData, isLoading } = useQuery({
@@ -297,7 +306,7 @@ export default function LibraryPage() {
                 </div>
 
                 {/* Workbench Link */}
-                <div className="px-6 mb-6">
+                <div className="px-6 mb-4">
                     <Link
                         to="/workbench"
                         className="flex items-center gap-3 px-3 py-3 bg-gradient-to-r from-primary/10 to-secondary/10 rounded-xl border border-primary/20 hover:shadow-md transition-all group"
@@ -308,6 +317,22 @@ export default function LibraryPage() {
                         <div>
                             <div className="font-semibold text-purple-900 text-sm">{t('library.smartWorkbench')}</div>
                             <div className="text-xs text-purple-600">{t('library.workbenchDesc')}</div>
+                        </div>
+                    </Link>
+                </div>
+
+                {/* Teams Link */}
+                <div className="px-6 mb-6">
+                    <Link
+                        to="/teams"
+                        className="flex items-center gap-3 px-3 py-3 bg-gradient-to-r from-blue-500/10 to-cyan-500/10 rounded-xl border border-blue-500/20 hover:shadow-md transition-all group"
+                    >
+                        <div className="p-2 bg-blue-500 rounded-lg text-white group-hover:scale-105 transition-transform">
+                            <Users className="w-4 h-4" />
+                        </div>
+                        <div>
+                            <div className="font-semibold text-blue-900 text-sm">{t('library.teams') || '团队协作'}</div>
+                            <div className="text-xs text-blue-600">{t('library.teamsDesc') || '共享与协作研究'}</div>
                         </div>
                     </Link>
                 </div>
@@ -420,12 +445,62 @@ export default function LibraryPage() {
                         </div>
                     )}
 
+                    {/* Bulk Action Bar - visible when papers are selected */}
+                    {selectedPaperIds.size > 0 && (
+                        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <CheckSquare className="w-5 h-5 text-blue-600" />
+                                <span className="text-sm font-medium text-blue-900">
+                                    已选择 {selectedPaperIds.size} 篇论文
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setBulkShareMode(true)}
+                                    className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                                >
+                                    <Share2 className="w-4 h-4" />
+                                    分享到团队
+                                </button>
+                                <button
+                                    onClick={() => setSelectedPaperIds(new Set())}
+                                    className="px-3 py-1.5 text-blue-600 text-sm hover:bg-blue-100 rounded-lg"
+                                >
+                                    取消选择
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     {/* List View */}
                     {viewMode === 'list' && (
                         <div className="bg-surface rounded-xl border border-border overflow-hidden">
                             {/* Table Header */}
                             <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-surface-elevated border-b border-border text-xs font-semibold text-content-dim uppercase tracking-wider">
-                                <div className="col-span-5">{t('library.tableHeaders.title')}</div>
+                                <div className="col-span-1 flex items-center">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            const completedIds = filteredPapers
+                                                .filter(p => p.status === 'completed' || p.status === 'analyzed')
+                                                .map(p => p.id);
+                                            if (selectedPaperIds.size === completedIds.length && completedIds.length > 0) {
+                                                setSelectedPaperIds(new Set());
+                                            } else {
+                                                setSelectedPaperIds(new Set(completedIds));
+                                            }
+                                        }}
+                                        className="p-1 hover:bg-slate-200 rounded transition-colors"
+                                        title="全选/取消"
+                                    >
+                                        {selectedPaperIds.size > 0 ? (
+                                            <CheckSquare className="w-4 h-4 text-blue-600" />
+                                        ) : (
+                                            <Square className="w-4 h-4 text-slate-400" />
+                                        )}
+                                    </button>
+                                </div>
+                                <div className="col-span-4">{t('library.tableHeaders.title')}</div>
                                 <div className="col-span-2">{t('library.tableHeaders.category')}</div>
                                 <div className="col-span-3">{t('library.tableHeaders.tags')}</div>
                                 <div className="col-span-1">{t('library.tableHeaders.status')}</div>
@@ -444,15 +519,59 @@ export default function LibraryPage() {
                                         key={paper.id}
                                         onClick={() => isCompleted && navigate(`/read/${paper.id}`)}
                                         className={`grid grid-cols-12 gap-4 px-4 py-3 border-b border-border items-center transition-colors ${isProcessing ? 'bg-surface-hover/50 cursor-wait' : 'hover:bg-surface-hover cursor-pointer'
-                                            }`}
+                                            } ${selectedPaperIds.has(paper.id) ? 'bg-blue-50' : ''}`}
                                     >
+                                        {/* Checkbox */}
+                                        <div className="col-span-1 flex items-center">
+                                            {isCompleted && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const newSet = new Set(selectedPaperIds);
+                                                        if (newSet.has(paper.id)) {
+                                                            newSet.delete(paper.id);
+                                                        } else {
+                                                            newSet.add(paper.id);
+                                                        }
+                                                        setSelectedPaperIds(newSet);
+                                                    }}
+                                                    className="p-1 hover:bg-slate-200 rounded transition-colors"
+                                                >
+                                                    {selectedPaperIds.has(paper.id) ? (
+                                                        <CheckSquare className="w-4 h-4 text-blue-600" />
+                                                    ) : (
+                                                        <Square className="w-4 h-4 text-slate-400" />
+                                                    )}
+                                                </button>
+                                            )}
+                                        </div>
                                         {/* Title */}
-                                        <div className="col-span-5 flex items-center gap-3">
+                                        <div className="col-span-4 flex items-center gap-3">
                                             <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isProcessing ? 'bg-warning animate-pulse' : isFailed ? 'bg-error' : 'bg-success'
                                                 }`} />
-                                            <div className="min-w-0">
-                                                <div className="font-medium text-content-main truncate group-hover:text-primary">
-                                                    {paper.title || paper.filename}
+                                            <div className="min-w-0 flex-1">
+                                                <div className="font-medium text-content-main truncate group-hover:text-primary flex items-center gap-2">
+                                                    <span className="truncate">{paper.title || paper.filename}</span>
+                                                    {/* Team sharing badges */}
+                                                    {paper.shared_teams && paper.shared_teams.length > 0 && (
+                                                        <div className="flex items-center gap-1 flex-shrink-0">
+                                                            {paper.shared_teams.slice(0, 2).map((team) => (
+                                                                <span
+                                                                    key={team.id}
+                                                                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] rounded-full"
+                                                                    title={`已分享给 ${team.name}`}
+                                                                >
+                                                                    <Users className="w-2.5 h-2.5" />
+                                                                    {team.name}
+                                                                </span>
+                                                            ))}
+                                                            {paper.shared_teams.length > 2 && (
+                                                                <span className="text-[10px] text-blue-600">
+                                                                    +{paper.shared_teams.length - 2}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 <div className="text-xs text-slate-400 truncate">
                                                     {paper.filename} • {new Date(paper.created_at).toLocaleDateString()}
@@ -514,6 +633,18 @@ export default function LibraryPage() {
 
                                         {/* Actions */}
                                         <div className="col-span-1 flex items-center justify-end gap-2">
+                                            {isCompleted && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setSharingPaper({ id: paper.id, title: paper.title || paper.filename });
+                                                    }}
+                                                    className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                                    title={t('library.shareToTeam') || '分享到团队'}
+                                                >
+                                                    <Share2 className="w-4 h-4" />
+                                                </button>
+                                            )}
                                             {(isFailed || isCompleted) && (
                                                 <button
                                                     onClick={(e) => handleReanalyze(e, paper.id)}
@@ -725,6 +856,28 @@ export default function LibraryPage() {
                 isOpen={showUpgradeModal}
                 onClose={() => setShowUpgradeModal(false)}
             />
+
+            {/* Share to Team Modal */}
+            {sharingPaper && (
+                <ShareToTeamModal
+                    paperId={sharingPaper.id}
+                    paperTitle={sharingPaper.title}
+                    onClose={() => setSharingPaper(null)}
+                    onSuccess={() => setSharingPaper(null)}
+                />
+            )}
+
+            {/* Bulk Share Modal */}
+            {bulkShareMode && selectedPaperIds.size > 0 && (
+                <ShareToTeamModal
+                    paperIds={Array.from(selectedPaperIds)}
+                    onClose={() => setBulkShareMode(false)}
+                    onSuccess={() => {
+                        setBulkShareMode(false);
+                        setSelectedPaperIds(new Set());
+                    }}
+                />
+            )}
         </div>
     );
 }

@@ -13,6 +13,10 @@ import WorkbenchPage from './pages/WorkbenchPage';
 import SettingsPage from './pages/SettingsPage';
 import LoginPage from './pages/LoginPage';
 import AdminPage from './pages/AdminPage';
+import TeamsPage from './pages/TeamsPage';
+import TaskBoardPage from './pages/TaskBoardPage';
+import TaskDetailsPage from './pages/TaskDetailsPage';
+import GuestReaderPage from './pages/GuestReaderPage';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -69,11 +73,17 @@ function AppRoutes() {
       {/* 公开路由 */}
       <Route path="login" element={<PublicRoute><LoginPage /></PublicRoute>} />
 
+      {/* 访客分享路由 (无需登录) */}
+      <Route path="share/:shareToken" element={<GuestReaderPage />} />
+
       {/* 受保护路由 */}
       <Route index element={<Navigate to="/library" replace />} />
       <Route path="library" element={<ProtectedRoute><LibraryPage /></ProtectedRoute>} />
       <Route path="read/:paperId" element={<ProtectedRoute><ReaderPage /></ProtectedRoute>} />
       <Route path="workbench" element={<ProtectedRoute><WorkbenchPage /></ProtectedRoute>} />
+      <Route path="teams" element={<ProtectedRoute><TeamsPage /></ProtectedRoute>} />
+      <Route path="teams/:teamId/tasks" element={<ProtectedRoute><TaskBoardPage /></ProtectedRoute>} />
+      <Route path="tasks/:taskId" element={<ProtectedRoute><TaskDetailsPage /></ProtectedRoute>} />
       <Route path="admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
       <Route path="settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
 

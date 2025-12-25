@@ -47,6 +47,14 @@ api.interceptors.response.use(
 );
 
 // API 类型定义
+
+// 分享团队信息
+export interface SharedTeamInfo {
+    id: string;
+    name: string;
+    shared_at?: string;
+}
+
 export interface Paper {
     id: string;
     filename: string;
@@ -64,6 +72,8 @@ export interface Paper {
     tags_confirmed?: boolean;
     doi?: string;
     arxiv_id?: string;
+    // Team sharing info
+    shared_teams?: SharedTeamInfo[];
 }
 
 export interface TaskStatus {
@@ -357,12 +367,13 @@ export interface AuthorWithWorks {
 export interface AuthorsWorksResponse {
     paper_id: string;
     authors: AuthorWithWorks[];
+    from_cache?: boolean;
 }
 
 export const authorsApi = {
-    getAuthorsWorks: async (paperId: string, worksLimit?: number): Promise<AuthorsWorksResponse> => {
+    getAuthorsWorks: async (paperId: string, worksLimit?: number, refresh?: boolean): Promise<AuthorsWorksResponse> => {
         const { data } = await api.get(`/papers/${paperId}/authors-works`, {
-            params: { works_limit: worksLimit }
+            params: { works_limit: worksLimit, refresh }
         });
         return data;
     },
@@ -1049,6 +1060,567 @@ export const promptsApi = {
         paper_id: string;
     }): Promise<PreviewResult> => {
         const { data } = await api.post('/admin/prompts/preview', previewData);
+        return data;
+    },
+};
+
+// ==================== Teams API ====================
+
+export interface Team {
+    id: string;
+    name: string;
+    description?: string;
+    avatar_url?: string;
+    created_by?: string;
+    created_at?: string;
+    member_count: number;
+    my_role?: string;
+}
+
+export interface TeamMember {
+    id: string;
+    user_id: string;
+    email: string;
+    username?: string;
+    role: string;
+    joined_at?: string;
+}
+
+export interface TeamInvitation {
+    id: string;
+    invite_code: string;
+    max_uses: number;
+    used_count: number;
+    expires_at?: string;
+    is_valid: boolean;
+    created_at?: string;
+}
+
+export interface TeamPaper {
+    id: string;
+    title?: string;
+    filename: string;
+    status: string;
+    category?: string;
+    created_at?: string;
+    shared_by?: {
+        id?: string;
+        email?: string;
+        username?: string;
+    };
+    shared_at?: string;
+}
+
+export interface TeamPapersResponse {
+    papers: TeamPaper[];
+    total: number;
+}
+
+export const teamsApi = {
+    // ========== Team CRUD ==========
+
+    /**
+     * 创建团队
+     */
+    create: async (data: { name: string; description?: string }): Promise<Team> => {
+        const { data: result } = await api.post('/teams', data);
+        return result;
+    },
+
+    /**
+     * 获取我的团队列表
+     */
+    list: async (): Promise<Team[]> => {
+        const { data } = await api.get('/teams');
+        return data;
+    },
+
+    /**
+     * 获取团队详情
+     */
+    get: async (teamId: string): Promise<Team> => {
+        const { data } = await api.get(`/teams/${teamId}`);
+        return data;
+    },
+
+    /**
+     * 更新团队信息
+     */
+    update: async (teamId: string, data: { name?: string; description?: string; avatar_url?: string }): Promise<Team> => {
+        const { data: result } = await api.put(`/teams/${teamId}`, data);
+        return result;
+    },
+
+    /**
+     * 删除团队 (仅 Owner)
+     */
+    delete: async (teamId: string): Promise<void> => {
+        await api.delete(`/teams/${teamId}`);
+    },
+
+    // ========== Member Management ==========
+
+    /**
+     * 获取团队成员列表
+     */
+    getMembers: async (teamId: string): Promise<TeamMember[]> => {
+        const { data } = await api.get(`/teams/${teamId}/members`);
+        return data;
+    },
+
+    /**
+     * 更新成员角色
+     */
+    updateMemberRole: async (teamId: string, userId: string, role: string): Promise<void> => {
+        await api.put(`/teams/${teamId}/members/${userId}`, null, { params: { role } });
+    },
+
+    /**
+     * 移除成员
+     */
+    removeMember: async (teamId: string, userId: string): Promise<void> => {
+        await api.delete(`/teams/${teamId}/members/${userId}`);
+    },
+
+    // ========== Invitation ==========
+
+    /**
+     * 生成邀请链接
+     */
+    createInvitation: async (teamId: string, options?: { max_uses?: number; expires_days?: number }): Promise<TeamInvitation> => {
+        const { data } = await api.post(`/teams/${teamId}/invite`, options || {});
+        return data;
+    },
+
+    /**
+     * 通过邀请码加入团队
+     */
+    joinByCode: async (inviteCode: string): Promise<{ message: string; team_id: string; team_name: string }> => {
+        const { data } = await api.post(`/teams/join/${inviteCode}`);
+        return data;
+    },
+
+    // ========== Paper Sharing ==========
+
+    /**
+     * 分享论文到团队
+     */
+    sharePaper: async (paperId: string, teamId: string): Promise<{ id: string; paper_id: string; team_id: string }> => {
+        const { data } = await api.post(`/teams/papers/${paperId}/share`, { team_id: teamId });
+        return data;
+    },
+
+    /**
+     * 获取团队论文列表
+     */
+    getTeamPapers: async (teamId: string): Promise<TeamPapersResponse> => {
+        const { data } = await api.get(`/teams/${teamId}/papers`);
+        return data;
+    },
+
+    /**
+     * 取消论文分享
+     */
+    unsharePaper: async (paperId: string, teamId: string): Promise<void> => {
+        await api.delete(`/teams/papers/${paperId}/share/${teamId}`);
+    },
+};
+
+// ==================== Annotations API ====================
+
+export type AnnotationType = 'highlight' | 'note' | 'comment';
+export type AnnotationVisibility = 'private' | 'team';
+
+export interface AnnotationUser {
+    id: string;
+    email?: string;
+    username?: string;
+}
+
+export interface Annotation {
+    id: string;
+    paper_id: string;
+    team_id?: string;
+    user_id: string;
+    user?: AnnotationUser;
+    type: AnnotationType;
+    visibility: AnnotationVisibility;
+    start_offset?: number;
+    end_offset?: number;
+    line_number?: number;
+    selected_text?: string;
+    content?: string;
+    color?: string;
+    parent_id?: string;
+    replies_count: number;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface CreateAnnotationData {
+    type?: AnnotationType;
+    visibility?: AnnotationVisibility;
+    team_id?: string;
+    start_offset?: number;
+    end_offset?: number;
+    line_number?: number;
+    selected_text?: string;
+    content?: string;
+    color?: string;
+}
+
+export interface UpdateAnnotationData {
+    content?: string;
+    color?: string;
+    visibility?: AnnotationVisibility;
+}
+
+export interface ReplyAnnotationData {
+    content: string;
+    visibility?: AnnotationVisibility;
+}
+
+export const annotationsApi = {
+    /**
+     * 获取论文标注列表
+     */
+    list: async (paperId: string, params?: { team_id?: string; type?: AnnotationType }): Promise<Annotation[]> => {
+        const { data } = await api.get(`/papers/${paperId}/annotations`, { params });
+        return data;
+    },
+
+    /**
+     * 创建标注
+     */
+    create: async (paperId: string, data: CreateAnnotationData): Promise<Annotation> => {
+        const { data: result } = await api.post(`/papers/${paperId}/annotations`, data);
+        return result;
+    },
+
+    /**
+     * 更新标注
+     */
+    update: async (annotationId: string, data: UpdateAnnotationData): Promise<Annotation> => {
+        const { data: result } = await api.put(`/annotations/${annotationId}`, data);
+        return result;
+    },
+
+    /**
+     * 删除标注
+     */
+    delete: async (annotationId: string): Promise<void> => {
+        await api.delete(`/annotations/${annotationId}`);
+    },
+
+    /**
+     * 回复标注
+     */
+    reply: async (annotationId: string, data: ReplyAnnotationData): Promise<Annotation> => {
+        const { data: result } = await api.post(`/annotations/${annotationId}/reply`, data);
+        return result;
+    },
+
+    /**
+     * 获取标注的回复列表
+     */
+    getReplies: async (annotationId: string): Promise<Annotation[]> => {
+        const { data } = await api.get(`/annotations/${annotationId}/replies`);
+        return data;
+    },
+};
+
+// ================== Tasks API ==================
+
+export type ReadingTaskStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
+export type AssigneeStatus = 'assigned' | 'reading' | 'submitted' | 'approved';
+export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
+
+export interface TaskAssignee {
+    id: string;
+    task_id: string;
+    user_id: string;
+    assigned_by: string;
+    status: AssigneeStatus;
+    summary?: string;
+    assigned_at?: string;
+    started_at?: string;
+    submitted_at?: string;
+    approved_at?: string;
+    user?: {
+        id: string;
+        username?: string;
+        email?: string;
+    };
+}
+
+export interface ReadingTask {
+    id: string;
+    team_id: string;
+    paper_id?: string;
+    created_by: string;
+    title: string;
+    description?: string;
+    status: ReadingTaskStatus;
+    priority: TaskPriority;
+    due_date?: string;
+    created_at?: string;
+    updated_at?: string;
+    completed_at?: string;
+    assignees: TaskAssignee[];
+    assignee_count: number;
+}
+
+export interface CreateTaskData {
+    paper_id?: string;
+    title: string;
+    description?: string;
+    priority?: TaskPriority;
+    due_date?: string;
+    assignee_ids?: string[];
+}
+
+export interface UpdateTaskData {
+    title?: string;
+    description?: string;
+    status?: ReadingTaskStatus;
+    priority?: TaskPriority;
+    due_date?: string;
+}
+
+export interface SubmitSummaryData {
+    summary: string;
+    summary_structure?: Record<string, unknown>;
+}
+
+export const tasksApi = {
+    /**
+     * 获取团队任务列表
+     */
+    listByTeam: async (
+        teamId: string,
+        filters?: {
+            status?: TaskStatus;
+            priority?: TaskPriority;
+            assignee_id?: string;
+        }
+    ): Promise<ReadingTask[]> => {
+        const { data } = await api.get(`/tasks/teams/${teamId}/tasks`, { params: filters });
+        return data;
+    },
+
+    /**
+     * 创建任务
+     */
+    create: async (teamId: string, data: CreateTaskData): Promise<ReadingTask> => {
+        const { data: result } = await api.post(`/tasks/teams/${teamId}/tasks`, data);
+        return result;
+    },
+
+    /**
+     * 获取任务详情
+     */
+    get: async (taskId: string): Promise<ReadingTask> => {
+        const { data } = await api.get(`/tasks/${taskId}`);
+        return data;
+    },
+
+    /**
+     * 更新任务
+     */
+    update: async (taskId: string, data: UpdateTaskData): Promise<ReadingTask> => {
+        const { data: result } = await api.put(`/tasks/${taskId}`, data);
+        return result;
+    },
+
+    /**
+     * 删除任务
+     */
+    delete: async (taskId: string): Promise<void> => {
+        await api.delete(`/tasks/${taskId}`);
+    },
+
+    /**
+     * 分配任务
+     */
+    assign: async (taskId: string, userIds: string[]): Promise<{ assigned: string[] }> => {
+        const { data } = await api.post(`/tasks/${taskId}/assign`, { user_ids: userIds });
+        return data;
+    },
+
+    /**
+     * 取消分配
+     */
+    unassign: async (taskId: string, userId: string): Promise<void> => {
+        await api.delete(`/tasks/${taskId}/assignees/${userId}`);
+    },
+
+    /**
+     * 开始阅读
+     */
+    startReading: async (taskId: string, userId: string): Promise<void> => {
+        await api.put(`/tasks/${taskId}/assignees/${userId}/start`);
+    },
+
+    /**
+     * 提交总结
+     */
+    submitSummary: async (taskId: string, userId: string, data: SubmitSummaryData): Promise<void> => {
+        await api.put(`/tasks/${taskId}/assignees/${userId}/submit`, data);
+    },
+
+    /**
+     * 批准总结
+     */
+    approveSummary: async (taskId: string, userId: string): Promise<void> => {
+        await api.put(`/tasks/${taskId}/assignees/${userId}/approve`);
+    },
+};
+
+// ================== AI API ==================
+
+export type AICommand = 'explain' | 'summarize' | 'search' | 'compare' | 'expand';
+
+export interface AIRequest {
+    command: AICommand;
+    content: string;
+    paper_id?: string;
+    team_id?: string;
+    annotation_id?: string;
+}
+
+export interface AIResponse {
+    success: boolean;
+    command: string;
+    response: string;
+    sources?: Array<{ title: string; url?: string }>;
+    created_at: string;
+}
+
+export interface DiscussionSummaryResponse {
+    success: boolean;
+    summary: string;
+    discussion_count: number;
+    created_at: string;
+}
+
+export const aiApi = {
+    /**
+     * 发送 AI 请求
+     */
+    assist: async (request: AIRequest): Promise<AIResponse> => {
+        const { data } = await api.post('/ai/assist', request);
+        return data;
+    },
+
+    /**
+     * 总结讨论
+     */
+    summarizeDiscussion: async (annotationId: string): Promise<DiscussionSummaryResponse> => {
+        const { data } = await api.post('/ai/summarize-discussion', null, {
+            params: { annotation_id: annotationId }
+        });
+        return data;
+    },
+};
+
+// ==================== Share API ====================
+
+export interface ShareLink {
+    id: string;
+    paper_id: string;
+    share_token: string;
+    share_url: string;
+    expires_at: string | null;
+    access_count: number;
+    created_at: string;
+}
+
+export interface ShareLinkListResponse {
+    links: ShareLink[];
+}
+
+export interface GuestPaper {
+    paper_id: string;
+    title: string | null;
+    filename: string;
+    status: string;
+    owner_name: string | null;
+}
+
+export interface GuestPaperContent {
+    markdown: string;
+}
+
+export interface GuestAnalysis {
+    paper_id: string;
+    status: string;
+    summary: string | null;
+    methods: MethodItem[];
+    datasets: DatasetItem[];
+    code_refs: CodeRefItem[];
+    structure: StructureInfo | null;
+}
+
+export const shareApi = {
+    // ============= 需要认证的端点 =============
+
+    /**
+     * 为论文生成分享链接
+     */
+    createLink: async (paperId: string, expiresInDays?: number): Promise<ShareLink> => {
+        const { data } = await api.post(`/share/papers/${paperId}/link`, {
+            expires_in_days: expiresInDays
+        });
+        return data;
+    },
+
+    /**
+     * 获取当前用户的所有分享链接
+     */
+    getMyLinks: async (): Promise<ShareLinkListResponse> => {
+        const { data } = await api.get('/share/links');
+        return data;
+    },
+
+    /**
+     * 获取指定论文的分享链接
+     */
+    getPaperLinks: async (paperId: string): Promise<ShareLinkListResponse> => {
+        const { data } = await api.get(`/share/papers/${paperId}/links`);
+        return data;
+    },
+
+    /**
+     * 撤销分享链接
+     */
+    revokeLink: async (shareToken: string): Promise<{ success: boolean; message: string }> => {
+        const { data } = await api.delete(`/share/link/${shareToken}`);
+        return data;
+    },
+
+    // ============= 访客端点（无需认证） =============
+
+    /**
+     * 访客获取论文基本信息
+     */
+    getGuestPaper: async (shareToken: string): Promise<GuestPaper> => {
+        const { data } = await api.get(`/share/paper/${shareToken}`);
+        return data;
+    },
+
+    /**
+     * 访客获取论文内容
+     */
+    getGuestContent: async (shareToken: string): Promise<GuestPaperContent> => {
+        const { data } = await api.get(`/share/paper/${shareToken}/content`);
+        return data;
+    },
+
+    /**
+     * 访客获取论文分析结果
+     */
+    getGuestAnalysis: async (shareToken: string): Promise<GuestAnalysis> => {
+        const { data } = await api.get(`/share/paper/${shareToken}/analysis`);
         return data;
     },
 };

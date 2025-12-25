@@ -21,6 +21,8 @@ import {
     ExternalLink,
     Sparkles,
     Users,
+    Share2,
+    Link2,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -33,6 +35,8 @@ interface ExploreOverviewProps {
     paperTitle: string;
     onStartReading: () => void;
     onBack: () => void;
+    onShareToTeam?: () => void;
+    onShareLink?: () => void;
 }
 
 export default function ExploreOverview({
@@ -40,6 +44,8 @@ export default function ExploreOverview({
     paperTitle,
     onStartReading,
     onBack,
+    onShareToTeam,
+    onShareLink,
 }: ExploreOverviewProps) {
     // Fetch analysis data
     const { data: analysis, isLoading: isAnalysisLoading } = useQuery({
@@ -72,14 +78,36 @@ export default function ExploreOverview({
                             </p>
                         </div>
                     </div>
-                    <button
-                        onClick={onStartReading}
-                        className="flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-content rounded-lg hover:bg-primary-hover transition-colors font-medium shadow-lg shadow-primary/20"
-                    >
-                        <BookOpen className="w-4 h-4" />
-                        开始深度阅读
-                        <ChevronRight className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={onStartReading}
+                            className="flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-content rounded-lg hover:bg-primary-hover transition-colors font-medium shadow-lg shadow-primary/20"
+                        >
+                            <BookOpen className="w-4 h-4" />
+                            开始深度阅读
+                            <ChevronRight className="w-4 h-4" />
+                        </button>
+                        {onShareLink && (
+                            <button
+                                onClick={onShareLink}
+                                className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-colors font-medium"
+                                title="生成分享链接"
+                            >
+                                <Link2 className="w-4 h-4" />
+                                分享链接
+                            </button>
+                        )}
+                        {onShareToTeam && (
+                            <button
+                                onClick={onShareToTeam}
+                                className="flex items-center gap-2 px-4 py-2.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium"
+                                title="分享到团队"
+                            >
+                                <Share2 className="w-4 h-4" />
+                                分享到团队
+                            </button>
+                        )}
+                    </div>
                 </div>
             </header>
 

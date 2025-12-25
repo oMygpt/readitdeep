@@ -9,7 +9,7 @@ from typing import Optional
 import uuid
 
 from sqlalchemy import String, Text, DateTime, func, ForeignKey
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 
@@ -66,5 +66,9 @@ class Paper(Base):
         onupdate=func.now(),
     )
     
+    # 关系
+    tasks = relationship("ReadingTask", back_populates="paper")
+    
     def __repr__(self) -> str:
         return f"<Paper {self.id}: {self.title or self.filename}>"
+
