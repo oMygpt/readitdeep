@@ -15,6 +15,7 @@ from app.config import get_settings
 from app.core.store import store
 from app.core.database import async_session_maker
 from app.models.user import User
+from app.models.paper import Paper
 from app.api.v1.auth import get_current_user, get_optional_user
 
 
@@ -44,6 +45,77 @@ class PaperDetail(BaseModel):
     updated_at: datetime
     user_id: Optional[str] = None
     error_message: Optional[str] = None
+
+
+async def sync_paper_to_db(paper_id: str, updates: dict):
+    """
+    同步论文状态到数据库 (用于团队分享功能)
+    
+    只同步 Paper 模型已定义的字段
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Paper 模型包含的字段
+    valid_fields = {
+        'filename', 'file_path', 'title', 'category', 'authors', 
+        'abstract', 'doi', 'arxiv_id', 'markdown_content', 
+        'translated_content', 'status', 'error_message'
+    }
+    
+    try:
+        async with async_session_maker() as db:
+            result = await db.execute(select(Paper).where(Paper.id == paper_id))
+            db_paper = result.scalar_one_or_none()
+            if db_paper:
+                for key, value in updates.items():
+                    if key in valid_fields and hasattr(db_paper, key):
+                        setattr(db_paper, key, value)
+                await db.commit()
+    except Exception as e:
+        logger.warning(f"Failed to sync paper {paper_id} to DB: {e}")
+
+
+async def check_paper_access(paper_id: str, paper: dict, current_user: Optional[User]) -> None:
+    """
+    检查用户是否有权限访问论文
+    
+    允许访问的情况：
+    1. 论文无 user_id (公开论文)
+    2. 是论文所有者
+    3. 是管理员
+    4. 是论文所分享团队的成员
+    
+    如果无权访问，抛出 HTTPException
+    """
+    if not paper.get("user_id"):
+        return  # 公开论文，允许访问
+    
+    if not current_user:
+        raise HTTPException(401, "请先登录")
+    
+    is_owner = paper["user_id"] == current_user.id
+    is_admin = current_user.is_admin
+    
+    if is_owner or is_admin:
+        return  # 所有者或管理员，允许访问
+    
+    # 检查是否为团队成员 (通过 paper_shares 表)
+    from app.models.team import PaperShare, TeamMember
+    
+    async with async_session_maker() as db:
+        result = await db.execute(
+            select(PaperShare)
+            .join(TeamMember, PaperShare.team_id == TeamMember.team_id)
+            .where(
+                PaperShare.paper_id == paper_id,
+                TeamMember.user_id == current_user.id
+            )
+        )
+        has_team_access = result.scalar_one_or_none() is not None
+    
+    if not has_team_access:
+        raise HTTPException(403, "无权访问此论文")
 
 
 async def parse_paper_task(paper_id: str, file_path: str, file_content: bytes, filename: str, user_id: Optional[str] = None):
@@ -76,13 +148,17 @@ async def parse_paper_task(paper_id: str, file_path: str, file_content: bytes, f
     settings = get_settings()
     logger = logging.getLogger(__name__)
 
-    # 辅助更新函数
+    # 辅助更新函数 (同时更新 store 和 DB)
+    import asyncio
+    
     def update_paper(updates: dict):
         paper = store.get(paper_id)
         if paper:
             paper.update(updates)
             paper["updated_at"] = datetime.utcnow()
             store.set(paper_id, paper)
+            # 异步同步到数据库 (用于团队分享)
+            asyncio.create_task(sync_paper_to_db(paper_id, updates))
 
     try:
         if not config.get("mineru_api_key"):
@@ -359,6 +435,18 @@ async def upload_paper(
     }
     store.set(paper_id, paper_data)
     
+    # 同步到数据库 (用于团队分享功能)
+    async with async_session_maker() as db:
+        db_paper = Paper(
+            id=paper_id,
+            user_id=current_user.id if current_user else None,
+            filename=file.filename,
+            file_path=file_path,
+            status="uploading",
+        )
+        db.add(db_paper)
+        await db.commit()
+    
     # 4. 启动后台解析任务
     background_tasks.add_task(
         parse_paper_task, 
@@ -388,13 +476,8 @@ async def get_paper(
     if not paper:
         raise HTTPException(404, "论文不存在")
     
-    # 权限检查
-    if paper.get("user_id"):
-        # 属于某个用户，必须登录且是本人或管理员
-        if not current_user:
-             raise HTTPException(401, "请先登录")
-        if paper["user_id"] != current_user.id and not current_user.is_admin:
-             raise HTTPException(403, "无权访问此论文")
+    # 权限检查 (包括团队成员权限)
+    await check_paper_access(paper_id, paper, current_user)
     
     return PaperDetail(
         id=paper["id"],
@@ -421,12 +504,8 @@ async def get_paper_content(
     if not paper:
         raise HTTPException(404, "论文不存在")
 
-    # 权限检查
-    if paper.get("user_id"):
-        if not current_user:
-             raise HTTPException(401, "请先登录")
-        if paper["user_id"] != current_user.id and not current_user.is_admin:
-             raise HTTPException(403, "无权访问此论文")
+    # 权限检查 (包括团队成员权限)
+    await check_paper_access(paper_id, paper, current_user)
 
     return {
         "markdown": paper.get("markdown_content", ""),
@@ -444,12 +523,8 @@ async def get_paper_analysis(
     if not paper:
         raise HTTPException(404, "论文不存在")
 
-    # 权限检查
-    if paper.get("user_id"):
-        if not current_user:
-             raise HTTPException(401, "请先登录")
-        if paper["user_id"] != current_user.id and not current_user.is_admin:
-             raise HTTPException(403, "无权访问此论文")
+    # 权限检查 (包括团队成员权限)
+    await check_paper_access(paper_id, paper, current_user)
 
     # 获取论文内容用于定位
     markdown_content = paper.get("markdown_content", "")
@@ -603,12 +678,14 @@ async def run_analysis_pipeline(paper_id: str, user_id: str):
 
     logger = logging.getLogger(__name__)
     
-    # helper
+    # helper (同步到 store 和 DB)
+    import asyncio
     def update_paper(updates: dict):
         p = store.get(paper_id)
         if p:
             p.update(updates)
             store.set(paper_id, p)
+            asyncio.create_task(sync_paper_to_db(paper_id, updates))
 
     paper = store.get(paper_id)
     if not paper: return

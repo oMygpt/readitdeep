@@ -82,7 +82,11 @@ async def init_db() -> None:
     from app.models.user import User  # noqa
     from app.models.system_config import SystemConfig  # noqa
     from app.models.user_config import UserConfig  # noqa
+    from app.models.team import Team, TeamMember, TeamInvitation, PaperShare  # noqa
+    from app.models.share_link import ShareLink  # noqa
     
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     print("✅ 数据库表已创建")
+
+

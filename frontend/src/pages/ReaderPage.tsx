@@ -24,7 +24,7 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeRaw from 'rehype-raw';
 import rehypeKatex from 'rehype-katex';
-import { papersApi } from '../lib/api';
+import { papersApi, authApi, annotationsApi } from '../lib/api';
 import type { TextLocation } from '../lib/api';
 import AnalysisPanel from '../components/AnalysisPanel';
 import StructurePanel from '../components/StructurePanel';
@@ -32,6 +32,9 @@ import PaperGraph from '../components/PaperGraph';
 import Workbench from '../components/Workbench';
 import ExploreOverview from '../components/ExploreOverview';
 import SmartSelectionPopup from '../components/SmartSelectionPopup';
+import ShareToTeamModal from '../components/ShareToTeamModal';
+import ShareLinkModal from '../components/ShareLinkModal';
+import HighlightOverlay from '../components/HighlightOverlay';
 
 import 'katex/dist/katex.min.css';
 
@@ -59,6 +62,9 @@ export default function ReaderPage() {
     const [selectionLocation, setSelectionLocation] = useState<TextLocation | null>(null);
     const [isDragging, setIsDragging] = useState(false);
     const [workbenchRefreshKey, setWorkbenchRefreshKey] = useState(0);
+    const [showShareModal, setShowShareModal] = useState(false);
+    const [showShareLinkModal, setShowShareLinkModal] = useState(false);
+    const [annotationsRefreshKey, setAnnotationsRefreshKey] = useState(0);
 
     const { data: paper, isLoading: isPaperLoading } = useQuery({
         queryKey: ['paper', paperId],
@@ -70,6 +76,21 @@ export default function ReaderPage() {
         queryKey: ['paper-content', paperId],
         queryFn: () => papersApi.getContent(paperId!),
         enabled: !!paperId && (paper?.status === 'completed' || paper?.status === 'analyzed'),
+    });
+
+    // Fetch current user for highlight color assignment
+    const { data: currentUser } = useQuery({
+        queryKey: ['current-user'],
+        queryFn: () => authApi.me(),
+        staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+    });
+
+    // Fetch annotations for this paper (used for highlight rendering)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { data: annotations = [] } = useQuery({
+        queryKey: ['paper-annotations', paperId, annotationsRefreshKey],
+        queryFn: () => annotationsApi.list(paperId!),
+        enabled: !!paperId && !!currentUser,
     });
 
     // Check for existing translation on load
@@ -1016,12 +1037,32 @@ export default function ReaderPage() {
     // Explore Overview Mode (show first before reading)
     if (viewMode === 'overview' && paper) {
         return (
-            <ExploreOverview
-                paperId={paperId!}
-                paperTitle={paper.title || paper.filename}
-                onStartReading={() => setViewMode('read')}
-                onBack={() => navigate('/')}
-            />
+            <>
+                <ExploreOverview
+                    paperId={paperId!}
+                    paperTitle={paper.title || paper.filename}
+                    onStartReading={() => setViewMode('read')}
+                    onBack={() => navigate('/')}
+                    onShareToTeam={() => setShowShareModal(true)}
+                    onShareLink={() => setShowShareLinkModal(true)}
+                />
+                {/* Share to Team Modal */}
+                {showShareModal && (
+                    <ShareToTeamModal
+                        paperId={paperId!}
+                        paperTitle={paper.title || paper.filename}
+                        onClose={() => setShowShareModal(false)}
+                        onSuccess={() => setShowShareModal(false)}
+                    />
+                )}
+                {/* Share Link Modal */}
+                <ShareLinkModal
+                    paperId={paperId!}
+                    paperTitle={paper.title || paper.filename}
+                    isOpen={showShareLinkModal}
+                    onClose={() => setShowShareLinkModal(false)}
+                />
+            </>
         );
     }
 
@@ -1347,7 +1388,39 @@ export default function ReaderPage() {
                                 paperTitle={paper.title || '论文'}
                                 onClose={() => setShowRightSidebar(false)}
                                 onJumpToLocation={handleJumpToLine}
+                                onJumpToHighlight={(selectedText) => {
+                                    // Scroll to highlight by finding the text in the content
+                                    const contentEl = mainContentRef.current;
+                                    if (!contentEl || !selectedText) return;
+
+                                    // Use TreeWalker to find the text node
+                                    const treeWalker = document.createTreeWalker(
+                                        contentEl,
+                                        NodeFilter.SHOW_TEXT,
+                                        null
+                                    );
+
+                                    const searchText = selectedText.substring(0, 50).toLowerCase();
+                                    let node: Node | null;
+                                    while ((node = treeWalker.nextNode())) {
+                                        if (node.textContent?.toLowerCase().includes(searchText)) {
+                                            // Found - scroll to it
+                                            const parent = node.parentElement;
+                                            if (parent) {
+                                                parent.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                // Flash effect
+                                                parent.style.transition = 'background-color 0.3s';
+                                                parent.style.backgroundColor = 'rgba(255, 224, 130, 0.5)';
+                                                setTimeout(() => {
+                                                    parent.style.backgroundColor = '';
+                                                }, 2000);
+                                            }
+                                            break;
+                                        }
+                                    }
+                                }}
                                 refreshKey={workbenchRefreshKey}
+                                annotations={annotations}
                             />
                         )}
                     </aside>
@@ -1399,8 +1472,27 @@ export default function ReaderPage() {
                         setSelectionLocation(null);
                     }}
                     onNoteAdded={() => setWorkbenchRefreshKey(k => k + 1)}
+                    onHighlightCreated={() => setAnnotationsRefreshKey(k => k + 1)}
+                    userId={currentUser?.id}
                 />
             )}
+
+            {/* Highlight Overlay */}
+            <HighlightOverlay
+                annotations={annotations}
+                contentRef={mainContentRef}
+                currentUserId={currentUser?.id}
+                paperId={paperId}
+                onDeleteAnnotation={async (id) => {
+                    try {
+                        await annotationsApi.delete(id);
+                        setAnnotationsRefreshKey(k => k + 1);
+                    } catch (e) {
+                        console.error('Failed to delete annotation:', e);
+                    }
+                }}
+                onAnnotationChanged={() => setAnnotationsRefreshKey(k => k + 1)}
+            />
         </div>
     );
 }

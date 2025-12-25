@@ -8,13 +8,24 @@ from typing import Optional, List
 
 from fastapi import APIRouter, Query, Depends
 from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.core.store import store
+from app.core.database import get_db
 from app.models.user import User
+from app.models.team import PaperShare, Team
 from app.api.v1.auth import get_current_user
 
 
 router = APIRouter()
+
+
+class SharedTeamInfo(BaseModel):
+    """分享团队信息"""
+    id: str
+    name: str
+    shared_at: Optional[datetime] = None
 
 
 class PaperSummary(BaseModel):
@@ -25,12 +36,33 @@ class PaperSummary(BaseModel):
     category: Optional[str] = None
     status: str
     created_at: datetime
+    tags: Optional[List[str]] = None
+    shared_teams: Optional[List[SharedTeamInfo]] = None  # 分享给哪些团队
 
 
 class LibraryResponse(BaseModel):
     """知识库响应"""
     total: int
     items: List[PaperSummary]
+
+
+async def get_paper_shared_teams(db, paper_id: str) -> List[SharedTeamInfo]:
+    """获取论文分享的团队列表"""
+    result = await db.execute(
+        select(PaperShare, Team)
+        .join(Team, PaperShare.team_id == Team.id)
+        .where(PaperShare.paper_id == paper_id)
+    )
+    rows = result.all()
+    
+    teams = []
+    for share, team in rows:
+        teams.append(SharedTeamInfo(
+            id=team.id,
+            name=team.name,
+            shared_at=share.shared_at
+        ))
+    return teams
 
 
 @router.get("/", response_model=LibraryResponse)
@@ -41,6 +73,7 @@ async def list_papers(
     category: Optional[str] = None,
     status: Optional[str] = None,
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> LibraryResponse:
     """
     获取知识库论文列表 (仅当前用户的论文)
@@ -86,19 +119,24 @@ async def list_papers(
     end = start + page_size
     paginated = papers[start:end]
     
+    # 获取每篇论文的分享团队信息
+    items = []
+    for p in paginated:
+        shared_teams = await get_paper_shared_teams(db, p["id"])
+        items.append(PaperSummary(
+            id=p["id"],
+            filename=p["filename"],
+            title=p.get("title"),
+            category=p.get("category"),
+            status=p["status"],
+            created_at=p.get("created_at"),
+            tags=p.get("tags"),
+            shared_teams=shared_teams if shared_teams else None,
+        ))
+    
     return LibraryResponse(
         total=total,
-        items=[
-            PaperSummary(
-                id=p["id"],
-                filename=p["filename"],
-                title=p.get("title"),
-                category=p.get("category"),
-                status=p["status"],
-                created_at=p.get("created_at"),
-            )
-            for p in paginated
-        ],
+        items=items,
     )
 
 
@@ -131,6 +169,20 @@ async def delete_paper(
     
     # 删除记录
     store.delete(paper_id)
+    
+    # 同步删除数据库记录 (用于团队分享功能)
+    from sqlalchemy import select
+    from app.core.database import async_session_maker
+    from app.models.paper import Paper
+    try:
+        async with async_session_maker() as db:
+            result = await db.execute(select(Paper).where(Paper.id == paper_id))
+            db_paper = result.scalar_one_or_none()
+            if db_paper:
+                await db.delete(db_paper)
+                await db.commit()
+    except Exception:
+        pass  # 忽略数据库删除失败
     
     return {"success": True, "message": "论文已删除"}
 

@@ -5,15 +5,28 @@
  * - 选中文本后显示智能操作按钮
  * - 公式优先显示 Math 解析
  * - 分析结果在可拖动的浮窗中显示
+ * - 支持高亮标注功能
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { X, Loader2, GripHorizontal, Minimize2, Maximize2, Send } from 'lucide-react';
+import {
+    X,
+    Loader2,
+    Highlighter,
+    StickyNote,
+    Lock,
+    Users,
+    GripHorizontal,
+    Minimize2,
+    Maximize2,
+    Send,
+} from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
-import { api } from '../lib/api';
+import { api, annotationsApi } from '../lib/api';
+import { getUserHighlightColor } from '../lib/highlight';
 
 import type { TextLocation } from '../lib/api';
 
@@ -38,6 +51,9 @@ interface SmartSelectionPopupProps {
     location?: TextLocation | null;
     onClose: () => void;
     onNoteAdded?: () => void;  // Callback when notes/methods/assets are added to workbench
+    onHighlightCreated?: () => void;  // Callback when highlight is created
+    teamId?: string;  // Optional team ID for team annotations
+    userId?: string;  // Current user ID for color assignment
 }
 
 // 检测是否为公式文本
@@ -270,6 +286,9 @@ export default function SmartSelectionPopup({
     location,
     onClose,
     onNoteAdded,
+    onHighlightCreated,
+    teamId,
+    userId,
 }: SmartSelectionPopupProps) {
     const [activeWindow, setActiveWindow] = useState<{
         type: string;
@@ -283,6 +302,13 @@ export default function SmartSelectionPopup({
     const [chatHistory, setChatHistory] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
     const [isChatLoading, setIsChatLoading] = useState(false);
     const [workbenchStatus, setWorkbenchStatus] = useState<{ type: string; success: boolean } | null>(null);
+    const [isHighlighting, setIsHighlighting] = useState(false);
+
+    // Note dialog state
+    const [showNoteDialog, setShowNoteDialog] = useState(false);
+    const [noteContent, setNoteContent] = useState('');
+    const [noteVisibility, setNoteVisibility] = useState<'private' | 'team'>(teamId ? 'team' : 'private');
+    const [isCreatingNote, setIsCreatingNote] = useState(false);
 
     const actions = getSmartActions(text);
 
@@ -325,6 +351,74 @@ export default function SmartSelectionPopup({
             setTimeout(() => setWorkbenchStatus(null), 2000);
         }
     }, [text, paperId, paperTitle, location, onNoteAdded]);
+
+    // 添加高亮标注
+    const handleHighlight = useCallback(async () => {
+        if (isHighlighting) return;
+        setIsHighlighting(true);
+
+        try {
+            const color = userId ? getUserHighlightColor(userId) : '#FFE082';
+
+            await annotationsApi.create(paperId, {
+                type: 'highlight',
+                visibility: teamId ? 'team' : 'private',
+                team_id: teamId,
+                start_offset: location?.start_line,
+                end_offset: location?.end_line,
+                line_number: location?.start_line,
+                selected_text: text,
+                color: color,
+            });
+
+            setWorkbenchStatus({ type: 'highlight', success: true });
+            onHighlightCreated?.();
+            setTimeout(() => {
+                setWorkbenchStatus(null);
+                onClose();
+            }, 1000);
+        } catch (error) {
+            console.error('Failed to create highlight:', error);
+            setWorkbenchStatus({ type: 'highlight', success: false });
+            setTimeout(() => setWorkbenchStatus(null), 2000);
+        } finally {
+            setIsHighlighting(false);
+        }
+    }, [text, paperId, location, teamId, userId, onHighlightCreated, onClose, isHighlighting]);
+
+    // 创建团队笔记
+    const handleCreateNote = useCallback(async () => {
+        if (isCreatingNote || !noteContent.trim()) return;
+        setIsCreatingNote(true);
+
+        try {
+            await annotationsApi.create(paperId, {
+                type: 'note',
+                visibility: noteVisibility,
+                team_id: noteVisibility === 'team' ? teamId : undefined,
+                start_offset: location?.start_line,
+                end_offset: location?.end_line,
+                line_number: location?.start_line,
+                selected_text: text,
+                content: noteContent.trim(),
+            });
+
+            setWorkbenchStatus({ type: 'note', success: true });
+            onHighlightCreated?.();  // Refresh annotations
+            setNoteContent('');
+            setShowNoteDialog(false);
+            setTimeout(() => {
+                setWorkbenchStatus(null);
+                onClose();
+            }, 1000);
+        } catch (error) {
+            console.error('Failed to create note:', error);
+            setWorkbenchStatus({ type: 'note', success: false });
+            setTimeout(() => setWorkbenchStatus(null), 2000);
+        } finally {
+            setIsCreatingNote(false);
+        }
+    }, [noteContent, noteVisibility, paperId, location, text, teamId, onHighlightCreated, onClose, isCreatingNote]);
 
     // Stream reader helper
     const streamAnalyze = async (
@@ -547,6 +641,21 @@ export default function SmartSelectionPopup({
                     {/* 分隔线 */}
                     <div className="w-px h-5 bg-border mx-1" />
 
+                    {/* 高亮按钮 */}
+                    <button
+                        onClick={handleHighlight}
+                        disabled={isHighlighting}
+                        className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-yellow-600 hover:bg-yellow-100 dark:hover:bg-yellow-900/30 rounded-full transition-all disabled:opacity-50"
+                        title="高亮标注"
+                    >
+                        {isHighlighting ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                            <Highlighter className="w-4 h-4" />
+                        )}
+                        <span className="hidden lg:inline">高亮</span>
+                    </button>
+
                     {/* 工作台快捷按钮 */}
                     <button
                         onClick={() => handleWorkbenchAdd('method')}
@@ -573,6 +682,16 @@ export default function SmartSelectionPopup({
                         <span className="hidden lg:inline">笔记</span>
                     </button>
 
+                    {/* 团队笔记按钮 */}
+                    <button
+                        onClick={() => setShowNoteDialog(true)}
+                        className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-purple-600 hover:bg-purple-100 dark:hover:bg-purple-900/30 rounded-full transition-all"
+                        title="添加团队笔记"
+                    >
+                        <StickyNote className="w-4 h-4" />
+                        <span className="hidden lg:inline">{teamId ? '团队' : '私密'}笔记</span>
+                    </button>
+
                     {/* 分隔线 */}
                     <div className="w-px h-5 bg-border mx-1" />
 
@@ -592,7 +711,9 @@ export default function SmartSelectionPopup({
                         : 'bg-error text-error-content'
                         }`}>
                         {workbenchStatus.success
-                            ? `✓ 已添加到${workbenchStatus.type === 'method' ? '方法炼金台' : workbenchStatus.type === 'asset' ? '资产仓库' : '智能笔记'}`
+                            ? workbenchStatus.type === 'highlight'
+                                ? '✓ 已添加高亮'
+                                : `✓ 已添加到${workbenchStatus.type === 'method' ? '方法炼金台' : workbenchStatus.type === 'asset' ? '资产仓库' : '智能笔记'}`
                             : '添加失败，请重试'
                         }
                     </div>
@@ -612,6 +733,98 @@ export default function SmartSelectionPopup({
                     onSendMessage={handleChatMessage}
                     chatHistory={chatHistory}
                 />
+            )}
+
+            {/* 笔记对话框 */}
+            {showNoteDialog && (
+                <div
+                    className="fixed z-[200] bg-surface rounded-xl shadow-2xl border border-border overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+                    style={{
+                        left: Math.min(position.x, window.innerWidth - 360),
+                        top: Math.min(position.y + 60, window.innerHeight - 300),
+                        width: '340px',
+                    }}
+                >
+                    {/* Header */}
+                    <div className="px-3 py-2 flex items-center justify-between bg-purple-500/10">
+                        <div className="flex items-center gap-2">
+                            <StickyNote className="w-4 h-4 text-purple-600" />
+                            <span className="text-sm font-medium text-content-main">添加笔记</span>
+                        </div>
+                        <button
+                            onClick={() => setShowNoteDialog(false)}
+                            className="p-1 hover:bg-black/10 rounded transition-colors"
+                        >
+                            <X className="w-4 h-4 text-content-muted" />
+                        </button>
+                    </div>
+
+                    {/* Selected text preview */}
+                    <div className="px-3 py-2 border-b border-border bg-surface-elevated">
+                        <div className="text-xs text-content-muted mb-1">选中内容</div>
+                        <div className="text-sm text-content-main line-clamp-2 italic">
+                            "{text.substring(0, 80)}{text.length > 80 ? '...' : ''}"
+                        </div>
+                    </div>
+
+                    {/* Visibility toggle */}
+                    <div className="px-3 py-2 border-b border-border">
+                        <div className="text-xs text-content-muted mb-2">可见性</div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setNoteVisibility('private')}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-all ${noteVisibility === 'private'
+                                        ? 'bg-gray-600 text-white'
+                                        : 'bg-surface-elevated text-content-muted hover:bg-surface'
+                                    }`}
+                            >
+                                <Lock className="w-3.5 h-3.5" />
+                                仅自己
+                            </button>
+                            <button
+                                onClick={() => setNoteVisibility('team')}
+                                disabled={!teamId}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-all ${noteVisibility === 'team'
+                                        ? 'bg-purple-600 text-white'
+                                        : 'bg-surface-elevated text-content-muted hover:bg-surface disabled:opacity-50 disabled:cursor-not-allowed'
+                                    }`}
+                                title={teamId ? '' : '需要在团队论文中才能使用'}
+                            >
+                                <Users className="w-3.5 h-3.5" />
+                                团队共享
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Note input */}
+                    <div className="p-3">
+                        <textarea
+                            value={noteContent}
+                            onChange={(e) => setNoteContent(e.target.value)}
+                            placeholder="输入您的笔记内容..."
+                            className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-surface text-content-main resize-none"
+                            rows={4}
+                            autoFocus
+                        />
+                        <div className="flex items-center justify-between mt-3">
+                            <span className="text-xs text-content-muted">
+                                {noteVisibility === 'team' ? '👥 团队可见' : '🔒 仅自己可见'}
+                            </span>
+                            <button
+                                onClick={handleCreateNote}
+                                disabled={!noteContent.trim() || isCreatingNote}
+                                className="flex items-center gap-1 px-4 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+                            >
+                                {isCreatingNote ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                    <StickyNote className="w-4 h-4" />
+                                )}
+                                保存笔记
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </>
     );

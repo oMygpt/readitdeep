@@ -24,9 +24,15 @@ import {
     FileText,
     Save,
     PanelRightClose,
+    Highlighter,
+    MessageCircle,
+    StickyNote,
+    Lock,
+    Users,
 } from 'lucide-react';
 import { api } from '../lib/api';
-import type { TextLocation } from '../lib/api';
+import type { TextLocation, Annotation } from '../lib/api';
+import { getHighlightBackgroundColor } from '../lib/highlight';
 
 // Types
 export interface WorkbenchItem {
@@ -45,7 +51,9 @@ interface WorkbenchProps {
     paperTitle: string;
     onClose?: () => void;
     onJumpToLocation?: (location: TextLocation) => void;
+    onJumpToHighlight?: (selectedText: string) => void;
     refreshKey?: number;  // Increment to trigger refresh
+    annotations?: Annotation[];  // Highlights to display
 }
 
 // Smart Note Card with expandable reflection
@@ -290,6 +298,148 @@ function AssetCard({ item, onRemove }: { item: WorkbenchItem; onRemove: () => vo
     );
 }
 
+// Highlight Card for sidebar
+function HighlightCard({
+    annotation,
+    onJump,
+    onDelete
+}: {
+    annotation: Annotation;
+    onJump: () => void;
+    onDelete?: () => void;
+}) {
+    const user = annotation.user;
+    const displayName = user?.username || user?.email?.split('@')[0] || '未知用户';
+    const createdAt = annotation.created_at
+        ? new Date(annotation.created_at).toLocaleDateString('zh-CN', {
+            month: 'short',
+            day: 'numeric',
+        })
+        : '';
+    const repliesCount = annotation.replies_count || 0;
+
+    return (
+        <div
+            className="bg-surface border rounded-xl p-3 shadow-sm cursor-pointer hover:shadow-md transition-all"
+            style={{ borderColor: getHighlightBackgroundColor(annotation.color || '#FFE082', 0.5) }}
+            onClick={onJump}
+        >
+            <div className="flex items-start gap-2">
+                <div
+                    className="w-1 h-full rounded-full flex-shrink-0 self-stretch"
+                    style={{ backgroundColor: annotation.color || '#FFE082' }}
+                />
+                <div className="flex-1 min-w-0">
+                    <div className="text-sm text-content-main line-clamp-2 italic">
+                        "{annotation.selected_text?.substring(0, 80)}{(annotation.selected_text?.length || 0) > 80 ? '...' : ''}"
+                    </div>
+                    <div className="flex items-center gap-2 mt-2 text-xs text-content-muted">
+                        <div
+                            className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] font-bold"
+                            style={{ backgroundColor: annotation.color || '#FFE082' }}
+                        >
+                            {displayName.charAt(0).toUpperCase()}
+                        </div>
+                        <span>{displayName}</span>
+                        <span>·</span>
+                        <span>{createdAt}</span>
+                        {repliesCount > 0 && (
+                            <>
+                                <span>·</span>
+                                <span className="flex items-center gap-0.5">
+                                    <MessageCircle className="w-3 h-3" />
+                                    {repliesCount}
+                                </span>
+                            </>
+                        )}
+                    </div>
+                </div>
+                {onDelete && (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                        className="p-1 text-content-muted hover:text-error rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                        <X className="w-3.5 h-3.5" />
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+}
+
+// Note Card for sidebar
+function NoteCard({
+    annotation,
+    onJump,
+    onDelete
+}: {
+    annotation: Annotation;
+    onJump: () => void;
+    onDelete?: () => void;
+}) {
+    const user = annotation.user;
+    const displayName = user?.username || user?.email?.split('@')[0] || '未知用户';
+    const createdAt = annotation.created_at
+        ? new Date(annotation.created_at).toLocaleDateString('zh-CN', {
+            month: 'short',
+            day: 'numeric',
+        })
+        : '';
+    const isTeamVisible = annotation.visibility === 'team';
+
+    return (
+        <div
+            className="bg-surface border border-purple-200 dark:border-purple-800/50 rounded-xl p-3 shadow-sm cursor-pointer hover:shadow-md transition-all group"
+            onClick={onJump}
+        >
+            <div className="flex items-start gap-2">
+                <StickyNote className="w-4 h-4 text-purple-500 mt-0.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                    {/* Note content */}
+                    <div className="text-sm text-content-main line-clamp-3">
+                        {annotation.content || '无内容'}
+                    </div>
+                    {/* Selected text preview */}
+                    {annotation.selected_text && (
+                        <div className="text-xs text-content-muted line-clamp-1 italic mt-1 bg-surface-elevated px-2 py-1 rounded">
+                            "{annotation.selected_text.substring(0, 50)}{annotation.selected_text.length > 50 ? '...' : ''}"
+                        </div>
+                    )}
+                    {/* Meta info */}
+                    <div className="flex items-center gap-2 mt-2 text-xs text-content-muted">
+                        <div className="w-4 h-4 rounded-full bg-purple-500 flex items-center justify-center text-white text-[10px] font-bold">
+                            {displayName.charAt(0).toUpperCase()}
+                        </div>
+                        <span>{displayName}</span>
+                        <span>·</span>
+                        <span>{createdAt}</span>
+                        <span>·</span>
+                        {isTeamVisible ? (
+                            <span className="flex items-center gap-0.5 text-purple-500">
+                                <Users className="w-3 h-3" />
+                                团队
+                            </span>
+                        ) : (
+                            <span className="flex items-center gap-0.5">
+                                <Lock className="w-3 h-3" />
+                                私密
+                            </span>
+                        )}
+                    </div>
+                </div>
+                {onDelete && (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                        className="p-1 text-content-muted hover:text-error rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                        <X className="w-3.5 h-3.5" />
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+}
+
 // Drop Zone Component
 function DropZone({
     title,
@@ -368,7 +518,7 @@ function DropZone({
 }
 
 // Main Enhanced Workbench Component
-export default function Workbench({ paperId, paperTitle, onClose, onJumpToLocation, refreshKey }: WorkbenchProps) {
+export default function Workbench({ paperId, paperTitle, onClose, onJumpToLocation, onJumpToHighlight, refreshKey, annotations = [] }: WorkbenchProps) {
     const { t } = useTranslation();
     const [methodItems, setMethodItems] = useState<WorkbenchItem[]>([]);
     const [assetItems, setAssetItems] = useState<WorkbenchItem[]>([]);
@@ -384,6 +534,12 @@ export default function Workbench({ paperId, paperTitle, onClose, onJumpToLocati
         code_refs: Array<{ repo_url?: string; description: string }>;
     } | null>(null);
     const [showAutoSection, setShowAutoSection] = useState(true);
+    const [showHighlightsSection, setShowHighlightsSection] = useState(true);
+    const [showNotesSection, setShowNotesSection] = useState(true);
+
+    // Filter annotations by type
+    const highlights = annotations.filter(a => a.type === 'highlight');
+    const teamNotes = annotations.filter(a => a.type === 'note');
 
     // Load existing workbench items for this paper on mount
     useEffect(() => {
@@ -637,10 +793,80 @@ export default function Workbench({ paperId, paperTitle, onClose, onJumpToLocati
                 )}
 
                 {/* User Content Section Label */}
-                {(methodItems.length > 0 || assetItems.length > 0 || noteItems.length > 0 || autoAnalysis) && (
+                {(methodItems.length > 0 || assetItems.length > 0 || noteItems.length > 0 || autoAnalysis || highlights.length > 0) && (
                     <div className="flex items-center gap-2 pt-2">
                         <span className="text-xs font-medium text-content-muted">{t('workbench.myNotes')}</span>
                         <div className="flex-1 h-px bg-border" />
+                    </div>
+                )}
+
+                {/* Highlights Section */}
+                {highlights.length > 0 && (
+                    <div className="rounded-xl border border-yellow-500/30 bg-surface overflow-hidden">
+                        <button
+                            onClick={() => setShowHighlightsSection(!showHighlightsSection)}
+                            className="w-full flex items-center justify-between px-3 py-2 bg-yellow-500/5 hover:bg-yellow-500/10 transition-colors"
+                        >
+                            <div className="flex items-center gap-2">
+                                <Highlighter className="w-4 h-4 text-yellow-600" />
+                                <span className="text-xs font-medium text-content-main">我的高亮</span>
+                                <span className="px-1.5 py-0.5 bg-yellow-500/20 text-yellow-700 text-[10px] rounded">
+                                    {highlights.length}
+                                </span>
+                            </div>
+                            {showHighlightsSection ? <ChevronUp className="w-4 h-4 text-content-muted" /> : <ChevronDown className="w-4 h-4 text-content-muted" />}
+                        </button>
+
+                        {showHighlightsSection && (
+                            <div className="p-3 space-y-2">
+                                {highlights.map((highlight) => (
+                                    <HighlightCard
+                                        key={highlight.id}
+                                        annotation={highlight}
+                                        onJump={() => {
+                                            if (highlight.selected_text && onJumpToHighlight) {
+                                                onJumpToHighlight(highlight.selected_text);
+                                            }
+                                        }}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Notes Section (Team Notes from annotations) */}
+                {teamNotes.length > 0 && (
+                    <div className="rounded-xl border border-purple-500/30 bg-surface overflow-hidden">
+                        <button
+                            onClick={() => setShowNotesSection(!showNotesSection)}
+                            className="w-full flex items-center justify-between px-3 py-2 bg-purple-500/5 hover:bg-purple-500/10 transition-colors"
+                        >
+                            <div className="flex items-center gap-2">
+                                <StickyNote className="w-4 h-4 text-purple-600" />
+                                <span className="text-xs font-medium text-content-main">我的笔记</span>
+                                <span className="px-1.5 py-0.5 bg-purple-500/20 text-purple-700 text-[10px] rounded">
+                                    {teamNotes.length}
+                                </span>
+                            </div>
+                            {showNotesSection ? <ChevronUp className="w-4 h-4 text-content-muted" /> : <ChevronDown className="w-4 h-4 text-content-muted" />}
+                        </button>
+
+                        {showNotesSection && (
+                            <div className="p-3 space-y-2">
+                                {teamNotes.map((note) => (
+                                    <NoteCard
+                                        key={note.id}
+                                        annotation={note}
+                                        onJump={() => {
+                                            if (note.selected_text && onJumpToHighlight) {
+                                                onJumpToHighlight(note.selected_text);
+                                            }
+                                        }}
+                                    />
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
 
