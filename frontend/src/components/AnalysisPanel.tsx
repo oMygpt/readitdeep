@@ -48,6 +48,7 @@ export default function AnalysisPanel({ paperId, onJumpToLine }: AnalysisPanelPr
             if (query.state.data?.status === 'analyzing') return 3000;
             return false;
         },
+        staleTime: 1000 * 60 * 5, // Cache for 5 minutes
     });
 
     // 触发分析

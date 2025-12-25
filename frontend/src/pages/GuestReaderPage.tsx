@@ -33,6 +33,7 @@ import {
     Code,
     ExternalLink,
     Sparkles,
+    Users,
 } from 'lucide-react';
 import { shareApi } from '../lib/api';
 import type { StructureSection } from '../lib/api';
@@ -203,10 +204,28 @@ export default function GuestReaderPage() {
                             >
                                 <ArrowLeft className="w-5 h-5" />
                             </Link>
-                            <div>
+                            <div className="flex-1 min-w-0">
                                 <h1 className="text-xl font-bold text-content-main line-clamp-1">
                                     {paperTitle}
                                 </h1>
+                                {/* Authors */}
+                                {paperInfo?.authors && (() => {
+                                    try {
+                                        const authors = JSON.parse(paperInfo.authors);
+                                        if (Array.isArray(authors) && authors.length > 0) {
+                                            const displayAuthors = authors.slice(0, 3).join(', ');
+                                            const hasMore = authors.length > 3;
+                                            return (
+                                                <p className="text-sm text-content-muted flex items-center gap-1 truncate">
+                                                    <Users className="w-3 h-3 flex-shrink-0" />
+                                                    <span className="truncate">
+                                                        {displayAuthors}{hasMore ? ` +${authors.length - 3}人` : ''}
+                                                    </span>
+                                                </p>
+                                            );
+                                        }
+                                    } catch { } return null;
+                                })()}
                                 <p className="text-sm text-content-muted flex items-center gap-1">
                                     <Sparkles className="w-3 h-3" />
                                     {t('share.guestViewOnly', '访客浏览模式')}

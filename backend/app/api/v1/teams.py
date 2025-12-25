@@ -590,64 +590,70 @@ async def list_team_papers(
     db: AsyncSession = Depends(get_db),
 ):
     """获取团队论文列表"""
-    from app.models.paper import Paper
-    from app.core.store import store
-    
-    await get_team_or_404(db, team_id)
-    await get_member_or_403(db, team_id, user.id)
-    
-    # 使用 LEFT JOIN，允许 Paper 表记录不存在的情况
-    result = await db.execute(
-        select(PaperShare, Paper, User)
-        .outerjoin(Paper, PaperShare.paper_id == Paper.id)
-        .outerjoin(User, PaperShare.shared_by == User.id)
-        .where(PaperShare.team_id == team_id)
-        .order_by(PaperShare.shared_at.desc())
-    )
-    rows = result.all()
-    
-    papers = []
-    for share, paper, sharer in rows:
-        # 优先使用数据库记录，不存在则 fallback 到 store
-        if paper:
-            paper_data = {
-                "id": paper.id,
-                "title": paper.title,
-                "filename": paper.filename,
-                "status": paper.status,
-                "category": paper.category,
-                "created_at": paper.created_at.isoformat() if paper.created_at else None,
-            }
-        else:
-            # Fallback: 从内存 store 获取
-            store_paper = store.get(share.paper_id)
-            if store_paper:
-                created_at = store_paper.get("created_at")
-                if created_at and hasattr(created_at, 'isoformat'):
-                    created_at = created_at.isoformat()
+    import traceback
+    try:
+        from app.models.paper import Paper
+        from app.core.store import store
+        
+        await get_team_or_404(db, team_id)
+        await get_member_or_403(db, team_id, str(user.id))
+        
+        # 使用 LEFT JOIN，允许 Paper 表记录不存在的情况
+        result = await db.execute(
+            select(PaperShare, Paper, User)
+            .outerjoin(Paper, PaperShare.paper_id == Paper.id)
+            .outerjoin(User, PaperShare.shared_by == User.id)
+            .where(PaperShare.team_id == team_id)
+            .order_by(PaperShare.shared_at.desc())
+        )
+        rows = result.all()
+        
+        papers = []
+        for share, paper, sharer in rows:
+            # 优先使用数据库记录，不存在则 fallback 到 store
+            if paper:
                 paper_data = {
-                    "id": store_paper["id"],
-                    "title": store_paper.get("title"),
-                    "filename": store_paper.get("filename", "Unknown"),
-                    "status": store_paper.get("status", "unknown"),
-                    "category": store_paper.get("category"),
-                    "created_at": created_at,
+                    "id": paper.id,
+                    "title": paper.title,
+                    "filename": paper.filename,
+                    "status": paper.status,
+                    "category": paper.category,
+                    "created_at": paper.created_at.isoformat() if paper.created_at else None,
                 }
             else:
-                # 论文既不在数据库也不在 store，跳过
-                logger.warning(f"Paper {share.paper_id} not found in DB or store")
-                continue
+                # Fallback: 从内存 store 获取
+                store_paper = store.get(share.paper_id)
+                if store_paper:
+                    created_at = store_paper.get("created_at")
+                    if created_at and hasattr(created_at, 'isoformat'):
+                        created_at = created_at.isoformat()
+                    paper_data = {
+                        "id": store_paper["id"],
+                        "title": store_paper.get("title"),
+                        "filename": store_paper.get("filename", "Unknown"),
+                        "status": store_paper.get("status", "unknown"),
+                        "category": store_paper.get("category"),
+                        "created_at": created_at,
+                    }
+                else:
+                    # 论文既不在数据库也不在 store，跳过
+                    logger.warning(f"Paper {share.paper_id} not found in DB or store")
+                    continue
+            
+            paper_data["shared_by"] = {
+                "id": sharer.id if sharer else None,
+                "email": sharer.email if sharer else None,
+                "username": sharer.username if sharer else None,
+            } if sharer else None
+            paper_data["shared_at"] = share.shared_at.isoformat() if share.shared_at else None
+            
+            papers.append(paper_data)
         
-        paper_data["shared_by"] = {
-            "id": sharer.id if sharer else None,
-            "email": sharer.email if sharer else None,
-            "username": sharer.username if sharer else None,
-        } if sharer else None
-        paper_data["shared_at"] = share.shared_at.isoformat() if share.shared_at else None
-        
-        papers.append(paper_data)
-    
-    return {"papers": papers, "total": len(papers)}
+        return {"papers": papers, "total": len(papers)}
+    except Exception as e:
+        logger.error(f"!!! list_team_papers ERROR: {e}")
+        logger.error(traceback.format_exc())
+        raise
 
 
 @router.delete("/papers/{paper_id}/share/{team_id}")

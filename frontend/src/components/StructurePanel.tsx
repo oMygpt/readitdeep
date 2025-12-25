@@ -19,6 +19,8 @@ export default function StructurePanel({ paperId, onJumpToLine }: StructurePanel
     const { data: analysis, isLoading, error } = useQuery({
         queryKey: ['analysis', paperId],
         queryFn: () => analysisApi.get(paperId),
+        staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+        retry: false,
     });
 
     const handleJump = (location: TextLocation) => {

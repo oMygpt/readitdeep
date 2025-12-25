@@ -25,6 +25,8 @@ import {
     Check,
     ArrowLeft,
     UserPlus,
+    ClipboardList,
+    Trash2,
 } from 'lucide-react';
 import { teamsApi, type Team } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -284,6 +286,13 @@ function TeamDetailView({
         },
     });
 
+    const unshareMutation = useMutation({
+        mutationFn: (paperId: string) => teamsApi.unsharePaper(paperId, teamId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['team-papers', teamId] });
+        },
+    });
+
     if (teamLoading) {
         return (
             <div className="flex items-center justify-center py-20">
@@ -336,6 +345,13 @@ function TeamDetailView({
                         )}
                     </button>
                 )}
+                <button
+                    onClick={() => navigate(`/teams/${teamId}/tasks`)}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                >
+                    <ClipboardList className="w-4 h-4" />
+                    任务板
+                </button>
             </div>
 
             {/* Members */}
@@ -393,21 +409,40 @@ function TeamDetailView({
                 ) : (
                     <div className="space-y-2">
                         {papers?.papers.map((paper) => (
-                            <button
+                            <div
                                 key={paper.id}
-                                onClick={() => navigate(`/read/${paper.id}`)}
-                                className="w-full flex items-center gap-3 p-3 bg-background rounded-lg hover:bg-surface-elevated transition-colors text-left"
+                                className="w-full flex items-center gap-3 p-3 bg-background rounded-lg group"
                             >
-                                <BookOpen className="w-5 h-5 text-primary flex-shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                    <div className="font-medium text-content-main truncate">
-                                        {paper.title || paper.filename}
+                                <button
+                                    onClick={() => navigate(`/read/${paper.id}`)}
+                                    className="flex items-center gap-3 flex-1 min-w-0 text-left hover:bg-surface-elevated rounded-lg transition-colors"
+                                >
+                                    <BookOpen className="w-5 h-5 text-primary flex-shrink-0" />
+                                    <div className="flex-1 min-w-0">
+                                        <div className="font-medium text-content-main truncate">
+                                            {paper.title || paper.filename}
+                                        </div>
+                                        <div className="text-xs text-content-dim">
+                                            由 {paper.shared_by?.username || paper.shared_by?.email || '未知'} 分享
+                                        </div>
                                     </div>
-                                    <div className="text-xs text-content-dim">
-                                        由 {paper.shared_by?.username || paper.shared_by?.email || '未知'} 分享
-                                    </div>
-                                </div>
-                            </button>
+                                </button>
+                                {(isAdmin || paper.shared_by?.id === user?.id) && (
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (confirm('确定要取消分享这篇论文吗？')) {
+                                                unshareMutation.mutate(paper.id);
+                                            }
+                                        }}
+                                        disabled={unshareMutation.isPending}
+                                        className="p-2 text-content-dim hover:text-error hover:bg-error/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                                        title="取消分享"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                )}
+                            </div>
                         ))}
                     </div>
                 )}

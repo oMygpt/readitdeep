@@ -109,6 +109,11 @@ export const papersApi = {
         const { data } = await api.get(`/papers/${id}/content`);
         return data;
     },
+
+    updateTags: async (id: string, tags: string[]): Promise<{ message: string; tags: string[] }> => {
+        const { data } = await api.put(`/papers/${id}/tags`, { tags });
+        return data;
+    },
 };
 
 export const libraryApi = {
@@ -1545,6 +1550,7 @@ export interface GuestPaper {
     filename: string;
     status: string;
     owner_name: string | null;
+    authors: string | null;
 }
 
 export interface GuestPaperContent {

@@ -11,7 +11,8 @@ from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from sqlalchemy import select, and_
 
 from app.core.database import get_db
@@ -80,22 +81,23 @@ class TaskResponse(BaseModel):
 
 # ================== Helper Functions ==================
 
-def check_team_membership(db: Session, team_id: str, user_id: str) -> TeamMember:
+async def check_team_membership(db: AsyncSession, team_id: str, user_id: str) -> TeamMember:
     """检查用户是否是团队成员"""
-    member = db.execute(
+    result = await db.execute(
         select(TeamMember).where(
             and_(TeamMember.team_id == team_id, TeamMember.user_id == user_id)
         )
-    ).scalar_one_or_none()
+    )
+    member = result.scalar_one_or_none()
     
     if not member:
         raise HTTPException(status_code=403, detail="Not a team member")
     return member
 
 
-def check_team_admin(db: Session, team_id: str, user_id: str) -> TeamMember:
+async def check_team_admin(db: AsyncSession, team_id: str, user_id: str) -> TeamMember:
     """检查用户是否是团队管理员"""
-    member = check_team_membership(db, team_id, user_id)
+    member = await check_team_membership(db, team_id, user_id)
     if member.role not in (TeamRole.OWNER, TeamRole.ADMIN):
         raise HTTPException(status_code=403, detail="Admin permission required")
     return member
@@ -109,12 +111,12 @@ async def list_team_tasks(
     status: Optional[TaskStatus] = None,
     priority: Optional[TaskPriority] = None,
     assignee_id: Optional[str] = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """获取团队任务列表"""
     # 检查权限
-    check_team_membership(db, team_id, current_user.id)
+    await check_team_membership(db, team_id, str(current_user.id))
     
     # 构建查询
     query = select(ReadingTask).where(ReadingTask.team_id == team_id)
@@ -129,7 +131,7 @@ async def list_team_tasks(
     query = query.options(selectinload(ReadingTask.assignees))
     query = query.order_by(ReadingTask.created_at.desc())
     
-    result = db.execute(query)
+    result = await db.execute(query)
     tasks = result.scalars().all()
     
     return [task.to_dict() for task in tasks]
@@ -139,16 +141,17 @@ async def list_team_tasks(
 async def create_task(
     team_id: str,
     request: CreateTaskRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """创建阅读任务"""
     # 检查权限 (只有管理员可以创建任务)
-    check_team_admin(db, team_id, current_user.id)
+    await check_team_admin(db, team_id, str(current_user.id))
     
     # 验证论文 (如果有)
     if request.paper_id:
-        paper = db.get(Paper, request.paper_id)
+        result = await db.execute(select(Paper).where(Paper.id == request.paper_id))
+        paper = result.scalar_one_or_none()
         if not paper:
             raise HTTPException(status_code=404, detail="Paper not found")
     
@@ -164,17 +167,18 @@ async def create_task(
         status=TaskStatus.PENDING,
     )
     db.add(task)
-    db.flush()  # 获取 task.id
+    await db.flush()  # 获取 task.id
     
     # 初始分配
     if request.assignee_ids:
         for user_id in request.assignee_ids:
             # 验证用户是团队成员
-            member = db.execute(
+            result = await db.execute(
                 select(TeamMember).where(
                     and_(TeamMember.team_id == team_id, TeamMember.user_id == user_id)
                 )
-            ).scalar_one_or_none()
+            )
+            member = result.scalar_one_or_none()
             
             if member:
                 assignee = TaskAssignee(
@@ -185,8 +189,8 @@ async def create_task(
                 )
                 db.add(assignee)
     
-    db.commit()
-    db.refresh(task)
+    await db.commit()
+    await db.refresh(task)
     
     return task.to_dict()
 
@@ -196,21 +200,22 @@ async def create_task(
 @router.get("/{task_id}", response_model=TaskResponse)
 async def get_task(
     task_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """获取任务详情"""
-    task = db.execute(
+    result = await db.execute(
         select(ReadingTask)
         .where(ReadingTask.id == task_id)
         .options(selectinload(ReadingTask.assignees))
-    ).scalar_one_or_none()
+    )
+    task = result.scalar_one_or_none()
     
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     
     # 检查权限
-    check_team_membership(db, task.team_id, current_user.id)
+    await check_team_membership(db, task.team_id, str(current_user.id))
     
     return task.to_dict()
 
@@ -219,17 +224,18 @@ async def get_task(
 async def update_task(
     task_id: str,
     request: UpdateTaskRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """更新任务"""
-    task = db.get(ReadingTask, task_id)
+    result = await db.execute(select(ReadingTask).where(ReadingTask.id == task_id))
+    task = result.scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     
     # 检查权限 (只有管理员或创建者可以更新)
-    member = check_team_membership(db, task.team_id, current_user.id)
-    if not (member.is_admin or task.created_by == current_user.id):
+    member = await check_team_membership(db, task.team_id, str(current_user.id))
+    if not (member.is_admin or str(task.created_by) == str(current_user.id)):
         raise HTTPException(status_code=403, detail="Permission denied")
     
     # 更新字段
@@ -246,8 +252,8 @@ async def update_task(
         if request.status == TaskStatus.COMPLETED:
             task.completed_at = datetime.utcnow()
     
-    db.commit()
-    db.refresh(task)
+    await db.commit()
+    await db.refresh(task)
     
     return task.to_dict()
 
@@ -255,21 +261,22 @@ async def update_task(
 @router.delete("/{task_id}")
 async def delete_task(
     task_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """删除任务"""
-    task = db.get(ReadingTask, task_id)
+    result = await db.execute(select(ReadingTask).where(ReadingTask.id == task_id))
+    task = result.scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     
     # 检查权限 (只有管理员或创建者可以删除)
-    member = check_team_membership(db, task.team_id, current_user.id)
-    if not (member.is_admin or task.created_by == current_user.id):
+    member = await check_team_membership(db, task.team_id, str(current_user.id))
+    if not (member.is_admin or str(task.created_by) == str(current_user.id)):
         raise HTTPException(status_code=403, detail="Permission denied")
     
-    db.delete(task)
-    db.commit()
+    await db.delete(task)
+    await db.commit()
     
     return {"message": "Task deleted"}
 
@@ -280,53 +287,56 @@ async def delete_task(
 async def assign_task(
     task_id: str,
     request: AssignTaskRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """分配任务给用户"""
-    task = db.get(ReadingTask, task_id)
+    result = await db.execute(select(ReadingTask).where(ReadingTask.id == task_id))
+    task = result.scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     
     # 检查权限
-    check_team_admin(db, task.team_id, current_user.id)
+    await check_team_admin(db, task.team_id, str(current_user.id))
     
     assigned = []
-    for user_id in request.user_ids:
+    for uid in request.user_ids:
         # 检查是否已分配
-        existing = db.execute(
+        existing_result = await db.execute(
             select(TaskAssignee).where(
-                and_(TaskAssignee.task_id == task_id, TaskAssignee.user_id == user_id)
+                and_(TaskAssignee.task_id == task_id, TaskAssignee.user_id == uid)
             )
-        ).scalar_one_or_none()
+        )
+        existing = existing_result.scalar_one_or_none()
         
         if existing:
             continue
         
         # 验证用户是团队成员
-        member = db.execute(
+        member_result = await db.execute(
             select(TeamMember).where(
-                and_(TeamMember.team_id == task.team_id, TeamMember.user_id == user_id)
+                and_(TeamMember.team_id == task.team_id, TeamMember.user_id == uid)
             )
-        ).scalar_one_or_none()
+        )
+        member = member_result.scalar_one_or_none()
         
         if not member:
             continue
         
         assignee = TaskAssignee(
             task_id=task_id,
-            user_id=user_id,
+            user_id=uid,
             assigned_by=current_user.id,
             status=AssigneeStatus.ASSIGNED,
         )
         db.add(assignee)
-        assigned.append(user_id)
+        assigned.append(uid)
     
     # 更新任务状态
     if task.status == TaskStatus.PENDING and assigned:
         task.status = TaskStatus.IN_PROGRESS
     
-    db.commit()
+    await db.commit()
     
     return {"message": f"Assigned to {len(assigned)} users", "assigned": assigned}
 
@@ -335,30 +345,32 @@ async def assign_task(
 async def unassign_task(
     task_id: str,
     user_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """取消分配"""
-    task = db.get(ReadingTask, task_id)
+    result = await db.execute(select(ReadingTask).where(ReadingTask.id == task_id))
+    task = result.scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     
     # 检查权限 (管理员或本人可以取消分配)
-    member = check_team_membership(db, task.team_id, current_user.id)
-    if not (member.is_admin or user_id == current_user.id):
+    member = await check_team_membership(db, task.team_id, str(current_user.id))
+    if not (member.is_admin or user_id == str(current_user.id)):
         raise HTTPException(status_code=403, detail="Permission denied")
     
-    assignee = db.execute(
+    assignee_result = await db.execute(
         select(TaskAssignee).where(
             and_(TaskAssignee.task_id == task_id, TaskAssignee.user_id == user_id)
         )
-    ).scalar_one_or_none()
+    )
+    assignee = assignee_result.scalar_one_or_none()
     
     if not assignee:
         raise HTTPException(status_code=404, detail="Assignment not found")
     
-    db.delete(assignee)
-    db.commit()
+    await db.delete(assignee)
+    await db.commit()
     
     return {"message": "Assignment removed"}
 
@@ -369,26 +381,27 @@ async def unassign_task(
 async def start_reading(
     task_id: str,
     user_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """开始阅读"""
     # 只能操作自己的分配
-    if user_id != current_user.id:
+    if user_id != str(current_user.id):
         raise HTTPException(status_code=403, detail="Can only start your own assignment")
     
-    assignee = db.execute(
+    result = await db.execute(
         select(TaskAssignee).where(
             and_(TaskAssignee.task_id == task_id, TaskAssignee.user_id == user_id)
         )
-    ).scalar_one_or_none()
+    )
+    assignee = result.scalar_one_or_none()
     
     if not assignee:
         raise HTTPException(status_code=404, detail="Assignment not found")
     
     assignee.status = AssigneeStatus.READING
     assignee.started_at = datetime.utcnow()
-    db.commit()
+    await db.commit()
     
     return {"message": "Reading started"}
 
@@ -398,19 +411,20 @@ async def submit_summary(
     task_id: str,
     user_id: str,
     request: SubmitSummaryRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """提交阅读总结"""
     # 只能操作自己的分配
-    if user_id != current_user.id:
+    if user_id != str(current_user.id):
         raise HTTPException(status_code=403, detail="Can only submit your own summary")
     
-    assignee = db.execute(
+    result = await db.execute(
         select(TaskAssignee).where(
             and_(TaskAssignee.task_id == task_id, TaskAssignee.user_id == user_id)
         )
-    ).scalar_one_or_none()
+    )
+    assignee = result.scalar_one_or_none()
     
     if not assignee:
         raise HTTPException(status_code=404, detail="Assignment not found")
@@ -421,7 +435,7 @@ async def submit_summary(
         assignee.summary_structure = json.dumps(request.summary_structure)
     assignee.status = AssigneeStatus.SUBMITTED
     assignee.submitted_at = datetime.utcnow()
-    db.commit()
+    await db.commit()
     
     return {"message": "Summary submitted"}
 
@@ -430,22 +444,24 @@ async def submit_summary(
 async def approve_summary(
     task_id: str,
     user_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """批准总结"""
-    task = db.get(ReadingTask, task_id)
+    result = await db.execute(select(ReadingTask).where(ReadingTask.id == task_id))
+    task = result.scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     
     # 检查权限
-    check_team_admin(db, task.team_id, current_user.id)
+    await check_team_admin(db, task.team_id, str(current_user.id))
     
-    assignee = db.execute(
+    assignee_result = await db.execute(
         select(TaskAssignee).where(
             and_(TaskAssignee.task_id == task_id, TaskAssignee.user_id == user_id)
         )
-    ).scalar_one_or_none()
+    )
+    assignee = assignee_result.scalar_one_or_none()
     
     if not assignee:
         raise HTTPException(status_code=404, detail="Assignment not found")
@@ -457,14 +473,15 @@ async def approve_summary(
     assignee.approved_at = datetime.utcnow()
     
     # 检查是否所有分配都完成
-    all_assignees = db.execute(
+    all_result = await db.execute(
         select(TaskAssignee).where(TaskAssignee.task_id == task_id)
-    ).scalars().all()
+    )
+    all_assignees = all_result.scalars().all()
     
     if all(a.status == AssigneeStatus.APPROVED for a in all_assignees):
         task.status = TaskStatus.COMPLETED
         task.completed_at = datetime.utcnow()
     
-    db.commit()
+    await db.commit()
     
     return {"message": "Summary approved"}

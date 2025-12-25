@@ -1,25 +1,25 @@
 {
-  "total_tokens": 1907569,
-  "total_prompt_tokens": 1737258,
-  "total_completion_tokens": 170311,
+  "total_tokens": 1928569,
+  "total_prompt_tokens": 1754806,
+  "total_completion_tokens": 173763,
   "by_function": {
     "workbench_method": {
-      "total_tokens": 123823,
-      "prompt_tokens": 94960,
-      "completion_tokens": 28863,
-      "calls_count": 71
+      "total_tokens": 125205,
+      "prompt_tokens": 96120,
+      "completion_tokens": 29085,
+      "calls_count": 72
     },
     "workbench_asset": {
-      "total_tokens": 1547782,
-      "prompt_tokens": 1473053,
-      "completion_tokens": 74729,
-      "calls_count": 66
+      "total_tokens": 1561933,
+      "prompt_tokens": 1486221,
+      "completion_tokens": 75712,
+      "calls_count": 67
     },
     "agent_summary": {
-      "total_tokens": 235964,
-      "prompt_tokens": 169245,
-      "completion_tokens": 66719,
-      "calls_count": 50
+      "total_tokens": 241431,
+      "prompt_tokens": 172465,
+      "completion_tokens": 68966,
+      "calls_count": 51
     }
   },
   "by_date": {
@@ -52,9 +52,9 @@
       "calls_count": 39
     },
     "2025-12-25": {
-      "total_tokens": 130516,
-      "calls_count": 15
+      "total_tokens": 151516,
+      "calls_count": 18
     }
   },
-  "calls_count": 187
+  "calls_count": 190
 }
