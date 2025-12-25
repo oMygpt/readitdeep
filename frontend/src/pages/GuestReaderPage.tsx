@@ -530,16 +530,14 @@ export default function GuestReaderPage() {
                     <div className="flex items-center bg-surface-elevated rounded-lg p-1">
                         <button
                             onClick={() => setViewMode('explore')}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors ${viewMode === 'explore' ? 'bg-primary text-primary-content' : 'text-content-muted hover:text-content-main'
-                                }`}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors text-content-muted hover:text-content-main hover:bg-surface-hover"
                         >
                             <Compass className="w-4 h-4" />
                             概览
                         </button>
                         <button
                             onClick={() => setViewMode('read')}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors ${viewMode === 'read' ? 'bg-primary text-primary-content' : 'text-content-muted hover:text-content-main'
-                                }`}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors bg-primary text-primary-content"
                         >
                             <BookOpen className="w-4 h-4" />
                             阅读

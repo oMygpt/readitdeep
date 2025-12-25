@@ -308,7 +308,7 @@ export default function TaskDetailsPage() {
         );
     }
 
-    const _currentAssignee = task.assignees.find(a => a.user_id === user?.id);
+
 
     return (
         <div className="min-h-screen bg-background">
