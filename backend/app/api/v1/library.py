@@ -123,6 +123,18 @@ async def list_papers(
     items = []
     for p in paginated:
         shared_teams = await get_paper_shared_teams(db, p["id"])
+        
+        # 解析 tags (可能是 JSON 字符串或 list)
+        tags_raw = p.get("tags")
+        if isinstance(tags_raw, str):
+            try:
+                import json
+                tags = json.loads(tags_raw)
+            except:
+                tags = None
+        else:
+            tags = tags_raw
+        
         items.append(PaperSummary(
             id=p["id"],
             filename=p["filename"],
@@ -130,7 +142,7 @@ async def list_papers(
             category=p.get("category"),
             status=p["status"],
             created_at=p.get("created_at"),
-            tags=p.get("tags"),
+            tags=tags,
             shared_teams=shared_teams if shared_teams else None,
         ))
     

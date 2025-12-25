@@ -494,36 +494,6 @@ async def get_paper(
     )
 
 
-class UpdateTagsRequest(BaseModel):
-    tags: list[str]
-
-
-@router.put("/{paper_id}/tags")
-async def update_paper_tags(
-    paper_id: str,
-    request: UpdateTagsRequest,
-    current_user: User = Depends(get_current_user),
-):
-    """更新论文标签"""
-    import json
-    
-    paper = store.get(paper_id)
-    if not paper:
-        raise HTTPException(404, "论文不存在")
-    
-    # 只有论文所有者可以修改标签
-    if paper.get("user_id") != current_user.id:
-        raise HTTPException(403, "只能修改自己的论文标签")
-    
-    # 更新 store
-    tags_json = json.dumps(request.tags)
-    store.update(paper_id, {"tags": tags_json})
-    
-    # 同步到数据库
-    await sync_paper_to_db(paper_id, {"tags": tags_json})
-    
-    return {"message": "标签已更新", "tags": request.tags}
-
 
 @router.get("/{paper_id}/content")
 async def get_paper_content(
