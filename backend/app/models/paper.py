@@ -55,6 +55,9 @@ class Paper(Base):
     )  # uploading, parsing, indexing, completed, failed
     error_message: Mapped[Optional[str]] = mapped_column(Text)
     
+    # 用户标签 (JSON 字符串数组)
+    tags: Mapped[Optional[str]] = mapped_column(Text)
+    
     # 时间戳
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

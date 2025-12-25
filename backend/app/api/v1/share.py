@@ -49,6 +49,7 @@ class GuestPaperResponse(BaseModel):
     filename: str
     status: str
     owner_name: Optional[str] = None  # 分享者名称 (脱敏)
+    authors: Optional[str] = None  # 论文作者 (JSON 字符串)
 
 
 class GuestPaperContentResponse(BaseModel):
@@ -312,6 +313,7 @@ async def get_shared_paper(share_token: str):
         filename=paper["filename"],
         status=paper.get("status", "unknown"),
         owner_name=owner_name,
+        authors=paper.get("authors"),
     )
 
 

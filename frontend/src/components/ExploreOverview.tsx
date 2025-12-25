@@ -17,7 +17,6 @@ import {
     Database,
     Code,
     Network,
-    ChevronRight,
     ExternalLink,
     Sparkles,
     Users,
@@ -52,6 +51,7 @@ export default function ExploreOverview({
         queryKey: ['analysis', paperId],
         queryFn: () => analysisApi.get(paperId),
         retry: false,
+        staleTime: 1000 * 60 * 5, // Cache for 5 minutes
     });
 
     const isLoading = isAnalysisLoading;
@@ -60,8 +60,9 @@ export default function ExploreOverview({
         <div className="min-h-screen bg-background">
             {/* Header */}
             <header className="bg-surface/80 backdrop-blur-sm border-b border-border sticky top-0 z-50">
-                <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
+                <div className="max-w-6xl mx-auto px-6 py-4">
+                    {/* Row 1: Back button + Title */}
+                    <div className="flex items-center gap-4 mb-3">
                         <button
                             onClick={onBack}
                             className="p-2 text-content-muted hover:text-content-main hover:bg-surface-elevated rounded-lg transition-colors"
@@ -78,19 +79,19 @@ export default function ExploreOverview({
                             </p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    {/* Row 2: Action Buttons */}
+                    <div className="flex items-center gap-3 pl-12">
                         <button
                             onClick={onStartReading}
-                            className="flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-content rounded-lg hover:bg-primary-hover transition-colors font-medium shadow-lg shadow-primary/20"
+                            className="flex items-center justify-center gap-2 px-5 py-2.5 min-w-[140px] bg-primary text-primary-content rounded-lg hover:bg-primary-hover transition-colors font-medium shadow-lg shadow-primary/20"
                         >
                             <BookOpen className="w-4 h-4" />
                             开始深度阅读
-                            <ChevronRight className="w-4 h-4" />
                         </button>
                         {onShareLink && (
                             <button
                                 onClick={onShareLink}
-                                className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-colors font-medium"
+                                className="flex items-center justify-center gap-2 px-5 py-2.5 min-w-[140px] bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-colors font-medium"
                                 title="生成分享链接"
                             >
                                 <Link2 className="w-4 h-4" />
@@ -100,7 +101,7 @@ export default function ExploreOverview({
                         {onShareToTeam && (
                             <button
                                 onClick={onShareToTeam}
-                                className="flex items-center gap-2 px-4 py-2.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium"
+                                className="flex items-center justify-center gap-2 px-5 py-2.5 min-w-[140px] bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium"
                                 title="分享到团队"
                             >
                                 <Share2 className="w-4 h-4" />
