@@ -26,9 +26,11 @@ import {
     Share2,
     CheckSquare,
     Square,
+    Download,
+    ChevronDown,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { libraryApi, papersApi, monitorApi, analysisApi } from '../lib/api';
+import { libraryApi, papersApi, monitorApi, analysisApi, citationApi, type CitationFormat } from '../lib/api';
 import UserMenu from '../components/UserMenu';
 import CategoryTagEditor from '../components/CategoryTagEditor';
 import QuotaBadge from '../components/QuotaBadge';
@@ -56,6 +58,9 @@ export default function LibraryPage() {
     // Bulk selection state
     const [selectedPaperIds, setSelectedPaperIds] = useState<Set<string>>(new Set());
     const [bulkShareMode, setBulkShareMode] = useState(false);
+    // Citation export state
+    const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
 
     // Polling for updates (暂停轮询当编辑弹窗打开时)
     const { data: libraryData, isLoading } = useQuery({
@@ -198,6 +203,23 @@ export default function LibraryPage() {
             await reanalyzeMutation.mutateAsync(paperId);
         } catch (err) {
             console.error('Reanalyze failed', err);
+        }
+    };
+
+    // Handle citation export
+    const handleExportCitations = async (format: CitationFormat) => {
+        if (selectedPaperIds.size === 0) return;
+
+        setIsExporting(true);
+        setExportDropdownOpen(false);
+
+        try {
+            await citationApi.exportCitations(Array.from(selectedPaperIds), format);
+        } catch (err) {
+            console.error('Export failed:', err);
+            alert('导出失败，请重试');
+        } finally {
+            setIsExporting(false);
         }
     };
 
@@ -462,6 +484,44 @@ export default function LibraryPage() {
                                     <Share2 className="w-4 h-4" />
                                     分享到团队
                                 </button>
+                                {/* Citation Export Dropdown */}
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setExportDropdownOpen(!exportDropdownOpen)}
+                                        disabled={isExporting}
+                                        className="px-3 py-1.5 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700 flex items-center gap-2 disabled:opacity-50"
+                                    >
+                                        {isExporting ? (
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                            <Download className="w-4 h-4" />
+                                        )}
+                                        导出引用
+                                        <ChevronDown className="w-3 h-3" />
+                                    </button>
+                                    {exportDropdownOpen && (
+                                        <div className="absolute right-0 mt-1 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                                            <button
+                                                onClick={() => handleExportCitations('bibtex')}
+                                                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg"
+                                            >
+                                                BibTeX (.bib)
+                                            </button>
+                                            <button
+                                                onClick={() => handleExportCitations('ris')}
+                                                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
+                                            >
+                                                RIS (.ris)
+                                            </button>
+                                            <button
+                                                onClick={() => handleExportCitations('plain')}
+                                                className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 rounded-b-lg"
+                                            >
+                                                纯文本 (.txt)
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                                 <button
                                     onClick={() => setSelectedPaperIds(new Set())}
                                     className="px-3 py-1.5 text-blue-600 text-sm hover:bg-blue-100 rounded-lg"
