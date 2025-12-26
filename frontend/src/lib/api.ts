@@ -149,6 +149,61 @@ export const libraryApi = {
     },
 };
 
+// ==================== Citation Export API ====================
+
+export type CitationFormat = 'bibtex' | 'ris' | 'plain';
+
+export const citationApi = {
+    /**
+     * 导出论文引用
+     * 
+     * @param paperIds 论文 ID 列表
+     * @param format 导出格式: bibtex, ris, plain
+     * @returns 触发文件下载
+     */
+    exportCitations: async (paperIds: string[], format: CitationFormat = 'bibtex'): Promise<void> => {
+        const token = localStorage.getItem('readitdeep_token');
+
+        const response = await fetch('/api/v1/library/export/citations', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': token ? `Bearer ${token}` : '',
+            },
+            body: JSON.stringify({
+                paper_ids: paperIds,
+                format: format,
+            }),
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || '导出失败');
+        }
+
+        // 获取文件名
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let filename = 'citations.bib';
+        if (contentDisposition) {
+            const match = contentDisposition.match(/filename="(.+)"/);
+            if (match) {
+                filename = match[1];
+            }
+        }
+
+        // 触发下载
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+    },
+};
+
 export const monitorApi = {
     getStatus: async (id: string): Promise<TaskStatus> => {
         const { data } = await api.get(`/monitor/${id}`);
