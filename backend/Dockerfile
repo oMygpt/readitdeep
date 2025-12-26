@@ -29,8 +29,11 @@ COPY . .
 # Create uploads directory
 RUN mkdir -p uploads/papers uploads/images
 
+# Make entrypoint executable
+RUN chmod +x entrypoint.sh
+
 # Expose port
 EXPOSE 8080
 
-# Run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+# Run the application with migration
+CMD ["./entrypoint.sh"]

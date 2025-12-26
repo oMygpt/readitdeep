@@ -80,6 +80,7 @@ async def init_db() -> None:
     """初始化数据库 (创建表)"""
     # 导入所有模型以确保它们被注册
     from app.models.user import User  # noqa
+    from app.models.paper import Paper  # noqa - 论文表 (包含 tags 列)
     from app.models.system_config import SystemConfig  # noqa
     from app.models.user_config import UserConfig  # noqa
     from app.models.team import Team, TeamMember, TeamInvitation, PaperShare  # noqa
