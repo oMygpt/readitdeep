@@ -137,5 +137,17 @@ docker compose -f docker-compose.ghcr.yml up -d
 
 ---
 
+
 **Read it DEEP** — *Where reading meets thinking.*
+
+
+## 📜 License
+
+This project is licensed under the **GNU Affero General Public License v3.0 (AGPL v3)**.
+
+- **Open Source**: You are free to use, modify, and distribute this software under the terms of the AGPL v3.
+- **Copyleft**: If you modify this software and distribute it (web service included), you must make your modifications open source under the same license.
+- **Dual Licensing**: For commercial use cases, proprietary integration, or exemptions from AGPL conditions, please contact **CHUNLIN@Readit DEEP** for a commercial license.
+
+Copyright (C) 2025 CHUNLIN@Readit DEEP.
 
