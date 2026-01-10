@@ -232,8 +232,9 @@ async def preview_prompt(
     db: AsyncSession = Depends(get_db),
 ):
     """使用指定提示词预览分析结果"""
+    import os
+    from openai import OpenAI
     from app.core.store import store
-    from app.services.llm import get_llm_service
     
     # 获取论文内容
     result = await db.execute(
@@ -265,11 +266,22 @@ async def preview_prompt(
     # 构建用户提示词
     user_prompt = data.user_prompt_template.replace("{content}", content)
     
-    # 调用 LLM
-    llm_service = get_llm_service()
+    # 获取 OpenAI 客户端配置
+    api_key = os.getenv("OPENAI_API_KEY")
+    base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="OpenAI API key not configured"
+        )
+    
+    client = OpenAI(api_key=api_key, base_url=base_url)
     
     try:
-        response = await llm_service.chat_completion(
+        response = client.chat.completions.create(
+            model=model,
             messages=[
                 {"role": "system", "content": data.system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -300,7 +312,7 @@ async def get_prompt_versions(
     admin: User = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """获取指定类型的所有版本"""
+    """获取指定类型的所有版本（合并数据库和文件系统）"""
     # 获取活跃版本
     result = await db.execute(
         select(PromptActiveVersion).where(PromptActiveVersion.prompt_type == prompt_type)
@@ -308,43 +320,55 @@ async def get_prompt_versions(
     active_record = result.scalar_one_or_none()
     active_version = active_record.version if active_record else None
     
-    # 获取所有版本
+    # 从数据库获取版本
     result = await db.execute(
         select(PromptVersion)
         .where(PromptVersion.prompt_type == prompt_type)
         .order_by(PromptVersion.version)
     )
-    versions = result.scalars().all()
+    db_versions = result.scalars().all()
+    db_version_set = {v.version for v in db_versions}
     
-    # 如果数据库为空，从 PromptLoader 获取
-    if not versions:
-        loader = get_prompt_loader()
-        loader_versions = loader.list_versions(prompt_type)
-        return PromptVersionsResponse(
-            prompt_type=prompt_type,
-            versions=[
-                PromptVersionItem(
-                    version=v["version"],
-                    description=v.get("description"),
-                    is_active=v.get("is_active", False),
-                )
-                for v in loader_versions
-            ],
-            active_version=active_version
-        )
+    # 从文件系统获取版本（通过 PromptLoader）
+    loader = get_prompt_loader()
+    loader.reload()  # 刷新以获取最新文件
+    file_versions = loader.list_versions(prompt_type)
+    
+    # 合并版本列表
+    all_versions = []
+    
+    # 先添加数据库中的版本
+    for v in db_versions:
+        all_versions.append(PromptVersionItem(
+            version=v.version,
+            description=v.description,
+            is_active=(v.version == active_version),
+            created_at=v.created_at.isoformat() if v.created_at else None,
+            updated_at=v.updated_at.isoformat() if v.updated_at else None,
+        ))
+    
+    # 添加文件系统中存在但数据库中不存在的版本
+    for fv in file_versions:
+        if fv["version"] not in db_version_set:
+            all_versions.append(PromptVersionItem(
+                version=fv["version"],
+                description=fv.get("description"),
+                is_active=fv.get("is_active", False) if not active_version else False,
+            ))
+    
+    # 按版本号排序
+    all_versions.sort(key=lambda x: x.version)
+    
+    # 如果没有设置活跃版本，使用文件系统的活跃版本（最新版本）
+    if not active_version and file_versions:
+        for fv in file_versions:
+            if fv.get("is_active"):
+                active_version = fv["version"]
+                break
     
     return PromptVersionsResponse(
         prompt_type=prompt_type,
-        versions=[
-            PromptVersionItem(
-                version=v.version,
-                description=v.description,
-                is_active=(v.version == active_version),
-                created_at=v.created_at.isoformat() if v.created_at else None,
-                updated_at=v.updated_at.isoformat() if v.updated_at else None,
-            )
-            for v in versions
-        ],
+        versions=all_versions,
         active_version=active_version
     )
 
