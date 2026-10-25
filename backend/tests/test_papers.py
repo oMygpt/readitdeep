@@ -7,7 +7,7 @@ async def test_upload_requires_login(client, no_parse):
     files = {"file": ("x.pdf", b"%PDF", "application/pdf")}
     r = await client.post("/api/v1/papers/upload", files=files)
     assert r.status_code == 401
-    assert no_parse == []
+    assert no_parse.refresh() == []
 
 
 async def test_upload_rejects_unknown_type(client, users, no_parse):
@@ -19,7 +19,7 @@ async def test_upload_creates_owned_paper_and_queues_parse(client, users, no_par
     r = await upload(client, users["alice"])
     assert r.status_code == 200, r.text
     pid = r.json()["id"]
-    assert len(no_parse) == 1
+    assert no_parse.refresh() == [pid]
     got = await client.get(f"/api/v1/papers/{pid}", headers=users["alice"]["headers"])
     assert got.status_code == 200
     assert got.json()["user_id"] == users["alice"]["id"]

@@ -23,6 +23,8 @@ from typing import Iterable, Optional
 import httpx
 from langchain_openai import ChatOpenAI
 
+from app.core.token_tracker import TokenTrackingCallback
+
 logger = logging.getLogger(__name__)
 
 INTERACTIVE = "interactive"
@@ -202,6 +204,7 @@ async def get_chat_model(
     temperature: float = 0.3,
     timeout: int = 90,
     channel: Optional[str] = None,
+    usage_label: Optional[str] = None,
 ) -> ChatOpenAI:
     from app.core.config_manager import ConfigManager
     from app.core.database import async_session_maker
@@ -220,4 +223,6 @@ async def get_chat_model(
         streaming=streaming,
         timeout=timeout,
         http_async_client=_client(bases, channel or default_channel(task), timeout),
+        stream_usage=True,  # 流式调用也返回用量
+        callbacks=[TokenTrackingCallback(usage_label or task.replace(":", "_"))],
     )

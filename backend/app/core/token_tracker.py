@@ -1,193 +1,170 @@
 """
-Read it DEEP - LLM Token 用量追踪器
+Read it DEEP - 模型用量统计
 
-功能:
-- 记录每次 LLM 调用的 token 用量
-- 按功能类型分类统计
-- 持久化到 JSON 文件
-- 提供统计查询接口
+每次模型调用结束时按（日期、任务、模型）累加到 token_usage 表。
+原来写 data/token_stats.json（每次整文件重写，多进程互相覆盖），升级时其中的
+按日数据导入为 task="legacy" 的记录。
+
+get_chat_model() 给每个模型实例挂上 TokenTrackingCallback，所有调用都会被记录。
 """
 
+from __future__ import annotations
+
 import json
-import os
-from datetime import datetime, date
-from typing import Dict, Any, Optional
-from pathlib import Path
-import threading
 import logging
+from datetime import date
+from pathlib import Path
+from typing import Any, Dict
+
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.outputs import LLMResult
+from sqlalchemy import func, select
 
 logger = logging.getLogger(__name__)
 
-# 数据存储路径
-DATA_DIR = Path(__file__).parent.parent.parent / "data"
-TOKEN_STATS_FILE = DATA_DIR / "token_stats.json"
+LEGACY_STATS_FILE = Path(__file__).parent.parent.parent / "data" / "token_stats.json"
+LEGACY_IMPORT = "token_stats_import_v1"
+
+
+def _engine():
+    from app.core.store import store
+
+    return store.engine
+
+
+def _upsert(conn, values: dict) -> None:
+    from app.models.job import TokenUsage
+
+    table = TokenUsage.__table__
+    keys = ("prompt_tokens", "completion_tokens", "total_tokens", "calls")
+    if conn.dialect.name == "postgresql":
+        from sqlalchemy.dialects.postgresql import insert
+    else:
+        from sqlalchemy.dialects.sqlite import insert
+    stmt = insert(table).values(**values)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["day", "task", "model"],
+        set_={k: getattr(table.c, k) + getattr(stmt.excluded, k) for k in keys},
+    )
+    conn.execute(stmt)
 
 
 class TokenTracker:
-    """全局 Token 用量追踪器"""
-    
-    _instance = None
-    _lock = threading.Lock()
-    
-    def __new__(cls):
-        if cls._instance is None:
-            with cls._lock:
-                if cls._instance is None:
-                    cls._instance = super().__new__(cls)
-                    cls._instance._initialized = False
-        return cls._instance
-    
-    def __init__(self):
-        if self._initialized:
-            return
-        self._initialized = True
-        self._stats = self._load_stats()
-    
-    def _load_stats(self) -> Dict[str, Any]:
-        """加载统计数据"""
-        if TOKEN_STATS_FILE.exists():
-            try:
-                with open(TOKEN_STATS_FILE, 'r') as f:
-                    return json.load(f)
-            except Exception as e:
-                logger.error(f"Failed to load token stats: {e}")
-        
-        return {
-            "total_tokens": 0,
-            "total_prompt_tokens": 0,
-            "total_completion_tokens": 0,
-            "by_function": {},
-            "by_date": {},
-            "calls_count": 0,
-        }
-    
-    def _save_stats(self):
-        """保存统计数据"""
-        try:
-            DATA_DIR.mkdir(parents=True, exist_ok=True)
-            with open(TOKEN_STATS_FILE, 'w') as f:
-                json.dump(self._stats, f, indent=2, ensure_ascii=False)
-        except Exception as e:
-            logger.error(f"Failed to save token stats: {e}")
-    
     def record(
         self,
         function_type: str,
         prompt_tokens: int = 0,
         completion_tokens: int = 0,
-        total_tokens: Optional[int] = None,
+        total_tokens: int | None = None,
         model: str = "",
-    ):
-        """
-        记录一次 LLM 调用的 token 用量
-        
-        Args:
-            function_type: 功能类型 (summary, method, dataset, code, translation, smart_*)
-            prompt_tokens: 输入 token 数
-            completion_tokens: 输出 token 数
-            total_tokens: 总 token 数 (如果提供则优先使用)
-            model: 模型名称
-        """
-        with self._lock:
-            if total_tokens is None:
-                total_tokens = prompt_tokens + completion_tokens
-            
-            today = date.today().isoformat()
-            
-            # 更新总计
-            self._stats["total_tokens"] += total_tokens
-            self._stats["total_prompt_tokens"] += prompt_tokens
-            self._stats["total_completion_tokens"] += completion_tokens
-            self._stats["calls_count"] += 1
-            
-            # 按功能分类
-            if function_type not in self._stats["by_function"]:
-                self._stats["by_function"][function_type] = {
-                    "total_tokens": 0,
-                    "prompt_tokens": 0,
-                    "completion_tokens": 0,
-                    "calls_count": 0,
-                }
-            func_stats = self._stats["by_function"][function_type]
-            func_stats["total_tokens"] += total_tokens
-            func_stats["prompt_tokens"] += prompt_tokens
-            func_stats["completion_tokens"] += completion_tokens
-            func_stats["calls_count"] += 1
-            
-            # 按日期分类
-            if today not in self._stats["by_date"]:
-                self._stats["by_date"][today] = {
-                    "total_tokens": 0,
-                    "calls_count": 0,
-                }
-            date_stats = self._stats["by_date"][today]
-            date_stats["total_tokens"] += total_tokens
-            date_stats["calls_count"] += 1
-            
-            # 保存
-            self._save_stats()
-            
-            logger.debug(
-                f"Token recorded: {function_type} - "
-                f"prompt={prompt_tokens}, completion={completion_tokens}, total={total_tokens}"
-            )
-    
+        day: date | None = None,
+    ) -> None:
+        if total_tokens is None:
+            total_tokens = prompt_tokens + completion_tokens
+        try:
+            with _engine().begin() as conn:
+                _upsert(conn, {
+                    "day": day or date.today(),
+                    "task": function_type[:50],
+                    "model": (model or "")[:200],
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": total_tokens,
+                    "calls": 1,
+                })
+        except Exception as e:  # 统计失败不能影响业务调用
+            logger.error(f"Failed to record token usage: {e}")
+
     def get_stats(self) -> Dict[str, Any]:
-        """获取统计数据"""
-        with self._lock:
-            return self._stats.copy()
-    
-    def reset(self):
-        """重置统计数据"""
-        with self._lock:
-            self._stats = {
-                "total_tokens": 0,
-                "total_prompt_tokens": 0,
-                "total_completion_tokens": 0,
-                "by_function": {},
-                "by_date": {},
-                "calls_count": 0,
+        """与旧 JSON 统计相同的结构：总计、按功能、按日期。"""
+        from app.models.job import TokenUsage as T
+
+        with _engine().connect() as conn:
+            totals = conn.execute(
+                select(func.coalesce(func.sum(T.total_tokens), 0), func.coalesce(func.sum(T.prompt_tokens), 0),
+                       func.coalesce(func.sum(T.completion_tokens), 0), func.coalesce(func.sum(T.calls), 0))
+            ).one()
+            by_function = {
+                r.task: {"total_tokens": int(r.tot), "prompt_tokens": int(r.pt), "completion_tokens": int(r.ct), "calls_count": int(r.n)}
+                for r in conn.execute(
+                    select(T.task, func.sum(T.total_tokens).label("tot"), func.sum(T.prompt_tokens).label("pt"),
+                           func.sum(T.completion_tokens).label("ct"), func.sum(T.calls).label("n")).group_by(T.task)
+                )
             }
-            self._save_stats()
+            by_date = {
+                r.day.isoformat(): {"total_tokens": int(r.tot), "calls_count": int(r.n)}
+                for r in conn.execute(
+                    select(T.day, func.sum(T.total_tokens).label("tot"), func.sum(T.calls).label("n")).group_by(T.day).order_by(T.day)
+                )
+            }
+        return {
+            "total_tokens": int(totals[0]),
+            "total_prompt_tokens": int(totals[1]),
+            "total_completion_tokens": int(totals[2]),
+            "calls_count": int(totals[3]),
+            "by_function": by_function,
+            "by_date": by_date,
+        }
+
+    def reset(self) -> None:
+        from app.models.job import TokenUsage
+
+        with _engine().begin() as conn:
+            conn.execute(TokenUsage.__table__.delete())
+
+
+def import_legacy_stats(path: Path = LEGACY_STATS_FILE) -> int:
+    """把旧 token_stats.json 的按日数据导入（只导一次）。返回导入的天数。"""
+    from app.models.workbench_item import DataMigration
+
+    if not path.exists():
+        return 0
+    with _engine().connect() as conn:
+        if conn.execute(select(DataMigration.name).where(DataMigration.name == LEGACY_IMPORT)).first():
+            return 0
+    stats = json.loads(path.read_text(encoding="utf-8"))
+    days = stats.get("by_date") or {}
+    with _engine().begin() as conn:
+        for day, v in days.items():
+            _upsert(conn, {
+                "day": date.fromisoformat(day), "task": "legacy", "model": "",
+                "prompt_tokens": 0, "completion_tokens": 0,
+                "total_tokens": int(v.get("total_tokens", 0)), "calls": int(v.get("calls_count", 0)),
+            })
+        conn.execute(DataMigration.__table__.insert().values(name=LEGACY_IMPORT, report={"days": len(days)}))
+    return len(days)
 
 
 class TokenTrackingCallback(BaseCallbackHandler):
-    """LangChain 回调处理器，用于追踪 token 用量"""
-    
+    """LangChain 回调：调用结束时记录用量（非流式读 llm_output，流式读消息上的 usage_metadata）"""
+
     def __init__(self, function_type: str = "unknown"):
         super().__init__()
         self.function_type = function_type
-        self.tracker = TokenTracker()
-    
+
     def on_llm_end(self, response: LLMResult, **kwargs):
-        """LLM 调用结束时记录 token"""
         try:
-            # 从 response 中提取 token 用量
-            if response.llm_output:
-                token_usage = response.llm_output.get("token_usage", {})
-                prompt_tokens = token_usage.get("prompt_tokens", 0)
-                completion_tokens = token_usage.get("completion_tokens", 0)
-                total_tokens = token_usage.get("total_tokens", 0)
-                model = response.llm_output.get("model_name", "")
-                
-                if total_tokens > 0 or prompt_tokens > 0 or completion_tokens > 0:
-                    self.tracker.record(
-                        function_type=self.function_type,
-                        prompt_tokens=prompt_tokens,
-                        completion_tokens=completion_tokens,
-                        total_tokens=total_tokens if total_tokens > 0 else None,
-                        model=model,
-                    )
+            usage = (response.llm_output or {}).get("token_usage") or {}
+            model = (response.llm_output or {}).get("model_name", "")
+            prompt = usage.get("prompt_tokens", 0)
+            completion = usage.get("completion_tokens", 0)
+            total = usage.get("total_tokens", 0)
+            if not (prompt or completion or total):
+                for generations in response.generations:
+                    for g in generations:
+                        meta = getattr(getattr(g, "message", None), "usage_metadata", None) or {}
+                        prompt += meta.get("input_tokens", 0)
+                        completion += meta.get("output_tokens", 0)
+                        total += meta.get("total_tokens", 0)
+                        model = model or (getattr(g, "generation_info", None) or {}).get("model_name", "")
+            if prompt or completion or total:
+                token_tracker.record(self.function_type, prompt, completion, total or None, model)
         except Exception as e:
             logger.error(f"Failed to track tokens: {e}")
 
 
-# 全局单例
 token_tracker = TokenTracker()
 
 
 def get_tracking_callback(function_type: str) -> TokenTrackingCallback:
-    """获取追踪回调实例"""
     return TokenTrackingCallback(function_type=function_type)

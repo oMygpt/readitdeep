@@ -64,9 +64,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         if report:
             print(f"📦 已导入旧 JSON 存储: 论文 {report['papers']['total']} 篇, 工作台 {report['workbench']['total']} 条")
         await asyncio.to_thread(recover_stuck)
+        from app.core.token_tracker import import_legacy_stats
+
+        await asyncio.to_thread(import_legacy_stats)
+
+    # 后台任务 worker（解析 / 分析 / 翻译）；RID_WORKER=0 时本进程不执行任务
+    from app.core import jobs
+
+    if os.getenv("RID_WORKER", "1") != "0":
+        jobs.worker = jobs.Worker()
+        jobs.worker.start()
     
     yield
-    
+
+    if jobs.worker is not None:
+        await jobs.worker.stop()
     print(f"👋 {settings.app_name} shutting down...")
 
 

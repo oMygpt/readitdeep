@@ -19,7 +19,6 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from app.config import get_settings
-from app.core.token_tracker import get_tracking_callback
 from app.agents.prompt_loader import get_prompt_loader
 
 logger = logging.getLogger(__name__)
@@ -58,7 +57,7 @@ async def get_llm_for_action(user_id: Optional[str], action_type: str) -> ChatOp
     """划词分析模型：按触发者的生效配置；smart_analysis_mode=custom 时用该动作的独立配置。走交互通道。"""
     from app.services.llm import get_chat_model
 
-    return await get_chat_model(f"smart:{action_type}", user_id, streaming=True)
+    return await get_chat_model(f"smart:{action_type}", user_id, streaming=True, usage_label=f"smart_{action_type}")
 
 
 async def smart_analyze(
@@ -138,8 +137,7 @@ async def smart_analyze(
             ]
         
         # 调用 LLM (带 token 追踪)
-        callback = get_tracking_callback(f"smart_{action_type}")
-        response = await llm.ainvoke(messages, config={"callbacks": [callback]})
+        response = await llm.ainvoke(messages)
         
         return {
             "success": True,
@@ -236,9 +234,8 @@ async def smart_analyze_stream(
             ]
         
         # 流式调用 LLM
-        callback = get_tracking_callback(f"smart_{action_type}")
         
-        async for chunk in llm.astream(messages, config={"callbacks": [callback]}):
+        async for chunk in llm.astream(messages):
             if chunk.content:
                 yield f"data: {json.dumps({'content': chunk.content})}\n\n"
         

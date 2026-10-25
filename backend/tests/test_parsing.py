@@ -1,5 +1,3 @@
-import asyncio
-
 import httpx
 
 from app.core.store import store
@@ -121,11 +119,9 @@ async def test_upload_pipeline_uses_grobid(client, users, monkeypatch):
     files = {"file": ("tiny.pdf", b"%PDF-1.4", "application/pdf")}
     r = await client.post("/api/v1/papers/upload", files=files, headers=users["alice"]["headers"])
     pid = r.json()["id"]
-    for _ in range(50):
-        p = store.get(pid)
-        if p.get("markdown_content"):
-            break
-        await asyncio.sleep(0.05)
+    from app.core import jobs
+
+    assert await jobs.drain(["parse"]) == 1
     p = store.get(pid)
     assert p["parser"] == "grobid" and p["title"] == "A Tiny Paper" and p["doi"] == "10.1234/tiny"
     assert "## 1 Introduction" in p["markdown_content"]

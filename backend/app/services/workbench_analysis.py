@@ -17,7 +17,6 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from app.config import get_settings
 from app.agents.prompt_loader import get_prompt_loader
 from app.core.workbench_store import workbench_store
-from app.core.token_tracker import get_tracking_callback
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -28,15 +27,15 @@ settings = get_settings()
 
 from app.core.store import store
 
-async def get_llm_for_paper(paper_id: str, user_id: str | None = None):
+async def get_llm_for_paper(paper_id: str, user_id: str | None = None, usage_label: str = "workbench"):
     """方法/资产提炼与摘要模型。user_id 为触发者（划词提炼，走交互通道）；
     未给出时为上传后的自动分析，按论文所有者配置、走批量通道。"""
     from app.services.llm import BATCH, INTERACTIVE, get_chat_model
 
     if user_id:
-        return await get_chat_model("chat", user_id, channel=INTERACTIVE)
+        return await get_chat_model("chat", user_id, channel=INTERACTIVE, usage_label=usage_label)
     owner = (store.get(paper_id) or {}).get("user_id")
-    return await get_chat_model("chat", owner, channel=BATCH)
+    return await get_chat_model("chat", owner, channel=BATCH, usage_label=usage_label)
 
 async def analyze_method(
     text: str,
@@ -50,7 +49,7 @@ async def analyze_method(
     
     提炼研究方法，生成伪代码，以审稿视角分析
     """
-    llm = await get_llm_for_paper(paper_id, user_id)
+    llm = await get_llm_for_paper(paper_id, user_id, usage_label="workbench_method")
     
     loader = get_prompt_loader()
     prompt_file = loader.get_prompt("workbench_method")
@@ -68,11 +67,10 @@ async def analyze_method(
         )
     
     try:
-        callback = get_tracking_callback("workbench_method")
         response = await llm.ainvoke([
             SystemMessage(content=system_prompt),
             HumanMessage(content=user_prompt),
-        ], config={"callbacks": [callback]})
+        ])
         
         content = response.content
         
@@ -175,7 +173,7 @@ async def analyze_asset(
     
     识别 GitHub/Huggingface/数据集等可复用资源
     """
-    llm = await get_llm_for_paper(paper_id, user_id)
+    llm = await get_llm_for_paper(paper_id, user_id, usage_label="workbench_asset")
     
     loader = get_prompt_loader()
     prompt_file = loader.get_prompt("workbench_asset")
@@ -192,11 +190,10 @@ async def analyze_asset(
         )
     
     try:
-        callback = get_tracking_callback("workbench_asset")
         response = await llm.ainvoke([
             SystemMessage(content=system_prompt),
             HumanMessage(content=user_prompt),
-        ], config={"callbacks": [callback]})
+        ])
         
         content = response.content
         
@@ -356,7 +353,7 @@ async def analyze_summary(
     """
     生成论文摘要 (Smart Summary)
     """
-    llm = await get_llm_for_paper(paper_id)
+    llm = await get_llm_for_paper(paper_id, usage_label="agent_summary")
     
     loader = get_prompt_loader()
     prompt_file = loader.get_prompt("summary")
@@ -373,11 +370,10 @@ async def analyze_summary(
         )
     
     try:
-        callback = get_tracking_callback("agent_summary")
         response = await llm.ainvoke([
             SystemMessage(content=system_prompt),
             HumanMessage(content=user_prompt),
-        ], config={"callbacks": [callback]})
+        ])
         
         summary = response.content.strip()
         

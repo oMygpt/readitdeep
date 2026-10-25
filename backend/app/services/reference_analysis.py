@@ -53,7 +53,7 @@ async def _get_llm(paper_id: str):
     """相关工作总结模型：按论文所有者配置（只有所有者能触发），走批量通道"""
     from app.services.llm import get_chat_model
 
-    return await get_chat_model("chat", (store.get(paper_id) or {}).get("user_id"))
+    return await get_chat_model("chat", (store.get(paper_id) or {}).get("user_id"), usage_label="reference_analysis")
 
 
 async def analyze_references(paper_id: str, limit: int = 5) -> ReferenceAnalysisResult:

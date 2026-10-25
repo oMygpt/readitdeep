@@ -25,7 +25,7 @@ async def get_translation_llm(user_id: str | None):
     """翻译模型：translation_* 配置，未配置时回落主模型；走批量并发通道"""
     from app.services.llm import get_chat_model
 
-    return await get_chat_model("translate", user_id, streaming=True, timeout=180)
+    return await get_chat_model("translate", user_id, streaming=True, timeout=180, usage_label="translation")
 
 TRANSLATION_PROMPT = """请将以下学术论文内容翻译成中文。
 
@@ -41,9 +41,6 @@ TRANSLATION_PROMPT = """请将以下学术论文内容翻译成中文。
 
 ## 翻译结果
 """
-
-# 存储活跃的翻译任务
-_active_translation_tasks: Dict[str, asyncio.Task] = {}
 
 
 async def start_translation_task(paper_id: str, user_id: str | None = None) -> Dict[str, Any]:
@@ -91,12 +88,9 @@ async def start_translation_task(paper_id: str, user_id: str | None = None) -> D
         "translation_error": None,  # 清除之前的错误
     })
     
-    # 创建后台任务
-    task = asyncio.create_task(_translate_paper_background(paper_id, user_id))
-    _active_translation_tasks[paper_id] = task
-    
-    # 任务完成时清理
-    task.add_done_callback(lambda t: _active_translation_tasks.pop(paper_id, None))
+    # 翻译任务入队（持久化，重启后从已完成的分块继续）
+    from app.core import jobs
+    jobs.submit("translate", paper_id, user_id or paper.get("user_id"))
     
     if resume_from > 0:
         logger.info(f"Resumed translation for paper {paper_id} from chunk {resume_from}")
