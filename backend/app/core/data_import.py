@@ -150,7 +150,12 @@ def recover_stuck(max_age_minutes: int = 60, now: Optional[datetime] = None) -> 
     result = {"completed": 0, "failed": 0, "translation_failed": 0}
     with store.engine.connect() as conn:
         rows = conn.execute(select(Paper.id, Paper.status, Paper.updated_at)).all()
+    from app.core.jobs import active_paper_ids
+
+    queued = active_paper_ids()  # 有排队/运行中任务的论文交给任务队列处理
     for pid, status, updated_at in rows:
+        if pid in queued:
+            continue
         if updated_at is not None and updated_at.tzinfo is None:
             updated_at = updated_at.replace(tzinfo=timezone.utc)
         if updated_at is not None and updated_at > cutoff:

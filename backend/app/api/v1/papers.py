@@ -340,15 +340,9 @@ async def upload_paper(
     }
     store.set(paper_id, paper_data)
     
-    # 4. 启动后台解析任务
-    background_tasks.add_task(
-        parse_paper_task, 
-        paper_id, 
-        file_path, 
-        content,
-        file.filename,
-        current_user.id if current_user else None
-    )
+    # 4. 解析任务入队（持久化，重启后继续）
+    from app.core import jobs
+    jobs.submit("parse", paper_id, current_user.id, {"file_path": file_path, "filename": file.filename})
     
     return PaperUploadResponse(
         id=paper_id,
@@ -678,7 +672,8 @@ async def trigger_analysis_endpoint(
     # 检查是否有内容
     if paper.get("markdown_content"):
         # 有内容，只重新分析
-        background_tasks.add_task(run_analysis_pipeline, paper_id, current_user.id)
+        from app.core import jobs
+        jobs.submit("analyze", paper_id, current_user.id)
         return {"status": "triggered", "message": "分析任务已启动"}
     else:
         # 没有内容，需要重新解析 PDF
@@ -690,19 +685,8 @@ async def trigger_analysis_endpoint(
         if not os.path.exists(file_path):
             raise HTTPException(400, "原始文件已删除，无法重新解析")
         
-        # 读取文件内容
-        with open(file_path, "rb") as f:
-            file_content = f.read()
-        
-        # 重新解析
-        background_tasks.add_task(
-            parse_paper_task,
-            paper_id,
-            file_path,
-            file_content,
-            paper.get("filename", "unknown.pdf"),
-            current_user.id
-        )
+        from app.core import jobs
+        jobs.submit("parse", paper_id, current_user.id, {"file_path": file_path, "filename": paper.get("filename", "unknown.pdf")})
         return {"status": "triggered", "message": "PDF 重新解析任务已启动"}
 
 

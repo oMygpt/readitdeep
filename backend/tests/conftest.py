@@ -63,15 +63,22 @@ async def users(client):
 
 
 @pytest.fixture
-def no_parse(monkeypatch):
-    """Upload without calling MinerU: the background parse becomes a no-op."""
-    calls = []
+def no_parse():
+    """上传只入队、不执行解析：返回当前排队的解析任务列表（测试里没有 worker 在跑）。"""
 
-    async def fake_parse(*args, **kwargs):
-        calls.append(args)
+    class Queued(list):
+        def refresh(self):
+            from sqlalchemy import select
 
-    monkeypatch.setattr("app.api.v1.papers.parse_paper_task", fake_parse)
-    return calls
+            from app.core.store import store
+            from app.models.job import Job
+
+            with store.engine.connect() as conn:
+                rows = conn.execute(select(Job.paper_id).where(Job.kind == "parse", Job.status == "queued")).all()
+            self[:] = [r[0] for r in rows]
+            return self
+
+    return Queued()
 
 
 @pytest_asyncio.fixture(scope="session", autouse=True)

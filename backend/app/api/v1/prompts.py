@@ -268,7 +268,7 @@ async def preview_prompt(
     
     # 与正式分析使用同一套模型配置（管理员本人的生效配置）
     try:
-        llm = await get_chat_model("chat", admin.id, temperature=0.7, channel=INTERACTIVE)
+        llm = await get_chat_model("chat", admin.id, temperature=0.7, channel=INTERACTIVE, usage_label="prompt_preview")
     except LLMNotConfigured as e:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)) from e
 

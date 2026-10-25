@@ -45,7 +45,7 @@ async def get_llm_for_classification(paper_id: str):
     from app.services.llm import get_chat_model
 
     owner = (store.get(paper_id) or {}).get("user_id")
-    return await get_chat_model("chat", owner)
+    return await get_chat_model("chat", owner, usage_label="classification")
 
 
 @dataclass
