@@ -31,7 +31,9 @@
 
 | 迁移体系 | 空库升级后与模型一致；旧库补齐后 stamp | `tests/test_migrations.py`：空库 `upgrade head` 后 autogenerate 对比 0 差异；模拟旧库（缺 2 表、5 列、1 索引，含存量用户）升级后无缺失且数据保留，再次升级无报错 |
 
-R2 本地测试：64 passed。
+| PostgreSQL | 关联部署用 PostgreSQL，同一套测试必须通过 | 本机 PostgreSQL 17 与 CI postgres:16 均 65 passed（含空库迁移一致性）。期间发现并修复原有隐患：数据库读出的带时区时间与 `utcnow()` 比较在 PostgreSQL 上抛 TypeError（团队邀请、会员到期、邀请码、分享链接、配额重置），会话时区固定 UTC 并统一 `as_utc()` |
+
+R2 测试：SQLite 64 passed + PostgreSQL 65 passed（CI 矩阵）。
 
 ## R3
 | 项 | 标准 | 证据 |

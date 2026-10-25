@@ -60,3 +60,4 @@
 - [x] 写入时间统一 UTC（原来混用本地时间与 UTC，影响「卡住任务」判断和排序）
 - [x] SQLite 合并写使用 `BEGIN IMMEDIATE`（无 FOR UPDATE 时防止跨进程丢更新）
 - [x] 旧数据里存成 JSON 字符串的标签，读取时统一为列表
+- [x] PostgreSQL 时区：会话 UTC、模型比较统一 `as_utc()`；CI 增加 PostgreSQL 矩阵
