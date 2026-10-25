@@ -8,3 +8,4 @@ from .author_cache import AuthorCache, PaperAuthorCache
 from .reading_task import ReadingTask, TaskAssignee, TaskStatus, AssigneeStatus, TaskPriority
 from .share_link import ShareLink, DEFAULT_EXPIRY_DAYS
 
+from .workbench_item import WorkbenchItem, DataMigration

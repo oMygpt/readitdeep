@@ -214,8 +214,7 @@ async def _fetch_and_store_s2(paper_id: str, external_id: str, limit: int, fetch
         logger.info(f"Stored {len(references_data)} references for paper {paper_id}")
     
     # Save to store
-    paper["s2_graph"] = s2_graph
-    store.update(paper_id, paper)
+    store.update(paper_id, {"s2_graph": s2_graph})
     
     return nodes, edges
 

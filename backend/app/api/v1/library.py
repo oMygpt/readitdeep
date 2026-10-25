@@ -3,7 +3,7 @@ Read it DEEP - Library API
 知识库管理 (支持多用户隔离)
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 
 from fastapi import APIRouter, Query, Depends
@@ -102,10 +102,12 @@ async def list_papers(
         t = p.get("created_at")
         if isinstance(t, str):
             try:
-                return datetime.fromisoformat(t)
-            except:
-                pass
-        return t or datetime.min
+                t = datetime.fromisoformat(t)
+            except ValueError:
+                t = None
+        if not isinstance(t, datetime):
+            return datetime.min.replace(tzinfo=timezone.utc)
+        return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
 
     try:
         papers.sort(key=get_time, reverse=True)
@@ -179,23 +181,14 @@ async def delete_paper(
         except:
             pass
     
-    # 删除记录
+    # 删除解析出的图片
+    import shutil
+    from app.core.files import images_root
+    shutil.rmtree(images_root() / paper_id, ignore_errors=True)
+
+    # 删除记录（数据库是唯一来源；PostgreSQL 上分享、批注等关联行按外键级联删除）
     store.delete(paper_id)
-    
-    # 同步删除数据库记录 (用于团队分享功能)
-    from sqlalchemy import select
-    from app.core.database import async_session_maker
-    from app.models.paper import Paper
-    try:
-        async with async_session_maker() as db:
-            result = await db.execute(select(Paper).where(Paper.id == paper_id))
-            db_paper = result.scalar_one_or_none()
-            if db_paper:
-                await db.delete(db_paper)
-                await db.commit()
-    except Exception:
-        pass  # 忽略数据库删除失败
-    
+
     return {"success": True, "message": "论文已删除"}
 
 

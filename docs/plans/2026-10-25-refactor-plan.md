@@ -19,13 +19,13 @@
 
 验收：鉴权矩阵测试全绿；手工用另一账号逐一尝试读取他人论文、译文、文件、工作台均失败。
 
-## R2 单一存储
-10. 引入 Alembic，基线迁移对齐现有表。
-11. `paper_contents`、`workbench_items`（带 user_id）、papers 状态机与子状态字段、`source_provider/source_id` 唯一约束。
-12. `migrate_json_to_db.py`（幂等，可重复跑；输出对账：条数、字节数、失败清单）。
-13. 删除 `JSONStore` / `WorkbenchStore`，所有读写走 DB；`jobs` 表 + worker 取代进程内后台任务，重启后恢复 `running` 任务。
+## R2 单一存储（细化见设计 §2.5）
+10. 引入 Alembic：`0001` 基线 + `0002` 新表新列；启动脚本处理「旧库补列 → stamp → upgrade」；测试校验迁移结果与模型一致。
+11. `store` / `workbench_store` 改为数据库实现，接口不变；新增 `update()` 合并写、`list_light()` 轻量列表；所有 `set(id, {**旧快照, …})` 改为 `update`。
+12. `migrate_json_to_db.py`（幂等 + 对账输出），启动时自动执行一次并记录。
+13. 启动时把超时卡在中间状态的论文/翻译标为可重试的失败。（持久化任务队列并入 R3；状态机扩展并入 R4）
 
-验收：用仓库里现有 `papers.json`/`workbench.json` 的副本做迁移演练，条数与内容一致；双 worker 并发上传与编辑不丢数据。
+验收：用历史 `papers.json`/`workbench.json` 副本做迁移演练，条数与内容一致、二次运行无变化；两个进程并发写同一论文的不同字段不互相覆盖；重启后不再有永久卡在 parsing 的论文。
 
 ## R3 可插拔后端
 14. `ParseProvider`：mineru_cloud、grobid、paperdaily_markdown；回退顺序可配。

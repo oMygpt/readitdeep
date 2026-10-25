@@ -1,5 +1,7 @@
 """论文相关路由的权限矩阵：未登录 401、他人 403、所有者/管理员通过、团队成员可读。"""
 
+import uuid
+
 import pytest
 
 from app.core.store import store
@@ -25,15 +27,15 @@ OWNER_WRITE_ROUTES = [
 
 
 def make_paper(owner_id, **extra):
-    pid = f"paper-{len(store._data) + 1}"
-    store._data[pid] = {
+    pid = str(uuid.uuid4())
+    store.set(pid, {
         "id": pid,
         "filename": "p.pdf",
         "status": "completed",
         "user_id": owner_id,
         "markdown_content": "# T\n\n![fig](/uploads/images/%s/fig1.png)\n" % pid,
         **extra,
-    }
+    })
     return pid
 
 
@@ -71,12 +73,6 @@ async def test_ownerless_legacy_paper_is_admin_only(client, users):
 
 async def test_team_member_can_read_shared_paper(client, users):
     pid = make_paper(users["alice"]["id"])
-    from app.core.database import async_session_maker
-    from app.models.paper import Paper
-
-    async with async_session_maker() as db:
-        db.add(Paper(id=pid, user_id=users["alice"]["id"], filename="p.pdf", status="completed"))
-        await db.commit()
     team = (await client.post("/api/v1/teams", json={"name": "lab"}, headers=users["alice"]["headers"])).json()
     invite = (await client.post(f"/api/v1/teams/{team['id']}/invite", json={}, headers=users["alice"]["headers"])).json()
     code = invite.get("invite_code") or invite.get("code")

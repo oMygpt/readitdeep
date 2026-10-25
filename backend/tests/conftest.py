@@ -1,9 +1,9 @@
 """Test harness.
 
-The app builds its engine and JSON stores at import time from settings and the
-current working directory, so the environment is pinned here *before* any
-`app` import: a throwaway SQLite file, a throwaway storage dir, and cwd moved
-into a temp dir so `data/*.json` never touches the developer's real data.
+The app builds its engines at import time from settings, so the environment is
+pinned here *before* any `app` import: a throwaway SQLite file, a throwaway
+storage dir, and cwd moved into a temp dir so relative `data/` paths never touch
+the developer's real data.
 """
 
 import os
@@ -12,7 +12,8 @@ import tempfile
 from pathlib import Path
 
 _TMP = Path(tempfile.mkdtemp(prefix="rid-test-"))
-os.environ["DATABASE_URL"] = f"sqlite:///{_TMP / 'test.db'}"
+# RID_TEST_DATABASE_URL=postgresql://... 时改用 PostgreSQL 跑同一套测试
+os.environ["DATABASE_URL"] = os.environ.get("RID_TEST_DATABASE_URL") or f"sqlite:///{_TMP / 'test.db'}"
 os.environ["SECRET_KEY"] = "test-secret-key-not-for-production"
 os.environ["STORAGE_PATH"] = str(_TMP / "uploads")
 os.environ["CORS_ORIGINS"] = "http://testserver"
@@ -25,24 +26,16 @@ import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
 
 from app.core.database import Base, engine, init_db  # noqa: E402
-from app.core.store import store  # noqa: E402
-from app.core.workbench_store import workbench_store  # noqa: E402
 from app.main import app  # noqa: E402
 
 
 @pytest_asyncio.fixture(autouse=True)
 async def fresh_state():
-    """Every test starts with empty tables and empty JSON stores."""
+    """Every test starts with empty tables."""
     await init_db()
     async with engine.begin() as conn:
         for table in reversed(Base.metadata.sorted_tables):
             await conn.execute(table.delete())
-    store._data = {}
-    workbench_store._data = {
-        "items": {},
-        "global_workbench": {"methods": [], "datasets": [], "notes": []},
-        "paper_workbenches": {},
-    }
     yield
 
 
@@ -85,3 +78,6 @@ def no_parse(monkeypatch):
 async def dispose_engine():
     yield
     await engine.dispose()
+    from app.core.store import store
+
+    store.engine.dispose()

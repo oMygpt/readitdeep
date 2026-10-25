@@ -170,8 +170,7 @@ async def update_paper_category(paper_id: str, request: UpdateCategoryRequest, p
     """
     更新论文分类
     """
-    paper["category"] = request.category
-    store.set(paper_id, paper)
+    store.update(paper_id, {"category": request.category})
     
     return {"success": True, "category": request.category}
 
@@ -234,8 +233,7 @@ async def rename_category(
     
     for paper in user_papers:
         if paper.get("category") == request.old_name:
-            paper["category"] = request.new_name.strip()
-            store.set(paper["id"], paper)
+            store.update(paper["id"], {"category": request.new_name.strip()})
             papers_updated += 1
     
     logger.info(f"Category renamed for user {current_user.id}: '{request.old_name}' -> '{request.new_name}' ({papers_updated} papers)")
@@ -270,8 +268,7 @@ async def delete_category(
     
     for paper in user_papers:
         if paper.get("category") == decoded_name:
-            paper["category"] = None
-            store.set(paper["id"], paper)
+            store.update(paper["id"], {"category": None})
             papers_updated += 1
     
     logger.info(f"Category deleted for user {current_user.id}: '{decoded_name}' ({papers_updated} papers moved to Uncategorized)")

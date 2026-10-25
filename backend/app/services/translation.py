@@ -89,8 +89,7 @@ async def start_translation_task(paper_id: str) -> Dict[str, Any]:
         return {"success": False, "status": "error", "message": "论文内容为空"}
     
     # 标记为翻译中
-    store.set(paper_id, {
-        **paper,
+    store.update(paper_id, {
         "translation_status": "translating",
         "translation_progress": 0 if resume_from == 0 else paper.get("translation_progress", 0),
         "translation_chunks_total": paper.get("translation_chunks_total", 0),
@@ -153,8 +152,7 @@ async def _translate_paper_background(paper_id: str) -> None:
             ]
         
         # 更新 chunk 总数
-        store.set(paper_id, {
-            **store.get(paper_id),
+        store.update(paper_id, {
             "translation_chunks_total": total_chunks,
             "translation_chunks": existing_chunks,
         })
@@ -187,8 +185,7 @@ async def _translate_paper_background(paper_id: str) -> None:
                 # 保存状态后抛出异常
                 current_paper = store.get(paper_id)
                 if current_paper:
-                    store.set(paper_id, {
-                        **current_paper,
+                    store.update(paper_id, {
                         "translation_chunks": existing_chunks,
                         "translation_status": "failed",
                         "translation_error": f"Chunk {i} failed: {str(e)}",
@@ -200,8 +197,7 @@ async def _translate_paper_background(paper_id: str) -> None:
             current_paper = store.get(paper_id)
             if current_paper:
                 progress = int(((i + 1) / total_chunks) * 100)
-                store.set(paper_id, {
-                    **current_paper,
+                store.update(paper_id, {
                     "translation_status": "translating",
                     "translation_progress": progress,
                     "translation_chunks_done": i + 1,
@@ -212,8 +208,7 @@ async def _translate_paper_background(paper_id: str) -> None:
         # 翻译完成
         final_paper = store.get(paper_id)
         if final_paper:
-            store.set(paper_id, {
-                **final_paper,
+            store.update(paper_id, {
                 "translation_status": "completed",
                 "translation_progress": 100,
                 "is_translated": True,
@@ -228,8 +223,7 @@ async def _translate_paper_background(paper_id: str) -> None:
         paper = store.get(paper_id)
         if paper and paper.get("translation_status") != "failed":
             # 只在未已标记为 failed 时更新
-            store.set(paper_id, {
-                **paper,
+            store.update(paper_id, {
                 "translation_status": "failed",
                 "translation_error": str(e),
             })

@@ -12,6 +12,7 @@ import uuid
 import secrets
 
 from app.core.database import Base
+from app.core.timeutil import as_utc, utcnow
 
 
 # ================== 角色常量 ==================
@@ -185,7 +186,7 @@ class TeamInvitation(Base):
     def is_valid(self) -> bool:
         """检查邀请是否有效"""
         # 检查过期
-        if self.expires_at and self.expires_at < datetime.utcnow():
+        if self.expires_at and as_utc(self.expires_at) < utcnow():
             return False
         # 检查使用次数
         if self.max_uses > 0 and self.used_count >= self.max_uses:

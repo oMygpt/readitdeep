@@ -11,6 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 import uuid
 
 from app.core.database import Base
+from app.core.timeutil import as_utc, utcnow
 
 
 class InvitationCode(Base):
@@ -68,7 +69,7 @@ class InvitationCode(Base):
         """是否已过期"""
         if not self.expires_at:
             return False
-        return self.expires_at < datetime.utcnow()
+        return as_utc(self.expires_at) < utcnow()
     
     @property
     def is_valid(self) -> bool:

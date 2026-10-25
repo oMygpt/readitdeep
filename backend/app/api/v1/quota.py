@@ -19,6 +19,7 @@ from app.models.user import User, PLAN_LIMITS
 from app.models.invitation_code import InvitationCode
 from app.models.system_config import SystemConfig
 from app.api.v1.auth import get_current_user
+from app.core.timeutil import as_utc, utcnow
 
 router = APIRouter()
 
@@ -198,12 +199,12 @@ async def redeem_invitation_code(
     invitation.used_at = datetime.utcnow()
     
     # 计算新的过期时间 (限制最大天数防止溢出)
-    now = datetime.utcnow()
+    now = utcnow()
     grant_days = min(invitation.grant_days or 30, 3650)  # 最多 10 年
     
-    if current_user.plan_expires_at and current_user.plan_expires_at > now:
+    if current_user.plan_expires_at and as_utc(current_user.plan_expires_at) > now:
         # 已有订阅，延长时间
-        new_expires = current_user.plan_expires_at + timedelta(days=grant_days)
+        new_expires = as_utc(current_user.plan_expires_at) + timedelta(days=grant_days)
     else:
         # 新订阅
         new_expires = now + timedelta(days=grant_days)

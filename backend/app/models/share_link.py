@@ -13,6 +13,7 @@ from sqlalchemy import String, Text, DateTime, Integer, func, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.core.timeutil import as_utc, utcnow
 
 
 # 默认有效期 14 天
@@ -77,7 +78,7 @@ class ShareLink(Base):
         """检查链接是否已过期"""
         if self.expires_at is None:
             return False
-        return datetime.utcnow() > self.expires_at.replace(tzinfo=None)
+        return utcnow() > as_utc(self.expires_at)
     
     def record_access(self) -> None:
         """记录访问"""

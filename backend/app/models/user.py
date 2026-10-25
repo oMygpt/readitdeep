@@ -12,6 +12,7 @@ import bcrypt
 import uuid
 
 from app.core.database import Base
+from app.core.timeutil import as_utc, utcnow
 
 
 # ================== 配额常量 ==================
@@ -104,17 +105,17 @@ class User(Base):
     def get_effective_plan(self) -> str:
         """获取有效计划 (检查过期)"""
         if self.plan in ("pro", "ultra"):
-            if self.plan_expires_at and self.plan_expires_at < datetime.utcnow():
+            if self.plan_expires_at and as_utc(self.plan_expires_at) < utcnow():
                 return "free"  # 已过期降级为免费
         return self.plan
     
     def reset_daily_quota_if_needed(self) -> bool:
         """检查并重置每日配额，返回是否重置"""
-        now = datetime.utcnow()
+        now = utcnow()
         today = now.date()
         
         needs_reset = False
-        if self.last_daily_reset is None or self.last_daily_reset.date() < today:
+        if self.last_daily_reset is None or as_utc(self.last_daily_reset).date() < today:
             self.daily_papers_used = 0
             self.daily_ai_used = 0
             self.last_daily_reset = now
@@ -124,7 +125,7 @@ class User(Base):
     
     def reset_monthly_quota_if_needed(self) -> bool:
         """检查并重置每月配额 (Free 用户)，返回是否重置"""
-        now = datetime.utcnow()
+        now = utcnow()
         current_month = (now.year, now.month)
         
         needs_reset = False
@@ -133,7 +134,8 @@ class User(Base):
             self.last_monthly_reset = now
             needs_reset = True
         else:
-            last_month = (self.last_monthly_reset.year, self.last_monthly_reset.month)
+            last = as_utc(self.last_monthly_reset)
+            last_month = (last.year, last.month)
             if last_month < current_month:
                 self.monthly_papers_used = 0
                 self.last_monthly_reset = now
