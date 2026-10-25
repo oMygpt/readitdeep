@@ -96,6 +96,18 @@ DEFAULT_SYSTEM_CONFIG = {
         "value": "",
         "description": "解析器顺序，逗号分隔（mineru / grobid / paperdaily_markdown）。为空时自动：有 MinerU Key 用 mineru,grobid，否则 grobid",
     },
+    "vlm_model": {
+        "value": "",
+        "description": "视觉模型名（如 Qwen/Qwen3-VL-32B-Instruct）；设置后 PDF 优先用视觉模型逐页转写",
+    },
+    "vlm_base_url": {
+        "value": "",
+        "description": "视觉模型地址（空则用主 LLM 地址）",
+    },
+    "vlm_api_key": {
+        "value": "",
+        "description": "视觉模型 API Key（空则用主 LLM 的 Key，仅当地址也为空时）",
+    },
     "grobid_url": {
         "value": "",
         "description": "GROBID 服务地址（如 http://10.6.64.6:8070），用于无 MinerU 时解析 PDF",

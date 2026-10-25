@@ -42,6 +42,13 @@ class Settings(BaseSettings):
     # 每个进程的模型并发上限：交互（划词分析/对话/@AI）与批量（翻译/自动分析/分类）
     llm_concurrency_interactive: int = 8
     llm_concurrency_batch: int = 2
+    llm_concurrency_vlm: int = 4
+
+    # 视觉模型（PDF 逐页转写）。地址/Key 为空时沿用主 LLM 的；vlm_model 为空则不启用
+    vlm_base_url: str = ""
+    vlm_api_key: str = ""
+    vlm_model: str = ""
+    vlm_max_pages: int = 80
     
     # 翻译 LLM
     translation_base_url: str = "http://localhost:8000/v1"
