@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     llm_base_url: str = "http://localhost:8000/v1"
     llm_api_key: str = ""
     llm_model: str = "qwen2.5-72b"
+    # 透传给 OpenAI 兼容服务的额外参数（JSON），如校内 Qwen3 关闭思考输出：
+    # {"chat_template_kwargs": {"enable_thinking": false}}
+    llm_extra_body: str = ""
+    # 每个进程的模型并发上限：交互（划词分析/对话/@AI）与批量（翻译/自动分析/分类）
+    llm_concurrency_interactive: int = 8
+    llm_concurrency_batch: int = 2
     
     # 翻译 LLM
     translation_base_url: str = "http://localhost:8000/v1"

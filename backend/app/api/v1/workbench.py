@@ -357,6 +357,7 @@ async def smart_analyze_endpoint(request: SmartAnalyzeRequest, current_user: Use
     await _check_source_paper(request.paper_id, current_user)
     await require_ai_quota(current_user)
     result = await smart_analyze(
+        user_id=current_user.id,
         text=request.text,
         paper_id=request.paper_id,
         paper_title=request.paper_title,
@@ -389,6 +390,7 @@ async def smart_analyze_stream_endpoint(request: SmartAnalyzeRequest, current_us
     await require_ai_quota(current_user)
     return StreamingResponse(
         smart_analyze_stream(
+            user_id=current_user.id,
             text=request.text,
             paper_id=request.paper_id,
             paper_title=request.paper_title,

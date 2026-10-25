@@ -7,7 +7,7 @@ Read it DEEP - 提示词管理 API
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import select, func, delete
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 import uuid
 
@@ -16,7 +16,7 @@ from app.models.user import User
 from app.models.prompt import PromptVersion, PromptActiveVersion, PromptHistory
 from app.models.paper import Paper
 from app.api.v1.auth import get_current_admin
-from app.agents.prompt_loader import get_prompt_loader, PromptLoader, PROMPTS_DIR
+from app.agents.prompt_loader import get_prompt_loader, PROMPTS_DIR
 
 router = APIRouter()
 
@@ -232,9 +232,9 @@ async def preview_prompt(
     db: AsyncSession = Depends(get_db),
 ):
     """使用指定提示词预览分析结果"""
-    import os
-    from openai import OpenAI
+    from langchain_core.messages import HumanMessage, SystemMessage
     from app.core.store import store
+    from app.services.llm import INTERACTIVE, LLMNotConfigured, get_chat_model
     
     # 获取论文内容
     result = await db.execute(
@@ -266,33 +266,21 @@ async def preview_prompt(
     # 构建用户提示词
     user_prompt = data.user_prompt_template.replace("{content}", content)
     
-    # 获取 OpenAI 客户端配置
-    api_key = os.getenv("OPENAI_API_KEY")
-    base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
-    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-    
-    if not api_key:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="OpenAI API key not configured"
-        )
-    
-    client = OpenAI(api_key=api_key, base_url=base_url)
-    
+    # 与正式分析使用同一套模型配置（管理员本人的生效配置）
     try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": data.system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            temperature=0.7,
+        llm = await get_chat_model("chat", admin.id, temperature=0.7, channel=INTERACTIVE)
+    except LLMNotConfigured as e:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)) from e
+
+    try:
+        response = await llm.ainvoke(
+            [SystemMessage(content=data.system_prompt), HumanMessage(content=user_prompt)],
             max_tokens=2000,
         )
-        
-        result_text = response.choices[0].message.content
-        tokens_used = response.usage.total_tokens if response.usage else None
-        
+        result_text = response.content
+        usage = getattr(response, "usage_metadata", None) or {}
+        tokens_used = usage.get("total_tokens")
+
         return PreviewResponse(
             result=result_text,
             tokens_used=tokens_used
@@ -395,7 +383,6 @@ async def create_prompt_version(
         )
     
     # 生成文件路径
-    from pathlib import Path
     file_path = str(PROMPTS_DIR / prompt_type / f"{data.version}.md")
     
     # 创建记录

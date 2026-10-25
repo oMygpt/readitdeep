@@ -29,10 +29,16 @@
 - [x] R2.6 启动时恢复卡住的论文/翻译状态
 - [x] R2.7 迁移演练（历史 45 篇 / 620 条）与并发写测试
 
-## R3 可插拔后端
-- [ ] R3.1 ParseProvider：mineru_cloud / grobid / paperdaily_markdown + 回退
-- [ ] R3.2 LLMPool：分任务、多端点、并发上限
-- [ ] R3.4 持久化任务队列（jobs 表 + worker，重启续跑）、token 统计迁入 DB（自 R2 移入）
+## R3 可插拔后端（设计 §2.6）
+- [x] R3a.1 `get_chat_model(task, user_id)` 统一入口；翻译、引用分析、@AI、提示词预览改用管理员配置
+- [x] R3a.2 模型配置按触发者取（与 AI 配额一致）
+- [x] R3a.3 多端点故障转移传输层（冷却、仅响应头前重试）
+- [x] R3a.4 交互 / 批量两个并发通道
+- [x] R3a.5 `LLM_EXTRA_BODY`（校内 Qwen3 关闭思考输出）
+- [ ] R3b.1 ParseProvider 接口 + mineru / grobid / paperdaily_markdown 占位
+- [ ] R3b.2 `parse_providers` / `grobid_url` 配置与回退；`parser` 字段；MinerU Key 缺失不再失败
+- [ ] R3c.1 `jobs` 表 + worker（认领、心跳、重试）；上传 / 重新分析 / 翻译入队
+- [ ] R3c.2 `token_usage` 表取代 token_stats.json
 - [ ] R3.3 校内 GROBID + vLLM 实测记录
 
 ## R4 PaperDaily 关联（依赖主站 E2/E3）

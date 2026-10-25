@@ -33,6 +33,7 @@ class ConfigManager:
             "llm_base_url": settings.llm_base_url,
             "llm_api_key": settings.llm_api_key,
             "llm_model": settings.llm_model,
+            "llm_extra_body": settings.llm_extra_body,
             "embedding_provider": settings.embedding_provider,
             "embedding_base_url": settings.embedding_base_url,
             "embedding_api_key": settings.embedding_api_key,
