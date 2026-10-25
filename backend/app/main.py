@@ -24,7 +24,6 @@ from typing import AsyncGenerator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
 from app.api.v1 import router as api_v1_router
@@ -61,12 +60,29 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     print(f"👋 {settings.app_name} shutting down...")
 
 
+INSECURE_SECRET_KEYS = {"", "change-me-in-production", "your-super-secret-key-change-in-production"}
+
+
+def check_security_settings(settings) -> None:
+    """拒绝用默认/过短的 SECRET_KEY 启动（JWT 与文件签名都依赖它）。DEBUG=true 时只警告。"""
+    if settings.secret_key in INSECURE_SECRET_KEYS or len(settings.secret_key) < 16:
+        message = (
+            "SECRET_KEY 未设置或仍为默认值，任何人都能伪造登录凭证。"
+            "请在 .env 中设置至少 16 位的随机值，例如: openssl rand -hex 32"
+        )
+        if settings.debug:
+            print(f"⚠️  {message}")
+        else:
+            raise RuntimeError(message)
+
+
 def create_app() -> FastAPI:
     """创建 FastAPI 应用"""
     settings = get_settings()
+    check_security_settings(settings)
     
     # 确保上传目录存在 (在挂载 StaticFiles 之前)
-    upload_path = ensure_upload_dirs(settings.storage_path)
+    ensure_upload_dirs(settings.storage_path)
     
     app = FastAPI(
         title=settings.app_name,
@@ -79,13 +95,13 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins_list,
-        allow_credentials=True,
+        # 鉴权走 Authorization 头而不是 Cookie；通配来源时不允许携带凭证
+        allow_credentials="*" not in settings.cors_origins_list,
         allow_methods=["*"],
         allow_headers=["*"],
     )
     
-    # 挂载静态文件 (上传的图片等)
-    app.mount("/uploads", StaticFiles(directory=str(upload_path)), name="uploads")
+    # 上传目录不再静态公开；图片经签名路由 /api/v1/files/images/... 访问
     
     # API 路由
     app.include_router(api_v1_router, prefix="/api/v1")

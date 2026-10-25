@@ -16,9 +16,10 @@ import jwt
 from app.core.database import get_db
 from app.models.user import User
 from app.config import get_settings
+from app.core.url_guard import is_url_config_key, validate_public_url
 
 router = APIRouter()
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 settings = get_settings()
 
 # JWT 配置
@@ -103,49 +104,39 @@ def decode_token(token: str) -> dict:
 # ================== 依赖注入 ==================
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    """获取当前登录用户 (依赖注入)"""
-    import logging
-    logger = logging.getLogger("uvicorn")
-    
-    token = credentials.credentials
-    try:
-        payload = decode_token(token)
-    except Exception as e:
-        logger.error(f"Token decode failed: {str(e)}")
-        raise e
+    """获取当前登录用户 (依赖注入)。缺少或无效凭证一律 401。"""
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="请先登录",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    payload = decode_token(credentials.credentials)
 
-    logger.info(f"Token payload: {payload}")
-    
     if payload.get("type") != "access":
-        logger.warning("Invalid token type")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="请使用 access token",
         )
-    
-    user_id = payload.get("sub")
-    logger.info(f"Looking for user_id: {user_id}")
-    
-    result = await db.execute(select(User).where(User.id == user_id))
+
+    result = await db.execute(select(User).where(User.id == payload.get("sub")))
     user = result.scalar_one_or_none()
-    
+
     if not user:
-        logger.error(f"User failed to be found in DB: {user_id}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="用户不存在",
         )
-    
+
     if not user.is_active:
-        logger.warning(f"User inactive: {user.email}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="账户已禁用",
         )
-    
+
     return user
 
 
@@ -262,10 +253,12 @@ async def login(
 
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db: AsyncSession = Depends(get_db),
 ):
     """刷新访问令牌"""
+    if credentials is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="请先登录")
     payload = decode_token(credentials.credentials)
     
     if payload.get("type") != "refresh":
@@ -430,6 +423,22 @@ class TestApiKeyResponse(BaseModel):
     details: Optional[dict] = None
 
 
+def _check_user_urls(urls: dict) -> None:
+    """用户提交的服务地址：未开放时 403；开放时拒绝内网/保留地址。空字符串表示清除，放行。"""
+    for key, value in urls.items():
+        if not value:
+            continue
+        if not settings.allow_user_endpoints:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="本站未开放自定义服务地址，请使用管理员配置的服务（可以只填写自己的 API Key）",
+            )
+        try:
+            validate_public_url(value)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"{key}: {e}") from e
+
+
 @router.get("/config", response_model=UserConfigResponse)
 async def get_user_config_endpoint(
     user: User = Depends(get_current_user),
@@ -499,6 +508,7 @@ async def update_user_config_endpoint(
     from app.core.config_manager import ConfigManager
     
     updates = data.model_dump(exclude_none=True)
+    _check_user_urls({k: v for k, v in updates.items() if is_url_config_key(k)})
     await ConfigManager.set_user_config(db, user.id, updates)
     
     # Return updated
@@ -516,7 +526,10 @@ async def test_api_key_endpoint(
     api_type 支持: 'llm', 'mineru', 'translation'
     """
     import httpx
-    
+
+    if data.base_url:
+        _check_user_urls({"base_url": data.base_url})
+
     try:
         if data.api_type == 'llm' or data.api_type == 'translation':
             # 测试 OpenAI 兼容 API

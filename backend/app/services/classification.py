@@ -313,16 +313,15 @@ def remove_tag(paper_id: str, tag: str) -> bool:
     return True
 
 
-def get_all_tags() -> list[dict]:
+def get_all_tags(user_id: str) -> list[dict]:
     """
-    获取所有已使用的标签及其论文数量
+    获取该用户论文中已使用的标签及其论文数量
     """
     tag_counts: dict[str, int] = {}
     
-    for paper_id in store.keys():
-        paper = store.get(paper_id)
+    for paper in store.get_by_user(user_id):
         if paper:
-            for tag in paper.get("tags", []):
+            for tag in paper.get("tags") or []:
                 tag_counts[tag] = tag_counts.get(tag, 0) + 1
     
     # 按使用次数排序

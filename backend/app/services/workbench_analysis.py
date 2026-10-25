@@ -53,6 +53,7 @@ async def analyze_method(
     paper_id: str,
     paper_title: str,
     location: str = "",
+    user_id: str | None = None,
 ) -> dict:
     """
     方法炼金台分析
@@ -149,6 +150,7 @@ async def analyze_method(
             description=core_idea,
             source_paper_id=paper_id,
             zone="methods",
+            user_id=user_id,
             data={
                 "analysis": analysis,
                 "original_text": text,
@@ -176,6 +178,7 @@ async def analyze_asset(
     paper_id: str,
     paper_title: str,
     location: str = "",
+    user_id: str | None = None,
 ) -> dict:
     """
     资产仓库分析
@@ -259,6 +262,7 @@ async def analyze_asset(
                 description=asset.get("description", ""),
                 source_paper_id=paper_id,
                 zone="datasets",
+                user_id=user_id,
                 data={
                     "asset": asset,
                     "original_text": text,
@@ -290,6 +294,7 @@ def create_smart_note(
     location: str = "",
     is_title_note: bool = False,
     reflection: str = "",
+    user_id: str | None = None,
 ) -> dict:
     """
     创建智能笔记
@@ -302,6 +307,7 @@ def create_smart_note(
         description=reflection if reflection else "点击添加心得...",
         source_paper_id=paper_id,
         zone="notes",
+        user_id=user_id,
         data={
             "original_text": text,
             "location": location,

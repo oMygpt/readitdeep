@@ -24,7 +24,7 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeRaw from 'rehype-raw';
 import rehypeKatex from 'rehype-katex';
-import { papersApi, authApi, annotationsApi } from '../lib/api';
+import { papersApi, authApi, annotationsApi, authFetch, AuthEventSource } from '../lib/api';
 import type { TextLocation } from '../lib/api';
 import AnalysisPanel from '../components/AnalysisPanel';
 import StructurePanel from '../components/StructurePanel';
@@ -115,7 +115,7 @@ export default function ReaderPage() {
         setTranslationProgress('启动翻译...');
 
         try {
-            const triggerRes = await fetch(`/api/v1/papers/${paperId}/translate`, { method: 'POST' });
+            const triggerRes = await authFetch(`/api/v1/papers/${paperId}/translate`, { method: 'POST' });
             const triggerData = await triggerRes.json();
 
             if (!triggerData.success && triggerData.status !== 'translating' && triggerData.status !== 'completed') {
@@ -126,7 +126,7 @@ export default function ReaderPage() {
 
             // If already completed, just fetch the result
             if (triggerData.status === 'completed') {
-                const res = await fetch(`/api/v1/papers/${paperId}/translation`);
+                const res = await authFetch(`/api/v1/papers/${paperId}/translation`);
                 const data = await res.json();
                 if (data.translated_content) {
                     setTranslatedContent(data.translated_content);
@@ -139,7 +139,7 @@ export default function ReaderPage() {
 
             // Connect SSE for live progress (optional - task continues in background)
             setTranslationProgress('连接翻译流...');
-            const eventSource = new EventSource(`/api/v1/papers/${paperId}/translate/stream`);
+            const eventSource = new AuthEventSource(`/api/v1/papers/${paperId}/translate/stream`);
             let buffer = '';
 
             eventSource.onmessage = (event) => {
@@ -152,7 +152,7 @@ export default function ReaderPage() {
                 } else if (data === '[DONE]' || data === '[ALREADY_DONE]') {
                     eventSource.close();
                     // Fetch final result
-                    fetch(`/api/v1/papers/${paperId}/translation`)
+                    authFetch(`/api/v1/papers/${paperId}/translation`)
                         .then(res => res.json())
                         .then(result => {
                             if (result.translated_content) {
@@ -191,7 +191,7 @@ export default function ReaderPage() {
     const pollTranslationStatus = async () => {
         const checkStatus = async () => {
             try {
-                const res = await fetch(`/api/v1/papers/${paperId}/translation`);
+                const res = await authFetch(`/api/v1/papers/${paperId}/translation`);
                 const data = await res.json();
 
                 if (data.status === 'completed' && data.translated_content) {

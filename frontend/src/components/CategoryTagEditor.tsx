@@ -4,7 +4,7 @@
 
 import { useState, useEffect } from 'react';
 import { X, Plus, Check, Tag, Folder } from 'lucide-react';
-import { classificationApi, libraryApi } from '../lib/api';
+import { authFetch, classificationApi, libraryApi } from '../lib/api';
 
 interface Props {
     paperId: string;
@@ -37,7 +37,7 @@ export default function CategoryTagEditor({
         try {
             const [cats, tagStats] = await Promise.all([
                 libraryApi.getCategories(),
-                fetch('/api/v1/library/tags').then(r => r.json())
+                authFetch('/api/v1/library/tags').then(r => r.json())
             ]);
             // Defensive check: ensure cats is an array before mapping
             setAllCategories(

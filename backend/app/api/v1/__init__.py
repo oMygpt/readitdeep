@@ -4,11 +4,12 @@ Read it DEEP - API v1 路由
 
 from fastapi import APIRouter
 
-from app.api.v1 import papers, library, monitor, analysis, graph, classification, translate, workbench, auth, admin, quota, prompts, authors, teams, annotations, tasks, ai_assist, share, citation
+from app.api.v1 import files, papers, library, monitor, graph, classification, translate, workbench, auth, admin, quota, prompts, authors, teams, annotations, tasks, ai_assist, share, citation
 
 router = APIRouter()
 
 # Share (访客分享 - 公开端点优先)
+router.include_router(files.router, prefix="/files", tags=["Files"])
 router.include_router(share.router, prefix="/share", tags=["Share"])
 
 # AI Assistant (AI 讨论助手)
@@ -41,7 +42,6 @@ router.include_router(papers.router, prefix="/papers", tags=["Papers"])
 router.include_router(library.router, prefix="/library", tags=["Library"])
 router.include_router(citation.router, prefix="/library", tags=["Citation"])
 router.include_router(monitor.router, prefix="/monitor", tags=["Monitor"])
-router.include_router(analysis.router, prefix="/papers", tags=["Analysis"])
 router.include_router(graph.router, prefix="/papers", tags=["Graph"])
 router.include_router(classification.router, prefix="/papers", tags=["Classification"])
 router.include_router(classification.tags_router, prefix="/library", tags=["Tags"])

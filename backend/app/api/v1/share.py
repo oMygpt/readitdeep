@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from sqlalchemy import select, delete
 
 from app.core.database import async_session_maker
+from app.core.files import sign_markdown_images
 from app.core.store import store
 from app.models.user import User
 from app.models.share_link import ShareLink, DEFAULT_EXPIRY_DAYS
@@ -331,7 +332,7 @@ async def get_shared_paper_content(share_token: str):
     await record_access(share_link)
     
     return GuestPaperContentResponse(
-        markdown=paper.get("markdown_content", ""),
+        markdown=sign_markdown_images(paper.get("markdown_content", "")),
     )
 
 
@@ -361,7 +362,7 @@ async def get_shared_paper_analysis(share_token: str):
     
     # 获取自动分析数据 (只获取 auto-generated items)
     from app.core.workbench_store import workbench_store
-    items = workbench_store.get_items_by_paper(share_link.paper_id)
+    items = workbench_store.get_items_by_paper(share_link.paper_id, owner_id=paper.get("user_id"))
     
     methods = []
     datasets = []

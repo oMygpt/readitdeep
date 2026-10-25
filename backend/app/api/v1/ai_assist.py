@@ -10,17 +10,18 @@ AI 讨论助手 API (AI Discussion Assistant API)
 """
 
 import os
-import json
 from datetime import datetime
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+import asyncio
 from sqlalchemy import select
 
 from app.core.database import get_db
 from app.api.v1.auth import get_current_user
-from app.models import User, Team, TeamMember, Paper, TeamAnnotation
+from app.api.deps import get_paper_or_404, require_ai_quota, user_can_access_paper
+from app.models import User, TeamMember, TeamAnnotation
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -60,8 +61,8 @@ def get_llm_client():
     return OpenAI(api_key=api_key, base_url=base_url)
 
 
-def build_context(
-    db: Session,
+async def build_context(
+    db: AsyncSession,
     paper_id: Optional[str] = None,
     team_id: Optional[str] = None,
     annotation_id: Optional[str] = None,
@@ -71,22 +72,24 @@ def build_context(
     
     # 添加论文上下文
     if paper_id:
-        paper = db.get(Paper, paper_id)
+        # 调用方已校验访问权限；正文以 store 为准（DB 副本可能滞后）
+        paper = get_paper_or_404(paper_id)
         if paper:
+            markdown = paper.get("markdown_content") or ""
             context_parts.append(f"## 论文信息\n")
-            context_parts.append(f"标题: {paper.title or paper.filename}\n")
-            if paper.abstract:
-                context_parts.append(f"摘要: {paper.abstract}\n")
-            if paper.markdown_content:
+            context_parts.append(f"标题: {paper.get('title') or paper.get('filename')}\n")
+            if paper.get("abstract"):
+                context_parts.append(f"摘要: {paper['abstract']}\n")
+            if markdown:
                 # 只取前 3000 字符避免上下文过长
-                content_preview = paper.markdown_content[:3000]
-                if len(paper.markdown_content) > 3000:
+                content_preview = markdown[:3000]
+                if len(markdown) > 3000:
                     content_preview += "\n...(内容已截断)"
                 context_parts.append(f"\n论文内容预览:\n{content_preview}\n")
     
     # 添加标注/讨论上下文
     if annotation_id:
-        annotation = db.get(TeamAnnotation, annotation_id)
+        annotation = await db.get(TeamAnnotation, annotation_id)
         if annotation:
             context_parts.append(f"\n## 当前讨论\n")
             if annotation.selected_text:
@@ -95,16 +98,16 @@ def build_context(
                 context_parts.append(f"批注内容: {annotation.content}\n")
             
             # 获取回复
-            replies = db.execute(
+            replies = (await db.execute(
                 select(TeamAnnotation)
                 .where(TeamAnnotation.parent_id == annotation_id)
                 .order_by(TeamAnnotation.created_at)
-            ).scalars().all()
+            )).scalars().all()
             
             if replies:
                 context_parts.append(f"\n讨论回复:\n")
                 for reply in replies[:10]:  # 最多 10 条回复
-                    user = db.get(User, reply.user_id)
+                    user = await db.get(User, reply.user_id)
                     username = user.username if user else "未知用户"
                     context_parts.append(f"- {username}: {reply.content}\n")
     
@@ -159,12 +162,31 @@ def generate_ai_response(
         return f"抱歉，AI 处理时出现错误: {str(e)}"
 
 
+async def _check_annotation_access(db: AsyncSession, annotation_id: str, user: User) -> TeamAnnotation:
+    """批注可见性：团队批注要求团队成员；个人批注要求作者本人或能访问其论文。"""
+    annotation = await db.get(TeamAnnotation, annotation_id)
+    if not annotation:
+        raise HTTPException(status_code=404, detail="Annotation not found")
+    if annotation.team_id:
+        member = (await db.execute(
+            select(TeamMember).where(
+                TeamMember.team_id == annotation.team_id,
+                TeamMember.user_id == user.id,
+            )
+        )).scalar_one_or_none()
+        if not member and not user.is_admin:
+            raise HTTPException(status_code=403, detail="Not a team member")
+    elif annotation.user_id != user.id and not user.is_admin:
+        raise HTTPException(status_code=403, detail="无权访问此批注")
+    return annotation
+
+
 # ================== API Endpoints ==================
 
 @router.post("/assist", response_model=AIResponse)
 async def ai_assist(
     request: AIRequestBase,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
@@ -187,18 +209,28 @@ async def ai_assist(
     
     # 检查团队权限 (如果指定了 team_id)
     if request.team_id:
-        member = db.execute(
+        member = (await db.execute(
             select(TeamMember).where(
                 TeamMember.team_id == request.team_id,
                 TeamMember.user_id == current_user.id
             )
-        ).scalar_one_or_none()
+        )).scalar_one_or_none()
         
         if not member:
             raise HTTPException(status_code=403, detail="Not a team member")
-    
+
+    if request.paper_id:
+        paper = get_paper_or_404(request.paper_id)
+        if not await user_can_access_paper(request.paper_id, paper, current_user):
+            raise HTTPException(status_code=403, detail="无权访问此论文")
+
+    if request.annotation_id:
+        await _check_annotation_access(db, request.annotation_id, current_user)
+
+    await require_ai_quota(current_user)
+
     # 构建上下文
-    context = build_context(
+    context = await build_context(
         db,
         paper_id=request.paper_id,
         team_id=request.team_id,
@@ -206,7 +238,8 @@ async def ai_assist(
     )
     
     # 生成 AI 响应
-    response_text = generate_ai_response(
+    response_text = await asyncio.to_thread(
+        generate_ai_response,
         command=request.command,
         content=request.content,
         context=context,
@@ -224,32 +257,19 @@ async def ai_assist(
 @router.post("/summarize-discussion")
 async def summarize_discussion(
     annotation_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """总结讨论线程"""
-    annotation = db.get(TeamAnnotation, annotation_id)
-    if not annotation:
-        raise HTTPException(status_code=404, detail="Annotation not found")
-    
-    # 检查团队权限
-    if annotation.team_id:
-        member = db.execute(
-            select(TeamMember).where(
-                TeamMember.team_id == annotation.team_id,
-                TeamMember.user_id == current_user.id
-            )
-        ).scalar_one_or_none()
-        
-        if not member:
-            raise HTTPException(status_code=403, detail="Not a team member")
+    annotation = await _check_annotation_access(db, annotation_id, current_user)
+    await require_ai_quota(current_user)
     
     # 获取所有回复
-    replies = db.execute(
+    replies = (await db.execute(
         select(TeamAnnotation)
         .where(TeamAnnotation.parent_id == annotation_id)
         .order_by(TeamAnnotation.created_at)
-    ).scalars().all()
+    )).scalars().all()
     
     # 构建讨论内容
     discussion_parts = []
@@ -257,14 +277,15 @@ async def summarize_discussion(
         discussion_parts.append(f"原始批注: {annotation.content}")
     
     for reply in replies:
-        user = db.get(User, reply.user_id)
+        user = await db.get(User, reply.user_id)
         username = user.username if user else "未知用户"
         discussion_parts.append(f"{username}: {reply.content}")
     
     discussion_text = "\n".join(discussion_parts)
     
     # 生成总结
-    response_text = generate_ai_response(
+    response_text = await asyncio.to_thread(
+        generate_ai_response,
         command="summarize",
         content=f"请总结以下学术讨论的要点:\n\n{discussion_text}",
         context="",

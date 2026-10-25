@@ -48,6 +48,13 @@ if [ ! -f ".env" ]; then
     fi
 fi
 
+# 默认/空 SECRET_KEY 时自动生成随机密钥（后端拒绝用默认密钥启动）
+if [ -f ".env" ] && grep -qE '^SECRET_KEY=(|your-super-secret-key-change-in-production|change-me-in-production)$' .env; then
+    NEW_SECRET=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
+    sed -i.bak "s/^SECRET_KEY=.*/SECRET_KEY=${NEW_SECRET}/" .env && rm -f .env.bak
+    echo -e "${GREEN}✓ 已为 .env 生成随机 SECRET_KEY${NC}"
+fi
+
 # 创建持久化数据目录
 echo -e "${GREEN}▶ 创建数据目录...${NC}"
 mkdir -p readit_data/{db,uploads,redis,logs}

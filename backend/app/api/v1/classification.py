@@ -18,6 +18,7 @@ import logging
 from app.core.store import store
 from app.models.user import User
 from app.api.v1.auth import get_current_user
+from app.api.deps import require_ai_quota, require_paper_access, require_paper_owner
 from app.services.classification import (
     suggest_tags,
     confirm_tags,
@@ -62,16 +63,16 @@ class TagStatsResponse(BaseModel):
 
 
 @router.post("/{paper_id}/classify", response_model=ClassifyResponse)
-async def classify_paper(paper_id: str):
+async def classify_paper(
+    paper_id: str,
+    paper: dict = Depends(require_paper_owner),
+    _user: User = Depends(require_ai_quota),
+):
     """
     触发论文智能分类
     
     使用 LLM 分析论文内容，生成标签建议
     """
-    paper = store.get(paper_id)
-    if not paper:
-        raise HTTPException(status_code=404, detail="论文不存在")
-    
     if paper.get("status") != "completed":
         raise HTTPException(status_code=400, detail="论文尚未解析完成")
     
@@ -91,14 +92,10 @@ async def classify_paper(paper_id: str):
 
 
 @router.get("/{paper_id}/tags", response_model=TagsResponse)
-async def get_paper_tags(paper_id: str):
+async def get_paper_tags(paper_id: str, paper: dict = Depends(require_paper_access)):
     """
     获取论文标签
     """
-    paper = store.get(paper_id)
-    if not paper:
-        raise HTTPException(status_code=404, detail="论文不存在")
-    
     return TagsResponse(
         paper_id=paper_id,
         tags=paper.get("tags", []),
@@ -108,14 +105,10 @@ async def get_paper_tags(paper_id: str):
 
 
 @router.put("/{paper_id}/tags", response_model=TagsResponse)
-async def update_paper_tags(paper_id: str, request: ConfirmTagsRequest):
+async def update_paper_tags(paper_id: str, request: ConfirmTagsRequest, paper: dict = Depends(require_paper_owner)):
     """
     确认/更新论文标签
     """
-    paper = store.get(paper_id)
-    if not paper:
-        raise HTTPException(status_code=404, detail="论文不存在")
-    
     success = confirm_tags(paper_id, request.tags)
     if not success:
         raise HTTPException(status_code=500, detail="更新失败")
@@ -130,14 +123,10 @@ async def update_paper_tags(paper_id: str, request: ConfirmTagsRequest):
 
 
 @router.post("/{paper_id}/tags", response_model=TagsResponse)
-async def add_paper_tag(paper_id: str, request: AddTagRequest):
+async def add_paper_tag(paper_id: str, request: AddTagRequest, paper: dict = Depends(require_paper_owner)):
     """
     添加论文标签
     """
-    paper = store.get(paper_id)
-    if not paper:
-        raise HTTPException(status_code=404, detail="论文不存在")
-    
     success = add_tag(paper_id, request.tag)
     if not success:
         raise HTTPException(status_code=500, detail="添加失败")
@@ -152,14 +141,10 @@ async def add_paper_tag(paper_id: str, request: AddTagRequest):
 
 
 @router.delete("/{paper_id}/tags/{tag}")
-async def delete_paper_tag(paper_id: str, tag: str):
+async def delete_paper_tag(paper_id: str, tag: str, paper: dict = Depends(require_paper_owner)):
     """
     删除论文标签
     """
-    paper = store.get(paper_id)
-    if not paper:
-        raise HTTPException(status_code=404, detail="论文不存在")
-    
     success = remove_tag(paper_id, tag)
     if not success:
         raise HTTPException(status_code=500, detail="删除失败")
@@ -181,14 +166,10 @@ class CategoryStatsResponse(BaseModel):
 
 
 @router.put("/{paper_id}/category")
-async def update_paper_category(paper_id: str, request: UpdateCategoryRequest):
+async def update_paper_category(paper_id: str, request: UpdateCategoryRequest, paper: dict = Depends(require_paper_owner)):
     """
     更新论文分类
     """
-    paper = store.get(paper_id)
-    if not paper:
-        raise HTTPException(status_code=404, detail="论文不存在")
-    
     paper["category"] = request.category
     store.set(paper_id, paper)
     
@@ -196,20 +177,20 @@ async def update_paper_category(paper_id: str, request: UpdateCategoryRequest):
 
 
 @tags_router.get("/tags", response_model=List[TagStatsResponse])
-async def get_library_tags():
+async def get_library_tags(current_user: User = Depends(get_current_user)):
     """
-    获取所有标签及其使用统计
+    获取当前用户的标签及其使用统计
     """
-    tags = get_all_tags()
+    tags = get_all_tags(current_user.id)
     return [TagStatsResponse(**t) for t in tags]
 
 
 @tags_router.get("/categories", response_model=List[CategoryStatsResponse])
-async def get_library_categories():
+async def get_library_categories(current_user: User = Depends(get_current_user)):
     """
-    获取所有分类及其使用统计
+    获取当前用户的分类及其使用统计（与 library.list_categories 同路径，后者先注册生效）
     """
-    all_papers = store.get_all()
+    all_papers = store.get_by_user(current_user.id)
     category_counts = {}
     
     for paper in all_papers:
