@@ -11,12 +11,31 @@ Read it DEEP - 工作台 API
 - GET  /papers/{id}/workbench  # 论文工作台
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import logging
 
+from app.api.deps import require_ai_quota, require_paper_access, user_can_access_paper, get_paper_or_404
+from app.api.v1.auth import get_current_user
 from app.core.workbench_store import workbench_store
+from app.models.user import User
+
+
+def _own_item_or_404(item_id: str, user: User) -> dict:
+    """条目不存在或不属于当前用户时一律 404（不泄露条目是否存在）。"""
+    item = workbench_store.get_item(item_id)
+    if not item or (workbench_store.owner_of(item) != user.id and not user.is_admin):
+        raise HTTPException(status_code=404, detail="项目不存在")
+    return item
+
+
+async def _check_source_paper(paper_id: Optional[str], user: User) -> None:
+    """往工作台写入关联某论文的条目前，确认调用者能访问该论文。"""
+    if paper_id:
+        paper = get_paper_or_404(paper_id)
+        if not await user_can_access_paper(paper_id, paper, user):
+            raise HTTPException(status_code=403, detail="无权访问此论文")
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -66,13 +85,13 @@ class WorkbenchStatsResponse(BaseModel):
 
 # Global Workbench Endpoints
 @router.get("", response_model=WorkbenchResponse)
-async def get_global_workbench():
+async def get_global_workbench(current_user: User = Depends(get_current_user)):
     """
     获取全局工作台
     
     返回所有论文的工作台项目汇总
     """
-    data = workbench_store.get_global_workbench()
+    data = workbench_store.get_global_workbench(current_user.id)
     return WorkbenchResponse(
         methods=[WorkbenchItemResponse(**item) for item in data["methods"]],
         datasets=[WorkbenchItemResponse(**item) for item in data["datasets"]],
@@ -81,19 +100,21 @@ async def get_global_workbench():
 
 
 @router.get("/stats", response_model=WorkbenchStatsResponse)
-async def get_workbench_stats():
+async def get_workbench_stats(current_user: User = Depends(get_current_user)):
     """
     获取工作台统计信息
     """
-    return WorkbenchStatsResponse(**workbench_store.get_stats())
+    return WorkbenchStatsResponse(**workbench_store.get_stats(current_user.id))
 
 
 @router.post("/items", response_model=WorkbenchItemResponse)
-async def add_workbench_item(request: AddItemRequest):
+async def add_workbench_item(request: AddItemRequest, current_user: User = Depends(get_current_user)):
     """
     添加工作台项目
     """
+    await _check_source_paper(request.source_paper_id, current_user)
     item = workbench_store.add_item(
+        user_id=current_user.id,
         type=request.type,
         title=request.title,
         description=request.description,
@@ -114,21 +135,20 @@ async def add_workbench_item(request: AddItemRequest):
 
 
 @router.get("/items/{item_id}", response_model=WorkbenchItemResponse)
-async def get_workbench_item(item_id: str):
+async def get_workbench_item(item_id: str, current_user: User = Depends(get_current_user)):
     """
     获取单个工作台项目
     """
-    item = workbench_store.get_item(item_id)
-    if not item:
-        raise HTTPException(status_code=404, detail="项目不存在")
+    item = _own_item_or_404(item_id, current_user)
     return WorkbenchItemResponse(**item)
 
 
 @router.put("/items/{item_id}", response_model=WorkbenchItemResponse)
-async def update_workbench_item(item_id: str, request: UpdateItemRequest):
+async def update_workbench_item(item_id: str, request: UpdateItemRequest, current_user: User = Depends(get_current_user)):
     """
     更新工作台项目
     """
+    _own_item_or_404(item_id, current_user)
     updates = {k: v for k, v in request.model_dump().items() if v is not None}
     success = workbench_store.update_item(item_id, updates)
     if not success:
@@ -139,10 +159,11 @@ async def update_workbench_item(item_id: str, request: UpdateItemRequest):
 
 
 @router.delete("/items/{item_id}")
-async def delete_workbench_item(item_id: str):
+async def delete_workbench_item(item_id: str, current_user: User = Depends(get_current_user)):
     """
     删除工作台项目
     """
+    _own_item_or_404(item_id, current_user)
     success = workbench_store.delete_item(item_id)
     if not success:
         raise HTTPException(status_code=404, detail="项目不存在")
@@ -154,13 +175,17 @@ paper_workbench_router = APIRouter()
 
 
 @paper_workbench_router.get("/{paper_id}/workbench", response_model=WorkbenchResponse)
-async def get_paper_workbench(paper_id: str):
+async def get_paper_workbench(
+    paper_id: str,
+    paper: dict = Depends(require_paper_access),
+    current_user: User = Depends(get_current_user),
+):
     """
     获取论文工作台
     
     返回特定论文关联的工作台项目
     """
-    data = workbench_store.get_paper_workbench(paper_id)
+    data = workbench_store.get_paper_workbench(paper_id, current_user.id)
     return WorkbenchResponse(
         methods=[WorkbenchItemResponse(**item) for item in data["methods"]],
         datasets=[WorkbenchItemResponse(**item) for item in data["datasets"]],
@@ -169,11 +194,17 @@ async def get_paper_workbench(paper_id: str):
 
 
 @paper_workbench_router.post("/{paper_id}/workbench/items", response_model=WorkbenchItemResponse)
-async def add_paper_workbench_item(paper_id: str, request: AddItemRequest):
+async def add_paper_workbench_item(
+    paper_id: str,
+    request: AddItemRequest,
+    paper: dict = Depends(require_paper_access),
+    current_user: User = Depends(get_current_user),
+):
     """
     为论文添加工作台项目
     """
     item = workbench_store.add_item(
+        user_id=current_user.id,
         type=request.type,
         title=request.title,
         description=request.description,
@@ -227,13 +258,16 @@ class UpdateReflectionRequest(BaseModel):
 
 
 @router.post("/analyze/method")
-async def analyze_method_endpoint(request: AnalyzeTextRequest):
+async def analyze_method_endpoint(request: AnalyzeTextRequest, current_user: User = Depends(get_current_user)):
     """
     方法炼金台分析
     
     分析选中的文本，提炼研究方法，生成伪代码，以审稿视角分析
     """
+    await _check_source_paper(request.paper_id, current_user)
+    await require_ai_quota(current_user)
     result = await analyze_method(
+        user_id=current_user.id,
         text=request.text,
         paper_id=request.paper_id,
         paper_title=request.paper_title,
@@ -243,13 +277,16 @@ async def analyze_method_endpoint(request: AnalyzeTextRequest):
 
 
 @router.post("/analyze/asset")
-async def analyze_asset_endpoint(request: AnalyzeTextRequest):
+async def analyze_asset_endpoint(request: AnalyzeTextRequest, current_user: User = Depends(get_current_user)):
     """
     资产仓库分析
     
     识别选中文本中的 GitHub/Huggingface/数据集等可复用资源
     """
+    await _check_source_paper(request.paper_id, current_user)
+    await require_ai_quota(current_user)
     result = await analyze_asset(
+        user_id=current_user.id,
         text=request.text,
         paper_id=request.paper_id,
         paper_title=request.paper_title,
@@ -259,13 +296,15 @@ async def analyze_asset_endpoint(request: AnalyzeTextRequest):
 
 
 @router.post("/notes")
-async def create_note_endpoint(request: CreateNoteRequest):
+async def create_note_endpoint(request: CreateNoteRequest, current_user: User = Depends(get_current_user)):
     """
     创建智能笔记
     
     保留原文，记录位置，支持用户心得
     """
+    await _check_source_paper(request.paper_id, current_user)
     result = create_smart_note(
+        user_id=current_user.id,
         text=request.text,
         paper_id=request.paper_id,
         paper_title=request.paper_title,
@@ -277,10 +316,11 @@ async def create_note_endpoint(request: CreateNoteRequest):
 
 
 @router.put("/notes/{item_id}/reflection")
-async def update_reflection_endpoint(item_id: str, request: UpdateReflectionRequest):
+async def update_reflection_endpoint(item_id: str, request: UpdateReflectionRequest, current_user: User = Depends(get_current_user)):
     """
     更新笔记心得
     """
+    _own_item_or_404(item_id, current_user)
     result = update_note_reflection(item_id, request.reflection)
     if not result["success"]:
         raise HTTPException(status_code=404, detail=result.get("error", "更新失败"))
@@ -304,7 +344,7 @@ class SmartAnalyzeRequest(BaseModel):
 
 
 @router.post("/analyze/smart")
-async def smart_analyze_endpoint(request: SmartAnalyzeRequest):
+async def smart_analyze_endpoint(request: SmartAnalyzeRequest, current_user: User = Depends(get_current_user)):
     """
     智能分析选中文本
     
@@ -314,6 +354,8 @@ async def smart_analyze_endpoint(request: SmartAnalyzeRequest):
     - deep: 深度研究分析
     - chat: Chat with PDF 对话
     """
+    await _check_source_paper(request.paper_id, current_user)
+    await require_ai_quota(current_user)
     result = await smart_analyze(
         text=request.text,
         paper_id=request.paper_id,
@@ -330,7 +372,7 @@ from fastapi.responses import StreamingResponse
 
 
 @router.post("/analyze/smart/stream")
-async def smart_analyze_stream_endpoint(request: SmartAnalyzeRequest):
+async def smart_analyze_stream_endpoint(request: SmartAnalyzeRequest, current_user: User = Depends(get_current_user)):
     """
     流式智能分析选中文本
     
@@ -343,6 +385,8 @@ async def smart_analyze_stream_endpoint(request: SmartAnalyzeRequest):
     - deep: 深度研究分析
     - chat: Chat with PDF 对话
     """
+    await _check_source_paper(request.paper_id, current_user)
+    await require_ai_quota(current_user)
     return StreamingResponse(
         smart_analyze_stream(
             text=request.text,

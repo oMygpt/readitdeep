@@ -10,12 +10,13 @@ Read it DEEP - Paper Graph API v0.1
 - 被引论文 (citations): 每 10 天刷新一次（可能增长）
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timedelta
 import logging
 
+from app.api.deps import require_paper_access
 from app.core.store import store
 from app.services.semantic_scholar import get_s2_service, S2_AVAILABLE, S2RateLimitError, S2ApiError
 from app.services.openalex import get_openalex_service
@@ -307,6 +308,7 @@ async def get_paper_graph(
     include_references: bool = Query(True, description="包含 S2 参考文献"),
     limit: int = Query(50, ge=1, le=100, description="每类最大数量"),
     force_refresh: bool = Query(False, description="强制刷新"),
+    paper: dict = Depends(require_paper_access),
 ) -> PaperGraphResponse:
     """
     获取论文关系图 v0.1
@@ -315,10 +317,6 @@ async def get_paper_graph(
     - 参考文献: 永久存储，只获取一次
     - 被引论文: 每 10 天刷新一次
     """
-    paper = store.get(paper_id)
-    if not paper:
-        raise HTTPException(status_code=404, detail="论文不存在")
-    
     if paper.get("status") != "completed":
         raise HTTPException(status_code=400, detail=f"论文尚未解析完成")
     
@@ -409,16 +407,13 @@ async def expand_paper_node(
     paper_id: str,
     node_external_id: str,
     limit: int = Query(20, ge=1, le=50, description="最大数量"),
+    paper: dict = Depends(require_paper_access),
 ) -> PaperGraphResponse:
     """
     展开二级引用 - 获取指定节点的引用关系
     
     用于点击图中的论文节点后，获取该论文的引用/参考文献
     """
-    paper = store.get(paper_id)
-    if not paper:
-        raise HTTPException(status_code=404, detail="论文不存在")
-    
     if not S2_AVAILABLE:
         raise HTTPException(status_code=503, detail="S2 API 不可用")
     

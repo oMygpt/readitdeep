@@ -18,7 +18,6 @@ export const api = axios.create({
 api.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem(TOKEN_KEY);
-        console.log('[DEBUG] Interceptor URL:', config.url, 'Token:', token ? 'Found' : 'Missing');
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
@@ -31,7 +30,6 @@ api.interceptors.request.use(
 api.interceptors.response.use(
     (response) => response,
     (error) => {
-        console.log('[DEBUG] API Error Status:', error.response?.status, 'URL:', error.config?.url);
         if (error.response?.status === 401) {
             // Token 无效，清除并跳转登录
             localStorage.removeItem(TOKEN_KEY);
@@ -45,6 +43,95 @@ api.interceptors.response.use(
         return Promise.reject(error);
     }
 );
+
+// ==================== 带鉴权的 fetch / SSE ====================
+
+/** 当前登录 token 对应的 Authorization 头（未登录时为空对象） */
+export function authHeaders(): Record<string, string> {
+    const token = localStorage.getItem(TOKEN_KEY);
+    return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+/** 与 fetch 相同，但自动带上登录 token。用于需要原生 Response（流、下载）的场景。 */
+export function authFetch(input: string, init: RequestInit = {}): Promise<Response> {
+    return fetch(input, {
+        ...init,
+        headers: { ...authHeaders(), ...(init.headers as Record<string, string> | undefined) },
+    });
+}
+
+type SSEListener = (e: MessageEvent) => void;
+
+/**
+ * EventSource 的替代品：原生 EventSource 不能带 Authorization 头，
+ * 这里用 fetch 读取 text/event-stream，并提供同样的 addEventListener / onmessage / onerror / close 接口。
+ */
+export class AuthEventSource {
+    onmessage: SSEListener | null = null;
+    onerror: ((e: Event) => void) | null = null;
+    private listeners: Record<string, SSEListener[]> = {};
+    private controller = new AbortController();
+    private closed = false;
+
+    constructor(url: string) {
+        this.run(url);
+    }
+
+    addEventListener(type: string, listener: SSEListener) {
+        (this.listeners[type] ||= []).push(listener);
+    }
+
+    close() {
+        this.closed = true;
+        this.controller.abort();
+    }
+
+    private dispatch(type: string, data: string) {
+        const event = new MessageEvent(type, { data });
+        if (type === 'message') this.onmessage?.(event);
+        this.listeners[type]?.forEach((fn) => fn(event));
+    }
+
+    private fail() {
+        if (this.closed) return;
+        this.closed = true;
+        this.onerror?.(new Event('error'));
+    }
+
+    private async run(url: string) {
+        try {
+            const response = await authFetch(url, {
+                headers: { Accept: 'text/event-stream' },
+                signal: this.controller.signal,
+            });
+            if (!response.ok || !response.body) return this.fail();
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            while (!this.closed) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                let sep;
+                while ((sep = buffer.indexOf('\n\n')) !== -1) {
+                    const block = buffer.slice(0, sep);
+                    buffer = buffer.slice(sep + 2);
+                    let type = 'message';
+                    const data: string[] = [];
+                    for (const line of block.split('\n')) {
+                        if (line.startsWith('event:')) type = line.slice(6).trim();
+                        else if (line.startsWith('data:')) data.push(line.slice(5).replace(/^ /, ''));
+                    }
+                    if (data.length) this.dispatch(type, data.join('\n'));
+                }
+            }
+            // 服务端正常结束流时与 EventSource 一致地触发 onerror，调用方据此收尾
+            this.fail();
+        } catch {
+            this.fail();
+        }
+    }
+}
 
 // API 类型定义
 
@@ -237,7 +324,7 @@ export const monitorApi = {
             onError?: (error: string) => void;
         }
     ): (() => void) => {
-        const eventSource = new EventSource(`/api/v1/monitor/${paperId}/stream`);
+        const eventSource = new AuthEventSource(`/api/v1/monitor/${paperId}/stream`);
 
         eventSource.addEventListener('progress', (e: MessageEvent) => {
             try {

@@ -6,15 +6,15 @@ Read it DEEP - Authors API
 
 from typing import Optional, List
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 import json
 
-from app.services.openalex import get_openalex_service, OpenAlexAuthor, OpenAlexPaper
-from app.core.store import store
+from app.services.openalex import get_openalex_service
+from app.api.deps import require_paper_access
 from app.core.database import get_db
 from app.models.author_cache import AuthorCache, PaperAuthorCache
 
@@ -195,6 +195,7 @@ async def get_authors_works(
     works_limit: int = 5,
     refresh: bool = False,
     db: AsyncSession = Depends(get_db),
+    paper: dict = Depends(require_paper_access),
 ):
     """
     获取论文作者信息及其主要论文
@@ -217,14 +218,6 @@ async def get_authors_works(
                 authors=cached,
                 from_cache=True
             )
-    
-    # 获取论文信息
-    paper = store.get(paper_id)
-    if not paper:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Paper {paper_id} not found"
-        )
     
     # 需要 DOI 或 arXiv ID 来查询 OpenAlex
     identifier = None

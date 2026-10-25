@@ -58,9 +58,16 @@ class ConfigManager:
             try:
                 result = await db.execute(select(UserConfig).where(UserConfig.user_id == user_id))
                 user_configs = result.scalars().all()
+                from app.core.url_guard import is_url_config_key
+
+                allow_urls = get_settings().allow_user_endpoints
                 for uc in user_configs:
-                    if uc.value is not None:
-                        config[uc.key] = uc.value
+                    if uc.value is None:
+                        continue
+                    # 未开放自定义地址时，历史遗留的用户地址配置不生效
+                    if is_url_config_key(uc.key) and not allow_urls:
+                        continue
+                    config[uc.key] = uc.value
             except Exception as e:
                 print(f"Error loading user config: {e}")
                 

@@ -16,7 +16,9 @@ from app.core.store import store
 from app.core.database import async_session_maker
 from app.models.user import User
 from app.models.paper import Paper
-from app.api.v1.auth import get_current_user, get_optional_user
+from app.api.v1.auth import get_current_user
+from app.api.deps import require_ai_quota, require_paper_access, require_paper_owner
+from app.core.files import sign_markdown_images
 
 
 router = APIRouter()
@@ -74,48 +76,6 @@ async def sync_paper_to_db(paper_id: str, updates: dict):
                 await db.commit()
     except Exception as e:
         logger.warning(f"Failed to sync paper {paper_id} to DB: {e}")
-
-
-async def check_paper_access(paper_id: str, paper: dict, current_user: Optional[User]) -> None:
-    """
-    检查用户是否有权限访问论文
-    
-    允许访问的情况：
-    1. 论文无 user_id (公开论文)
-    2. 是论文所有者
-    3. 是管理员
-    4. 是论文所分享团队的成员
-    
-    如果无权访问，抛出 HTTPException
-    """
-    if not paper.get("user_id"):
-        return  # 公开论文，允许访问
-    
-    if not current_user:
-        raise HTTPException(401, "请先登录")
-    
-    is_owner = paper["user_id"] == current_user.id
-    is_admin = current_user.is_admin
-    
-    if is_owner or is_admin:
-        return  # 所有者或管理员，允许访问
-    
-    # 检查是否为团队成员 (通过 paper_shares 表)
-    from app.models.team import PaperShare, TeamMember
-    
-    async with async_session_maker() as db:
-        result = await db.execute(
-            select(PaperShare)
-            .join(TeamMember, PaperShare.team_id == TeamMember.team_id)
-            .where(
-                PaperShare.paper_id == paper_id,
-                TeamMember.user_id == current_user.id
-            )
-        )
-        has_team_access = result.scalar_one_or_none() is not None
-    
-    if not has_team_access:
-        raise HTTPException(403, "无权访问此论文")
 
 
 async def parse_paper_task(paper_id: str, file_path: str, file_content: bytes, filename: str, user_id: Optional[str] = None):
@@ -367,7 +327,7 @@ async def parse_paper_task(paper_id: str, file_path: str, file_content: bytes, f
 async def upload_paper(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    current_user: Optional[User] = Depends(get_optional_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
     上传论文文件
@@ -375,13 +335,6 @@ async def upload_paper(
     # 验证文件类型
     if not file.filename.lower().endswith(('.pdf', '.docx', '.tex')):
         raise HTTPException(400, "仅支持 .pdf, .docx, .tex 文件")
-    
-    # 鉴权检查
-    if not current_user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="请先登录",
-        )
     
     # ================== 配额检查 ==================
     # 重置每日/每月配额（如果需要）
@@ -417,7 +370,8 @@ async def upload_paper(
         upload_dir = f"data/uploads/{current_user.id}"
     
     os.makedirs(upload_dir, exist_ok=True)
-    file_path = os.path.join(upload_dir, f"{paper_id}_{file.filename}")
+    safe_name = os.path.basename(file.filename.replace("\\", "/")) or "upload"
+    file_path = os.path.join(upload_dir, f"{paper_id}_{safe_name}")
     
     content = await file.read()
     with open(file_path, "wb") as f:
@@ -469,15 +423,9 @@ async def upload_paper(
 @router.get("/{paper_id}", response_model=PaperDetail)
 async def get_paper(
     paper_id: str,
-    current_user: Optional[User] = Depends(get_optional_user),
+    paper: dict = Depends(require_paper_access),
 ):
     """获取论文详情"""
-    paper = store.get(paper_id)
-    if not paper:
-        raise HTTPException(404, "论文不存在")
-    
-    # 权限检查 (包括团队成员权限)
-    await check_paper_access(paper_id, paper, current_user)
     
     return PaperDetail(
         id=paper["id"],
@@ -485,8 +433,8 @@ async def get_paper(
         title=paper.get("title"),
         category=paper.get("category"),
         status=paper.get("status", "unknown"),
-        markdown_content=paper.get("markdown_content"),
-        translated_content=paper.get("translated_content"),
+        markdown_content=sign_markdown_images(paper.get("markdown_content")),
+        translated_content=sign_markdown_images(paper.get("translated_content")),
         created_at=paper.get("created_at") or datetime.now(),
         updated_at=paper.get("updated_at") or datetime.now(),
         user_id=paper.get("user_id"),
@@ -498,34 +446,22 @@ async def get_paper(
 @router.get("/{paper_id}/content")
 async def get_paper_content(
     paper_id: str,
-    current_user: Optional[User] = Depends(get_optional_user),
+    paper: dict = Depends(require_paper_access),
 ):
     """获取论文内容 (Markdown)"""
-    paper = store.get(paper_id)
-    if not paper:
-        raise HTTPException(404, "论文不存在")
-
-    # 权限检查 (包括团队成员权限)
-    await check_paper_access(paper_id, paper, current_user)
 
     return {
-        "markdown": paper.get("markdown_content", ""),
-        "translated": paper.get("translated_content", "")
+        "markdown": sign_markdown_images(paper.get("markdown_content", "")),
+        "translated": sign_markdown_images(paper.get("translated_content", ""))
     }
 
 
 @router.get("/{paper_id}/analysis")
 async def get_paper_analysis(
     paper_id: str,
-    current_user: Optional[User] = Depends(get_optional_user),
+    paper: dict = Depends(require_paper_access),
 ):
     """获取论文分析结果 (聚合 Workbench 数据)"""
-    paper = store.get(paper_id)
-    if not paper:
-        raise HTTPException(404, "论文不存在")
-
-    # 权限检查 (包括团队成员权限)
-    await check_paper_access(paper_id, paper, current_user)
 
     # 获取论文内容用于定位
     markdown_content = paper.get("markdown_content", "")
@@ -594,7 +530,7 @@ async def get_paper_analysis(
 
     # 从 Workbench 获取数据
     from app.core.workbench_store import workbench_store
-    items = workbench_store.get_items_by_paper(paper_id)
+    items = workbench_store.get_items_by_paper(paper_id, owner_id=paper.get("user_id"))
     
     methods = []
     datasets = []
@@ -794,7 +730,8 @@ async def run_analysis_pipeline(paper_id: str, user_id: str):
 async def trigger_analysis_endpoint(
     paper_id: str,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_user),
+    paper: dict = Depends(require_paper_owner),
+    current_user: User = Depends(require_ai_quota),
 ):
     """
     手动触发分析
@@ -802,13 +739,6 @@ async def trigger_analysis_endpoint(
     - 如果论文已有内容，只重新运行分析流程
     - 如果论文没有内容（解析失败），重新解析 PDF
     """
-    paper = store.get(paper_id)
-    if not paper:
-        raise HTTPException(404, "论文不存在")
-    
-    # 权限检查
-    if paper.get("user_id") != current_user.id and not current_user.is_admin:
-        raise HTTPException(403, "无权操作此论文")
     
     # 检查是否有内容
     if paper.get("markdown_content"):
@@ -856,7 +786,8 @@ class ReferenceAnalysisResponse(BaseModel):
 async def analyze_paper_references(
     paper_id: str,
     limit: int = 5,
-    current_user: User = Depends(get_current_user),
+    paper: dict = Depends(require_paper_owner),
+    current_user: User = Depends(require_ai_quota),
 ):
     """
     用户触发的引用论文分析
@@ -869,14 +800,6 @@ async def analyze_paper_references(
         paper_id: 论文 ID
         limit: 获取的引用数量 (默认 5，最大 10)
     """
-    paper = store.get(paper_id)
-    if not paper:
-        raise HTTPException(404, "论文不存在")
-    
-    # 权限检查
-    if paper.get("user_id") != current_user.id and not current_user.is_admin:
-        raise HTTPException(403, "无权访问此论文")
-    
     # 限制数量
     limit = min(limit, 10)
     
@@ -896,21 +819,13 @@ async def analyze_paper_references(
 @router.get("/{paper_id}/references/analysis")
 async def get_paper_reference_analysis(
     paper_id: str,
-    current_user: User = Depends(get_current_user),
+    paper: dict = Depends(require_paper_access),
 ):
     """
     获取已缓存的引用分析结果
     
     如果没有缓存，返回 null
     """
-    paper = store.get(paper_id)
-    if not paper:
-        raise HTTPException(404, "论文不存在")
-    
-    # 权限检查
-    if paper.get("user_id") != current_user.id and not current_user.is_admin:
-        raise HTTPException(403, "无权访问此论文")
-    
     from app.services.reference_analysis import get_cached_reference_analysis
     
     cached = get_cached_reference_analysis(paper_id)

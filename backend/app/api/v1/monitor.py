@@ -5,10 +5,13 @@ Read it DEEP - Monitor API
 
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
+from app.api.deps import require_paper_access
+from app.api.v1.auth import get_current_user
 from app.core.store import store
+from app.models.user import User
 
 # from sqlalchemy.ext.asyncio import AsyncSession
 # from sqlalchemy import select
@@ -58,17 +61,13 @@ STATUS_MESSAGE = {
 
 
 @router.get("/{paper_id}", response_model=TaskStatus)
-async def get_task_status(paper_id: str) -> TaskStatus:
+async def get_task_status(paper_id: str, paper: dict = Depends(require_paper_access)) -> TaskStatus:
     """
     获取论文解析任务状态
     
     前端轮询此接口获取实时进度:
     - Uploading... → Parsing... → Indexing... → Completed
     """
-    paper = store.get(paper_id)
-    if not paper:
-        raise HTTPException(status_code=404, detail="任务不存在")
-    
     status = paper.get("status")
     
     # 如果失败，显示具体错误信息
@@ -86,11 +85,11 @@ async def get_task_status(paper_id: str) -> TaskStatus:
 
 
 @router.get("/")
-async def list_active_tasks() -> dict:
-    """获取所有进行中的任务"""
+async def list_active_tasks(current_user: User = Depends(get_current_user)) -> dict:
+    """获取当前用户进行中的任务（管理员看全部）"""
     active_statuses = ["uploading", "parsing", "indexing"]
     
-    all_papers = store.get_all()
+    all_papers = store.get_all() if current_user.is_admin else store.get_by_user(current_user.id)
     
     active_tasks = [
         {
@@ -162,7 +161,7 @@ async def status_event_generator(paper_id: str):
 
 
 @router.get("/{paper_id}/stream")
-async def stream_task_status(paper_id: str):
+async def stream_task_status(paper_id: str, paper: dict = Depends(require_paper_access)):
     """
     SSE 实时进度流
     

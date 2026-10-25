@@ -26,6 +26,8 @@ class WorkbenchItem:
     zone: str = "notes"  # methods, datasets, notes
     created_at: str = ""
     data: dict = None
+    # 归属用户。旧数据没有该字段，归属回落到 source_paper 的所有者（见 owner_of）
+    user_id: Optional[str] = None
 
     def __post_init__(self):
         if not self.created_at:
@@ -79,6 +81,7 @@ class WorkbenchStore:
         source_paper_id: Optional[str] = None,
         zone: str = "notes",
         data: dict = None,
+        user_id: Optional[str] = None,
     ) -> WorkbenchItem:
         """添加工作台项目"""
         item_id = f"wb-{uuid.uuid4().hex[:8]}"
@@ -90,6 +93,7 @@ class WorkbenchStore:
             source_paper_id=source_paper_id,
             zone=zone,
             data=data or {},
+            user_id=user_id,
         )
 
         # 保存项目
@@ -179,48 +183,59 @@ class WorkbenchStore:
 
     # --- Query ---
 
-    def get_global_workbench(self) -> dict:
-        """获取全局工作台"""
+    def owner_of(self, item: dict) -> Optional[str]:
+        """条目归属：显式 user_id，否则回落到来源论文的所有者；都没有则无主（仅管理员可见）。"""
+        if item.get("user_id"):
+            return item["user_id"]
+        paper_id = item.get("source_paper_id")
+        if paper_id:
+            from app.core.store import store
+
+            paper = store.get(paper_id) or {}
+            return paper.get("user_id")
+        return None
+
+    def _zones_of(self, items: List[dict]) -> dict:
         result = {"methods": [], "datasets": [], "notes": []}
-        for zone, item_ids in self._data["global_workbench"].items():
-            for item_id in item_ids:
-                item = self._data["items"].get(item_id)
-                if item:
-                    result[zone].append(item)
+        for item in items:
+            zone = item.get("zone", "notes")
+            if zone in result:
+                result[zone].append(item)
         return result
 
-    def get_paper_workbench(self, paper_id: str) -> dict:
-        """获取论文工作台"""
-        result = {"methods": [], "datasets": [], "notes": []}
-        if paper_id not in self._data["paper_workbenches"]:
-            return result
+    def get_items_for_user(self, user_id: str) -> List[dict]:
+        return [i for i in self._data["items"].values() if self.owner_of(i) == user_id]
 
-        for zone, item_ids in self._data["paper_workbenches"][paper_id].items():
-            for item_id in item_ids:
-                item = self._data["items"].get(item_id)
-                if item:
-                    result[zone].append(item)
-        return result
+    def get_global_workbench(self, user_id: str) -> dict:
+        """获取某用户的全局工作台（其所有条目按区域汇总）"""
+        return self._zones_of(self.get_items_for_user(user_id))
+
+    def get_paper_workbench(self, paper_id: str, user_id: str) -> dict:
+        """获取某用户在某论文上的工作台"""
+        return self._zones_of(self.get_items_by_paper(paper_id, owner_id=user_id))
 
     def get_all_items(self) -> List[dict]:
         """获取所有项目"""
         return list(self._data["items"].values())
 
-    def get_items_by_paper(self, paper_id: str) -> List[dict]:
-        """获取某论文的所有项目"""
+    def get_items_by_paper(self, paper_id: str, owner_id: Optional[str] = None) -> List[dict]:
+        """获取某论文的项目；给定 owner_id 时只返回该用户的条目"""
         return [
             item for item in self._data["items"].values()
             if item.get("source_paper_id") == paper_id
+            and (owner_id is None or self.owner_of(item) == owner_id)
         ]
 
-    def get_stats(self) -> dict:
-        """获取统计信息"""
+    def get_stats(self, user_id: str) -> dict:
+        """获取某用户的统计信息"""
+        items = self.get_items_for_user(user_id)
+        zones = self._zones_of(items)
         return {
-            "total_items": len(self._data["items"]),
-            "methods_count": len(self._data["global_workbench"]["methods"]),
-            "datasets_count": len(self._data["global_workbench"]["datasets"]),
-            "notes_count": len(self._data["global_workbench"]["notes"]),
-            "papers_count": len(self._data["paper_workbenches"]),
+            "total_items": len(items),
+            "methods_count": len(zones["methods"]),
+            "datasets_count": len(zones["datasets"]),
+            "notes_count": len(zones["notes"]),
+            "papers_count": len({i.get("source_paper_id") for i in items if i.get("source_paper_id")}),
         }
 
 

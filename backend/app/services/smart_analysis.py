@@ -135,35 +135,8 @@ async def smart_analyze(
     if action_type not in ACTION_TO_PROMPT:
         return {"success": False, "error": f"未知的分析类型: {action_type}"}
     
-    # ================== AI 配额检查 ==================
-    paper = store.get(paper_id)
-    user_id = paper.get("user_id") if paper else None
-    
-    if user_id:
-        try:
-            async with async_session_maker() as db:
-                result = await db.execute(select(User).where(User.id == user_id))
-                user = result.scalar_one_or_none()
-                if user:
-                    # 重置配额
-                    user.reset_daily_quota_if_needed()
-                    
-                    # 检查配额
-                    if not user.can_use_ai:
-                        quota_status = user.get_quota_status()
-                        return {
-                            "success": False,
-                            "error": "AI 配额已用完，请升级会员或等待配额重置",
-                            "quota_exceeded": True,
-                            "quota": quota_status,
-                        }
-                    
-                    # 预扣 AI 使用量
-                    user.increment_ai_usage()
-                    await db.commit()
-        except Exception as quota_err:
-            logger.error(f"AI quota check failed: {quota_err}")
-    
+    # AI 配额由路由层按调用者预扣（app.api.deps.require_ai_quota），这里不再按论文所有者扣
+
     try:
         # 获取 LLM (支持 per-action 配置)
         llm = await get_llm_for_action(paper_id, action_type)
@@ -263,31 +236,8 @@ async def smart_analyze_stream(
         yield f"data: {json.dumps({'error': f'未知的分析类型: {action_type}'})}\n\n"
         return
     
-    # ================== AI 配额检查 ==================
-    paper = store.get(paper_id)
-    user_id = paper.get("user_id") if paper else None
-    
-    if user_id:
-        try:
-            async with async_session_maker() as db:
-                result = await db.execute(select(User).where(User.id == user_id))
-                user = result.scalar_one_or_none()
-                if user:
-                    # 重置配额
-                    user.reset_daily_quota_if_needed()
-                    
-                    # 检查配额
-                    if not user.can_use_ai:
-                        quota_status = user.get_quota_status()
-                        yield f"data: {json.dumps({'error': 'AI 配额已用完，请升级会员或等待配额重置', 'quota_exceeded': True, 'quota': quota_status})}\n\n"
-                        return
-                    
-                    # 预扣 AI 使用量
-                    user.increment_ai_usage()
-                    await db.commit()
-        except Exception as quota_err:
-            logger.error(f"AI quota check failed: {quota_err}")
-    
+    # AI 配额由路由层按调用者预扣（app.api.deps.require_ai_quota），这里不再按论文所有者扣
+
     try:
         # 获取 LLM (支持 per-action 配置)
         llm = await get_llm_for_action(paper_id, action_type)
