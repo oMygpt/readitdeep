@@ -67,7 +67,7 @@ async def trigger_translation(
         raise HTTPException(status_code=400, detail="论文尚未解析完成")
 
     await _charge_if_new_translation(paper_id, current_user)
-    result = await start_translation_task(paper_id)
+    result = await start_translation_task(paper_id, current_user.id)
     return TriggerResponse(**result)
 
 
@@ -95,7 +95,7 @@ async def stream_translate_paper(
 
     await _charge_if_new_translation(paper_id, current_user)
     return StreamingResponse(
-        translate_paper_stream(paper_id),
+        translate_paper_stream(paper_id, current_user.id),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

@@ -27,10 +27,13 @@
 
 验收：用历史 `papers.json`/`workbench.json` 副本做迁移演练，条数与内容一致、二次运行无变化；两个进程并发写同一论文的不同字段不互相覆盖；重启后不再有永久卡在 parsing 的论文。
 
-## R3 可插拔后端
-14. `ParseProvider`：mineru_cloud、grobid、paperdaily_markdown；回退顺序可配。
-15. `LLMPool`：按任务分组、多端点、并发上限、交互与批量分开限流；token 统计迁入 DB。
-16. 用校内 GROBID + 内部 vLLM 跑通一篇 arXiv 论文的解析、翻译、方法提炼；记录耗时与并发，供容量评审。
+## R3 可插拔后端（细化见设计 §2.6）
+14. R3a：`get_chat_model` 统一入口，9 处调用改造；多端点故障转移传输层；交互/批量两个并发通道。
+15. R3b：`ParseProvider`（mineru / grobid / paperdaily_markdown 占位），系统配置顺序与回退，`parser` 字段。
+16. R3c：`jobs` 表 + worker（认领、心跳、重试），上传/重新分析/翻译入队；`token_usage` 表。
+17. 用校内 GROBID（10.6.64.6:8070）+ 内部 vLLM（4 台 Qwen3.6-35B-A3B）跑通一篇 arXiv 论文的解析、翻译、方法提炼；记录耗时与并发，供容量评审。
+
+验收：无 MinerU Key 时 GROBID 完成解析；一个端点故障时请求自动转移；并发上限生效且交互不被批量挤占；重启后排队与运行中的任务继续；校内实测记录。
 
 ## R4 PaperDaily 关联（依赖主站 E2/E3 上线 connect 与收藏入口）
 17. `RID_MODE=linked`：connect 登录、外部身份映射、委托 key 加密存储、401 清会话。

@@ -8,19 +8,15 @@ Read it DEEP - 智能论文分类服务
 - 用户可确认/修改/添加标签
 """
 
-from typing import Optional
 from dataclasses import dataclass
 import logging
 import json
 import re
 
-from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from app.config import get_settings
 from app.core.store import store
-from app.core.database import async_session_maker
-from app.core.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -45,20 +41,11 @@ PREDEFINED_CATEGORIES = [
 
 
 async def get_llm_for_classification(paper_id: str):
-    """根据论文归属获取配置好的 LLM 实例用于分类"""
-    paper = store.get(paper_id)
-    user_id = paper.get("user_id") if paper else None
-    
-    async with async_session_maker() as db:
-        config = await ConfigManager.get_effective_config(db, user_id)
-        
-    return ChatOpenAI(
-        base_url=config.get("llm_base_url") or settings.llm_base_url,
-        api_key=config.get("llm_api_key") or settings.llm_api_key or "dummy",
-        model=config.get("llm_model") or settings.llm_model,
-        temperature=0.3,
-        request_timeout=90,
-    )
+    """分类模型：按论文所有者配置（分类只由所有者或上传流水线触发），走批量通道"""
+    from app.services.llm import get_chat_model
+
+    owner = (store.get(paper_id) or {}).get("user_id")
+    return await get_chat_model("chat", owner)
 
 
 @dataclass

@@ -9,13 +9,11 @@ AI 讨论助手 API (AI Discussion Assistant API)
 - 拓展功能
 """
 
-import os
 from datetime import datetime
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
-import asyncio
 from sqlalchemy import select
 
 from app.core.database import get_db
@@ -47,19 +45,6 @@ class AIResponse(BaseModel):
 
 
 # ================== Helper Functions ==================
-
-def get_llm_client():
-    """获取 LLM 客户端"""
-    from openai import OpenAI
-    
-    api_key = os.getenv("OPENAI_API_KEY")
-    base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
-    
-    if not api_key:
-        raise HTTPException(status_code=500, detail="OpenAI API key not configured")
-    
-    return OpenAI(api_key=api_key, base_url=base_url)
-
 
 async def build_context(
     db: AsyncSession,
@@ -114,13 +99,14 @@ async def build_context(
     return "\n".join(context_parts)
 
 
-def generate_ai_response(
+async def generate_ai_response(
     command: str,
     content: str,
     context: str,
+    user_id: str,
 ) -> str:
-    """调用 LLM 生成响应"""
-    client = get_llm_client()
+    """调用 LLM 生成响应（按触发者的生效配置，走交互通道）"""
+    from app.services.llm import LLMNotConfigured, get_chat_model
     
     # 根据指令构建提示
     command_prompts = {
@@ -150,14 +136,11 @@ def generate_ai_response(
     })
     
     try:
-        model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-        response = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            max_tokens=1500,
-            temperature=0.7,
-        )
-        return response.choices[0].message.content
+        llm = await get_chat_model("assist", user_id, temperature=0.7)
+        response = await llm.ainvoke(messages, max_tokens=1500)
+        return response.content
+    except LLMNotConfigured as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
     except Exception as e:
         return f"抱歉，AI 处理时出现错误: {str(e)}"
 
@@ -238,8 +221,8 @@ async def ai_assist(
     )
     
     # 生成 AI 响应
-    response_text = await asyncio.to_thread(
-        generate_ai_response,
+    response_text = await generate_ai_response(
+        user_id=current_user.id,
         command=request.command,
         content=request.content,
         context=context,
@@ -284,8 +267,8 @@ async def summarize_discussion(
     discussion_text = "\n".join(discussion_parts)
     
     # 生成总结
-    response_text = await asyncio.to_thread(
-        generate_ai_response,
+    response_text = await generate_ai_response(
+        user_id=current_user.id,
         command="summarize",
         content=f"请总结以下学术讨论的要点:\n\n{discussion_text}",
         context="",

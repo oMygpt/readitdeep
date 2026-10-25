@@ -19,9 +19,6 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from app.config import get_settings
-from app.core.store import store
-from app.core.database import async_session_maker
-from app.core.config_manager import ConfigManager
 from app.core.token_tracker import get_tracking_callback
 from app.agents.prompt_loader import get_prompt_loader
 
@@ -57,64 +54,11 @@ FALLBACK_PROMPTS = {
 }
 
 
-async def get_llm_for_action(paper_id: str, action_type: str) -> ChatOpenAI:
-    """
-    获取指定 action 的 LLM 实例
-    
-    逻辑:
-    1. 获取 paper 关联的 user_id
-    2. 获取有效配置 (用户 > 系统 > 环境变量)
-    3. 如果 smart_analysis_mode = 'custom' 且有独立配置，使用独立配置
-    4. 否则使用主 LLM 配置
-    """
-    paper = store.get(paper_id)
-    user_id = paper.get("user_id") if paper else None
-    
-    async with async_session_maker() as db:
-        config = await ConfigManager.get_effective_config(db, user_id)
-    
-    # 检查是否使用独立配置
-    smart_mode = config.get("smart_analysis_mode", "inherit")
-    
-    if smart_mode == "custom":
-        # 尝试获取独立配置
-        prefix = f"smart_{action_type}_"
-        action_base_url = config.get(f"{prefix}base_url") or ""
-        action_model = config.get(f"{prefix}model") or ""
-        action_api_key = config.get(f"{prefix}api_key") or ""
-        
-        # 如果有独立配置，使用它
-        if action_base_url or action_model or action_api_key:
-            return ChatOpenAI(
-                base_url=action_base_url or config.get("llm_base_url") or settings.llm_base_url,
-                api_key=action_api_key or config.get("llm_api_key") or settings.llm_api_key or "dummy",
-                model=action_model or config.get("llm_model") or settings.llm_model,
-                temperature=0.3,
-                request_timeout=90,  # 90 seconds timeout for LLM calls
-                streaming=True,  # Enable streaming
-            )
-    
-    # 继承主 LLM 配置
-    base_url = config.get("llm_base_url") or settings.llm_base_url
-    api_key = config.get("llm_api_key") or settings.llm_api_key or "dummy"
-    model = config.get("llm_model") or settings.llm_model
-    
-    logger.info(f"[SmartAnalysis] Using LLM config: base_url={base_url}, model={model}, api_key_set={bool(api_key and api_key != 'dummy')}")
-    
-    if not base_url:
-        raise ValueError("LLM base_url is not configured. Please set LLM_BASE_URL in environment or admin config.")
-    
-    if not api_key or api_key == "dummy":
-        raise ValueError("LLM API key is not configured. Please set LLM_API_KEY in environment or admin config.")
-    
-    return ChatOpenAI(
-        base_url=base_url,
-        api_key=api_key,
-        model=model,
-        temperature=0.3,
-        request_timeout=90,  # 90 seconds timeout for LLM calls
-        streaming=True,  # Enable streaming
-    )
+async def get_llm_for_action(user_id: Optional[str], action_type: str) -> ChatOpenAI:
+    """划词分析模型：按触发者的生效配置；smart_analysis_mode=custom 时用该动作的独立配置。走交互通道。"""
+    from app.services.llm import get_chat_model
+
+    return await get_chat_model(f"smart:{action_type}", user_id, streaming=True)
 
 
 async def smart_analyze(
@@ -125,12 +69,11 @@ async def smart_analyze(
     context: Optional[str] = None,
     chat_history: Optional[List[Dict[str, str]]] = None,
     user_message: Optional[str] = None,
+    user_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     智能分析选中文本
     """
-    from sqlalchemy import select
-    from app.models.user import User
     
     if action_type not in ACTION_TO_PROMPT:
         return {"success": False, "error": f"未知的分析类型: {action_type}"}
@@ -139,7 +82,7 @@ async def smart_analyze(
 
     try:
         # 获取 LLM (支持 per-action 配置)
-        llm = await get_llm_for_action(paper_id, action_type)
+        llm = await get_llm_for_action(user_id, action_type)
         
         # 从 PromptLoader 获取 Prompt
         loader = get_prompt_loader()
@@ -222,6 +165,7 @@ async def smart_analyze_stream(
     context: Optional[str] = None,
     chat_history: Optional[List[Dict[str, str]]] = None,
     user_message: Optional[str] = None,
+    user_id: Optional[str] = None,
 ):
     """
     流式智能分析选中文本
@@ -229,8 +173,6 @@ async def smart_analyze_stream(
     Yields SSE-formatted chunks for real-time streaming response
     """
     import json
-    from sqlalchemy import select
-    from app.models.user import User
     
     if action_type not in ACTION_TO_PROMPT:
         yield f"data: {json.dumps({'error': f'未知的分析类型: {action_type}'})}\n\n"
@@ -240,7 +182,7 @@ async def smart_analyze_stream(
 
     try:
         # 获取 LLM (支持 per-action 配置)
-        llm = await get_llm_for_action(paper_id, action_type)
+        llm = await get_llm_for_action(user_id, action_type)
         
         # 从 PromptLoader 获取 Prompt
         loader = get_prompt_loader()

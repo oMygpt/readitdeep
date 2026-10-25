@@ -13,7 +13,6 @@ from typing import AsyncGenerator, Dict, Any
 import logging
 import re
 
-from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from app.config import get_settings
@@ -22,16 +21,11 @@ from app.core.store import store
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-# 翻译 LLM (使用 streaming)
-def get_translation_llm():
-    """获取翻译 LLM (每次获取以支持动态配置)"""
-    return ChatOpenAI(
-        base_url=settings.llm_base_url,
-        api_key=settings.llm_api_key or "dummy",
-        model=settings.llm_model,
-        temperature=0.3,
-        streaming=True,
-    )
+async def get_translation_llm(user_id: str | None):
+    """翻译模型：translation_* 配置，未配置时回落主模型；走批量并发通道"""
+    from app.services.llm import get_chat_model
+
+    return await get_chat_model("translate", user_id, streaming=True, timeout=180)
 
 TRANSLATION_PROMPT = """请将以下学术论文内容翻译成中文。
 
@@ -52,7 +46,7 @@ TRANSLATION_PROMPT = """请将以下学术论文内容翻译成中文。
 _active_translation_tasks: Dict[str, asyncio.Task] = {}
 
 
-async def start_translation_task(paper_id: str) -> Dict[str, Any]:
+async def start_translation_task(paper_id: str, user_id: str | None = None) -> Dict[str, Any]:
     """
     启动后台翻译任务
     
@@ -98,7 +92,7 @@ async def start_translation_task(paper_id: str) -> Dict[str, Any]:
     })
     
     # 创建后台任务
-    task = asyncio.create_task(_translate_paper_background(paper_id))
+    task = asyncio.create_task(_translate_paper_background(paper_id, user_id))
     _active_translation_tasks[paper_id] = task
     
     # 任务完成时清理
@@ -112,7 +106,7 @@ async def start_translation_task(paper_id: str) -> Dict[str, Any]:
         return {"success": True, "status": "translating", "message": "翻译已开始"}
 
 
-async def _translate_paper_background(paper_id: str) -> None:
+async def _translate_paper_background(paper_id: str, user_id: str | None = None) -> None:
     """
     后台翻译论文 - 增量保存，支持续传
     
@@ -157,7 +151,7 @@ async def _translate_paper_background(paper_id: str) -> None:
             "translation_chunks": existing_chunks,
         })
         
-        llm = get_translation_llm()
+        llm = await get_translation_llm(user_id or (store.get(paper_id) or {}).get("user_id"))
         
         # 从 resume_index 开始翻译
         for i in range(resume_index, total_chunks):
@@ -229,7 +223,7 @@ async def _translate_paper_background(paper_id: str) -> None:
             })
 
 
-async def translate_paper_stream(paper_id: str) -> AsyncGenerator[str, None]:
+async def translate_paper_stream(paper_id: str, user_id: str | None = None) -> AsyncGenerator[str, None]:
     """
     流式翻译论文内容 (SSE 格式)
     
@@ -250,7 +244,7 @@ async def translate_paper_stream(paper_id: str) -> AsyncGenerator[str, None]:
     
     # 如果没有在翻译，启动任务
     if translation_status != "translating":
-        result = await start_translation_task(paper_id)
+        result = await start_translation_task(paper_id, user_id)
         if not result["success"]:
             yield f"data: [ERROR] {result['message']}\n\n"
             return

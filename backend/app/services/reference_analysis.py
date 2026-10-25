@@ -11,7 +11,6 @@ import logging
 from typing import Optional
 from dataclasses import dataclass
 
-from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from app.config import get_settings
@@ -50,14 +49,11 @@ REFERENCE_SUMMARY_PROMPT = """请根据以下引用论文信息，生成一段�
 """
 
 
-def _get_llm():
-    """获取 LLM 实例"""
-    return ChatOpenAI(
-        base_url=settings.llm_base_url,
-        api_key=settings.llm_api_key or "dummy",
-        model=settings.llm_model,
-        temperature=0.3,
-    )
+async def _get_llm(paper_id: str):
+    """相关工作总结模型：按论文所有者配置（只有所有者能触发），走批量通道"""
+    from app.services.llm import get_chat_model
+
+    return await get_chat_model("chat", (store.get(paper_id) or {}).get("user_id"))
 
 
 async def analyze_references(paper_id: str, limit: int = 5) -> ReferenceAnalysisResult:
@@ -117,7 +113,7 @@ async def analyze_references(paper_id: str, limit: int = 5) -> ReferenceAnalysis
             # 注意: OpenAlex 的 abstract 可能为空
         
         # 3. LLM 生成总结
-        llm = _get_llm()
+        llm = await _get_llm(paper_id)
         prompt = REFERENCE_SUMMARY_PROMPT.format(
             main_title=paper.get("title", "未知论文"),
             references=ref_text

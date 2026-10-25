@@ -10,10 +10,8 @@ Read it DEEP - 工作台分析服务
 import json
 import logging
 import re
-from typing import Optional
 from datetime import datetime
 
-from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from app.config import get_settings
@@ -29,24 +27,16 @@ settings = get_settings()
 # llm = ChatOpenAI(...) 
 
 from app.core.store import store
-from app.core.config_manager import ConfigManager
-from app.core.database import async_session_maker, get_db
 
-async def get_llm_for_paper(paper_id: str):
-    """根据论文归属获取配置好的 LLM 实例"""
-    paper = store.get(paper_id)
-    user_id = paper.get("user_id") if paper else None
-    
-    async with async_session_maker() as db:
-        config = await ConfigManager.get_effective_config(db, user_id)
-        
-    return ChatOpenAI(
-        base_url=config.get("llm_base_url") or settings.llm_base_url,
-        api_key=config.get("llm_api_key") or settings.llm_api_key or "dummy",
-        model=config.get("llm_model") or settings.llm_model,
-        temperature=0.3,
-        request_timeout=90,  # 90 seconds timeout for LLM calls
-    )
+async def get_llm_for_paper(paper_id: str, user_id: str | None = None):
+    """方法/资产提炼与摘要模型。user_id 为触发者（划词提炼，走交互通道）；
+    未给出时为上传后的自动分析，按论文所有者配置、走批量通道。"""
+    from app.services.llm import BATCH, INTERACTIVE, get_chat_model
+
+    if user_id:
+        return await get_chat_model("chat", user_id, channel=INTERACTIVE)
+    owner = (store.get(paper_id) or {}).get("user_id")
+    return await get_chat_model("chat", owner, channel=BATCH)
 
 async def analyze_method(
     text: str,
@@ -60,7 +50,7 @@ async def analyze_method(
     
     提炼研究方法，生成伪代码，以审稿视角分析
     """
-    llm = await get_llm_for_paper(paper_id)
+    llm = await get_llm_for_paper(paper_id, user_id)
     
     loader = get_prompt_loader()
     prompt_file = loader.get_prompt("workbench_method")
@@ -185,7 +175,7 @@ async def analyze_asset(
     
     识别 GitHub/Huggingface/数据集等可复用资源
     """
-    llm = await get_llm_for_paper(paper_id)
+    llm = await get_llm_for_paper(paper_id, user_id)
     
     loader = get_prompt_loader()
     prompt_file = loader.get_prompt("workbench_asset")

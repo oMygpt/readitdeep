@@ -2,6 +2,15 @@
 
 自托管用户升级时需要注意的行为变化。按版本倒序。
 
+## 统一模型调用（2026-10，改造计划 R3a）
+
+1. **所有模型调用都使用后台/环境变量里的同一套配置**（`LLM_*`、`TRANSLATION_*`、智能分析独立配置）。此前翻译和引用分析只读环境变量、忽略后台配置；`@AI` 与提示词预览读的是另一套 `OPENAI_API_KEY / OPENAI_BASE_URL / OPENAI_MODEL`，升级后这三个变量不再使用。
+2. **模型配置按触发者取**：用户在设置页填了自己的 API Key，就用自己的 Key；团队成员在别人的论文上使用 AI，不再花论文所有者的 Key（与 R1 的 AI 配额口径一致）。上传后的自动分析仍按上传者。
+3. **多端点**：`LLM_BASE_URL`（及翻译、智能分析的地址）可以填多个等价地址，逗号分隔，自动轮询；某个地址连不上或返回 5xx 时自动换下一个，并让它冷却 30 秒。
+4. **并发上限**：`LLM_CONCURRENCY_INTERACTIVE`（默认 8，划词分析/对话/@AI）与 `LLM_CONCURRENCY_BATCH`（默认 2，翻译/自动分析/分类/引用分析），每个进程分别计数。与其他服务共用 GPU 时调小批量通道。
+5. **`LLM_EXTRA_BODY`**：透传给 OpenAI 兼容服务的额外参数（JSON），例如 Qwen3 关闭思考输出：`{"chat_template_kwargs": {"enable_thinking": false}}`。
+6. 自建模型服务不需要 Key 时，`LLM_API_KEY` 可以留空。
+
 ## 单一存储（2026-10，改造计划 R2）
 
 1. **论文与工作台改存数据库**：原来的 `data/papers.json`、`data/workbench.json` 在首次启动新版本时自动导入数据库（SQLite 或 PostgreSQL），日志会打印「已导入旧 JSON 存储」。原文件不会被删除，确认无误后可自行归档。手动导入或查看对账报告：`python scripts/db_upgrade.py --reimport`。

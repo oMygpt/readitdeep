@@ -75,6 +75,23 @@
 7. **状态机推迟到 R4**：`metadata_imported / file_available` 只在从 PaperDaily 导入时出现，现有上传流程的 `status` 取值（uploading → parsing → … → completed / failed）前端与流水线大量依赖，R2 不改，R4 引入导入流程时再扩展。
 8. **任务恢复先做「明确失败」**：进程内后台任务保留；启动时把超过 60 分钟仍停在中间状态的论文/翻译标为失败并写明「服务重启中断，请重试」，用户可用现有「重新分析」入口重跑。持久化任务队列与并发上限并入 R3（与 LLMPool 一起做）。
 
+### 2.6 R3 实施细化（2026-10-26，实施前补充）
+
+审读发现模型调用分散在 9 处、口径不一：翻译、引用分析直接读环境变量，忽略管理员在后台的配置；`@AI` 与提示词预览用另一套 `OPENAI_*` 变量；其余按**论文所有者**的配置取模型（团队成员用 AI 时花的是所有者自己填的 Key）；MinerU Key 缺失时上传直接失败；后台任务在进程内，重启即丢。R3 分三个 PR：
+
+**R3a 统一模型调用**
+1. `app/services/llm.py::get_chat_model(task, user_id, streaming=False)` 成为唯一入口。任务：`chat`（分类、摘要、方法/资产提炼、引用分析、`@AI`、提示词预览）、`translate`（`translation_*`，空则回落主模型）、`smart:<action>`（`smart_analysis_mode=custom` 时用 `smart_<action>_*`）。配置一律走 `ConfigManager`（用户 > 系统 > 环境变量），`user_id` 用**触发者**（与 AI 配额口径一致）；上传后的自动分析用上传者。
+2. **多端点**：`*_base_url` 可填多个地址（逗号分隔，同一模型、同一路径前缀）。由 httpx 传输层做轮询与故障转移：连接失败或 5xx 时换下一个端点并把该端点冷却 30 秒；流式请求只在拿到响应头之前重试。对调用方透明。
+3. **并发上限**：按端点组分两个通道——交互（划词分析、对话、`@AI`）与批量（翻译、自动分析、分类、引用分析），各一个信号量：`LLM_CONCURRENCY_INTERACTIVE`（默认 8）、`LLM_CONCURRENCY_BATCH`（默认 2），进程内生效；流式响应在流关闭时释放。与入库抽取共用 GPU 时批量通道保持很小，交互请求不被翻译长任务挤占。
+
+**R3b 可插拔解析**
+4. `ParseProvider` 接口：`parse(filename, content, paper_id) -> ParseResult(markdown, images, parser, meta)`。实现：`mineru`（现有云 API）、`grobid`（TEI → Markdown：标题、作者、摘要、分节正文、公式文本、图表标题、参考文献；不含图片，仅 PDF）、`paperdaily_markdown`（R4 填充）。
+5. 系统配置 `parse_providers`（顺序列表，默认：配置了 MinerU Key 用 `mineru,grobid`，否则 `grobid`）与 `grobid_url`；依次回退，结果记录 `parser` 字段并在阅读页可见。MinerU Key 缺失不再导致上传失败。
+
+**R3c 持久化任务与用量统计**
+6. `jobs` 表（kind = parse / analyze / translate，状态 queued → running → done / failed，attempts、心跳、错误）；进程内 worker 循环认领任务（PostgreSQL `FOR UPDATE SKIP LOCKED`，SQLite `BEGIN IMMEDIATE`），按 kind 限并发；心跳超时的 running 任务重新入队（最多 3 次）。上传、重新分析、翻译改为入队；R2 的 `recover_stuck` 只处理没有任务记录的历史论文。
+7. Token 用量从 `data/token_stats.json`（多进程互相覆盖）迁到 `token_usage` 表（按日、模型、任务累加）。
+
 ## 3. 与 PaperDaily 关联（`RID_MODE=linked`）
 
 对应 PaperDaily 设计 v2.1 §3.3、§4.2、§4.3、§5；依赖主站 E2（connect，client `read`）与 E3。
