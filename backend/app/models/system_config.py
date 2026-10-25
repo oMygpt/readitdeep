@@ -91,6 +91,16 @@ DEFAULT_SYSTEM_CONFIG = {
         "description": "自部署 MinerU URL"
     },
     
+    # ==================== 论文解析 ====================
+    "parse_providers": {
+        "value": "",
+        "description": "解析器顺序，逗号分隔（mineru / grobid / paperdaily_markdown）。为空时自动：有 MinerU Key 用 mineru,grobid，否则 grobid",
+    },
+    "grobid_url": {
+        "value": "",
+        "description": "GROBID 服务地址（如 http://10.6.64.6:8070），用于无 MinerU 时解析 PDF",
+    },
+
     # ==================== 智能分析配置 ====================
     "smart_analysis_mode": {
         "value": "inherit",  # 'inherit' | 'custom'

@@ -11,7 +11,7 @@ import ipaddress
 import socket
 from urllib.parse import urlparse
 
-URL_CONFIG_SUFFIXES = ("_base_url", "_api_url")
+URL_CONFIG_SUFFIXES = ("_url",)
 
 
 def is_url_config_key(key: str) -> bool:

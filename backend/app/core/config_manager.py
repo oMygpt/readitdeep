@@ -30,6 +30,8 @@ class ConfigManager:
         env_mappings = {
             "mineru_api_key": settings.mineru_api_key,
             "mineru_api_url": settings.mineru_api_url,
+            "grobid_url": settings.grobid_url,
+            "parse_providers": settings.parse_providers,
             "llm_base_url": settings.llm_base_url,
             "llm_api_key": settings.llm_api_key,
             "llm_model": settings.llm_model,

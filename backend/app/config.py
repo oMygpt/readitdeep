@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     # Mineru PDF 解析
     mineru_api_url: str = "https://mineru.net/api/v4"  # 正确的 API 地址
     mineru_api_key: str = ""
+
+    # 论文解析：GROBID 地址与解析器顺序（见 app/services/parsing）
+    grobid_url: str = ""
+    parse_providers: str = ""
     
     # 文件存储
     storage_type: Literal["local", "s3"] = "local"
