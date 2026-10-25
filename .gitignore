@@ -39,3 +39,8 @@ uploads/
 
 # Docker persistent data
 readit_data/
+
+# Runtime data (never commit user papers / workbench / stats)
+backend/data/
+/data/
+.pids*

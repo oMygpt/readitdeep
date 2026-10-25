@@ -3,11 +3,11 @@
 对应计划 `2026-10-25-refactor-plan.md`。完成一项勾一项并写上 PR 号；验收证据记在 `2026-10-25-refactor-acceptance.md`。
 
 ## R0 仓库卫生与测试地基
-- [ ] R0.1 删除 `backend/data/*.json(.bak)`、`.pids*`、空 `backend.md`、一次性脚本；`.gitignore` 增 `backend/data/`
-- [ ] R0.2 `jiejian/` 移到 `archive/jiejian-prototype` 分支后从 main 删除
-- [ ] R0.3 `backend/tests/` + pytest 配置 + 临时 SQLite / 临时存储目录 fixture
-- [ ] R0.4 GitHub Actions：ruff（宽松规则起步）+ pytest
-- [ ] R0.5 首批测试：注册、登录、上传（MinerU 打桩）、论文访问控制
+- [x] R0.1 删除 `backend/data/*.json(.bak)`、`.pids*`、空 `backend.md`、一次性脚本；`.gitignore` 增 `backend/data/`
+- [x] R0.2 删除 `jiejian/`（作者决定直接删除，不留分支）
+- [x] R0.3 `backend/tests/` + pytest 配置 + 临时 SQLite / 临时存储目录 fixture
+- [x] R0.4 GitHub Actions：ruff（宽松规则起步）+ pytest
+- [x] R0.5 首批测试：注册、登录、上传（MinerU 打桩）、论文访问控制
 - [ ] R0.6 重写 git 历史清除 `backend/data/`（先做本地 mirror 备份）
 
 ## R1 安全基线

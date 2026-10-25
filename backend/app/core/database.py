@@ -22,7 +22,13 @@ def get_database_url() -> tuple[str, dict]:
     connect_args = {}
     
     # SQLite 配置
-    if db_url.startswith("sqlite"):
+    if db_url.startswith("sqlite") and ":///" in db_url:
+        # 显式路径 (测试 / 自定义位置): sqlite:///path 或 sqlite+aiosqlite:///path
+        if not db_url.startswith("sqlite+aiosqlite"):
+            db_url = db_url.replace("sqlite", "sqlite+aiosqlite", 1)
+        connect_args = {"check_same_thread": False}
+
+    elif db_url.startswith("sqlite"):
         # 确保数据目录存在
         data_dir = os.path.join(os.path.dirname(__file__), "..", "..", "data")
         os.makedirs(data_dir, exist_ok=True)
