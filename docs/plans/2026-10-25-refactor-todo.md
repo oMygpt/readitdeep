@@ -40,6 +40,7 @@
 - [x] R3c.1 `jobs` 表 + worker（认领、心跳、重试）；上传 / 重新分析 / 翻译入队
 - [x] R3c.2 `token_usage` 表取代 token_stats.json
 - [x] R3.3 校内 GROBID + vLLM 实测记录
+- [x] R3d 视觉模型解析（校内 Qwen3-VL，逐页转写 + 裁图，排在 GROBID 之前）
 - [x] R3c.3 启动时立即接管本机已退出进程留下的任务（不必等心跳超时）
 
 ## R4 PaperDaily 关联（依赖主站 E2/E3）

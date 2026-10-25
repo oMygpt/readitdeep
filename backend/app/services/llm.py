@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 INTERACTIVE = "interactive"
 BATCH = "batch"
+VLM = "vlm"  # 视觉解析逐页并发，单独通道，不挤占翻译与划词分析
 COOLDOWN_SECONDS = 30.0
 
 
@@ -47,6 +48,8 @@ def resolve_model_config(config: dict, task: str) -> tuple[list[str], str, str]:
     prefix = None
     if task == "translate":
         prefix = "translation_"
+    elif task == "vlm":
+        prefix = "vlm_"
     elif task.startswith("smart:") and config.get("smart_analysis_mode") == "custom":
         prefix = f"smart_{task.split(':', 1)[1]}_"
     if prefix:
@@ -83,6 +86,7 @@ def _limits() -> dict[str, int]:
     return {
         INTERACTIVE: max(1, settings.llm_concurrency_interactive),
         BATCH: max(1, settings.llm_concurrency_batch),
+        VLM: max(1, settings.llm_concurrency_vlm),
     }
 
 

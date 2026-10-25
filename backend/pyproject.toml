@@ -28,6 +28,7 @@ dependencies = [
     "rapidfuzz>=3.0.0",
     "alembic>=1.13",
     "psycopg[binary]>=3.2",
+    "pymupdf>=1.24",
 ]
 
 [project.optional-dependencies]

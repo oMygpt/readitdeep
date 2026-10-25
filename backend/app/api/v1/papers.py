@@ -87,7 +87,7 @@ async def parse_paper_task(paper_id: str, file_path: str, file_content: bytes, f
         update_paper({"status": "parsing"})
         from app.services.parsing import parse_with_fallback
 
-        result = await parse_with_fallback(config, filename, file_content, paper_id)
+        result = await parse_with_fallback(config, filename, file_content, paper_id, user_id)
         if not result.success:
             update_paper({"status": "failed", "error_message": result.error})
             return

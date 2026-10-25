@@ -61,7 +61,7 @@ def test_provider_order_defaults():
 async def test_fallback_to_grobid_when_mineru_fails(monkeypatch):
     calls = []
 
-    async def fake_run(name, config, filename, content, paper_id):
+    async def fake_run(name, config, filename, content, paper_id, user_id=None):
         calls.append(name)
         if name == "mineru":
             return ParseResult(False, error="quota exceeded")

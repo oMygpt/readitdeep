@@ -189,6 +189,9 @@ async def register(
     # 检查是否是第一个用户
     result = await db.execute(select(User).limit(1))
     is_first_user = result.scalar_one_or_none() is None
+
+    if not is_first_user and not settings.allow_registration:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="本站暂未开放注册，请联系管理员")
     
     # 创建用户
     user = User(
