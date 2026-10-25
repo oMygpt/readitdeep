@@ -18,10 +18,10 @@ async def test_uploads_static_mount_is_gone(client):
 async def test_markdown_links_are_signed_and_served(client, users):
     pid = "p-signed"
     put_image(pid)
-    store._data[pid] = {
+    store.set(pid, {
         "id": pid, "filename": "x.pdf", "status": "completed", "user_id": users["alice"]["id"],
         "markdown_content": f"![f](/uploads/images/{pid}/fig1.png)",
-    }
+    })
     md = (await client.get(f"/api/v1/papers/{pid}/content", headers=users["alice"]["headers"])).json()["markdown"]
     assert "/uploads/" not in md
     url = md[md.index("(") + 1 : md.index(")")]

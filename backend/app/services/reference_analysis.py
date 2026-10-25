@@ -131,8 +131,7 @@ async def analyze_references(paper_id: str, limit: int = 5) -> ReferenceAnalysis
         ai_summary = response.content
         
         # 4. 保存结果到 store
-        store.set(paper_id, {
-            **paper,
+        store.update(paper_id, {
             "reference_analysis": {
                 "references": references,
                 "ai_summary": ai_summary,

@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Optional
 import uuid
 
-from sqlalchemy import String, Text, DateTime, func, ForeignKey
+from sqlalchemy import JSON, Index, String, Text, DateTime, func, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -57,6 +57,15 @@ class Paper(Base):
     
     # 用户标签 (JSON 字符串数组)
     tags: Mapped[Optional[str]] = mapped_column(Text)
+
+    # 来源（R4 PaperDaily 导入用；上传的论文为空）。同一用户同一来源同一 ID 只导入一次
+    source_provider: Mapped[Optional[str]] = mapped_column(String(50))
+    source_id: Mapped[Optional[str]] = mapped_column(String(200))
+
+    # 其余字段（分析结果、翻译进度、标签建议等）。见 app/core/store.py
+    extra: Mapped[Optional[dict]] = mapped_column(JSON)
+    # 体积大、列表页用不到的字段（embedding、结构、引用图谱等），列表查询不加载
+    extra_large: Mapped[Optional[dict]] = mapped_column(JSON)
     
     # 时间戳
     created_at: Mapped[datetime] = mapped_column(
@@ -69,6 +78,10 @@ class Paper(Base):
         onupdate=func.now(),
     )
     
+    __table_args__ = (
+        Index("uq_papers_user_source", "user_id", "source_provider", "source_id", unique=True),
+    )
+
     # 关系
     tasks = relationship("ReadingTask", back_populates="paper")
     

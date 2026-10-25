@@ -82,18 +82,26 @@ async def get_db() -> AsyncSession:
             await session.close()
 
 
+def sync_database_url() -> str:
+    """同步驱动的连接串（store / Alembic 使用）：aiosqlite → sqlite，asyncpg → psycopg。"""
+    url = DATABASE_URL
+    if url.startswith("sqlite+aiosqlite"):
+        return url.replace("sqlite+aiosqlite", "sqlite", 1)
+    if url.startswith("postgresql+asyncpg"):
+        return url.replace("postgresql+asyncpg", "postgresql+psycopg", 1)
+    return url
+
+
+def import_all_models() -> None:
+    """注册全部模型到 Base.metadata（建表、迁移、一致性校验都依赖完整的元数据）。"""
+    import app.models  # noqa: F401
+    from app.models.system_config import SystemConfig  # noqa: F401
+    from app.models.user_config import UserConfig  # noqa: F401
+    from app.models.prompt import PromptVersion  # noqa: F401
+
+
 async def init_db() -> None:
-    """初始化数据库 (创建表)"""
-    # 导入所有模型以确保它们被注册
-    from app.models.user import User  # noqa
-    from app.models.paper import Paper  # noqa - 论文表 (包含 tags 列)
-    from app.models.system_config import SystemConfig  # noqa
-    from app.models.user_config import UserConfig  # noqa
-    from app.models.team import Team, TeamMember, TeamInvitation, PaperShare  # noqa
-    from app.models.share_link import ShareLink  # noqa
-    
+    """创建全部表（测试与本地快速启动用；正式部署走 Alembic，见 app/core/migrations.py）"""
+    import_all_models()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    print("✅ 数据库表已创建")
-
-

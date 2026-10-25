@@ -51,9 +51,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     settings = get_settings()
     print(f"🚀 {settings.app_name} starting...")
     
-    # 初始化数据库表
-    from app.core.database import init_db
-    await init_db()
+    # 数据库升级 → 导入旧 JSON 存储（仅首次）→ 恢复重启前中断的任务
+    if os.getenv("RID_AUTO_MIGRATE", "1") != "0":
+        import asyncio
+        from app.core.data_import import import_json_if_needed, recover_stuck
+        from app.core.migrations import upgrade_database
+        from app.core.store import store
+
+        mode = await asyncio.to_thread(upgrade_database, store.engine)
+        print(f"✅ 数据库已是最新结构 ({mode})")
+        report = await asyncio.to_thread(import_json_if_needed)
+        if report:
+            print(f"📦 已导入旧 JSON 存储: 论文 {report['papers']['total']} 篇, 工作台 {report['workbench']['total']} 条")
+        await asyncio.to_thread(recover_stuck)
     
     yield
     

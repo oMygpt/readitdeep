@@ -31,7 +31,7 @@ async def test_smart_analyze_charges_caller_and_blocks_when_exhausted(client, us
     monkeypatch.setattr("app.api.v1.workbench.smart_analyze", fake_smart)
     alice = users["alice"]
     pid = "p-ai"
-    store._data[pid] = {"id": pid, "filename": "x", "status": "completed", "user_id": alice["id"], "markdown_content": "x"}
+    store.set(pid, {"id": pid, "filename": "x", "status": "completed", "user_id": alice["id"], "markdown_content": "x"})
     body = {"text": "t", "paper_id": pid, "paper_title": "T", "action_type": "chat"}
 
     r = await client.post("/api/v1/workbench/analyze/smart", json=body, headers=alice["headers"])
@@ -50,7 +50,7 @@ async def test_cannot_run_ai_on_someone_elses_paper(client, users, monkeypatch):
 
     monkeypatch.setattr("app.api.v1.workbench.smart_analyze", fake_smart)
     pid = "p-other"
-    store._data[pid] = {"id": pid, "filename": "x", "status": "completed", "user_id": users["alice"]["id"]}
+    store.set(pid, {"id": pid, "filename": "x", "status": "completed", "user_id": users["alice"]["id"]})
     body = {"text": "t", "paper_id": pid, "paper_title": "T", "action_type": "chat"}
     r = await client.post("/api/v1/workbench/analyze/smart", json=body, headers=users["bob"]["headers"])
     assert r.status_code == 403

@@ -25,9 +25,13 @@
 ## R2
 | 项 | 标准 | 证据 |
 |---|---|---|
-| 迁移演练 | 用历史 `papers.json`（45 篇）/`workbench.json`（620 条）副本迁移，条数、正文长度逐条一致，二次运行无变化 | |
-| 并发 | 两个 worker 并发上传/编辑工作台不丢数据 | |
-| 重启恢复 | 解析中途重启后任务继续或明确失败，不卡在 parsing | |
+| 迁移演练 | 用历史 `papers.json`（45 篇）/`workbench.json`（620 条）副本迁移，条数、正文长度逐条一致，二次运行无变化 | 2026-10-26 本机私有副本演练（不入库）：45 篇全部插入，逐字段比对 0 差异（1 篇旧数据标签为 JSON 字符串，读出为列表，属预期修正）；620 条工作台全部插入，字段 0 差异，355 条有归属、265 条无主（151 条来源论文已不在 JSON 中，其余来自 7 篇无主论文）；第二次导入 0 插入、全部覆盖、内容 0 变化。真实启动流程（uvicorn + 旧 papers.json）自动建库并导入 45 篇。CI 中以合成数据跑同样断言（`tests/test_data_import.py`） |
+| 并发 | 两个 worker 并发上传/编辑工作台不丢数据 | `tests/test_store.py::test_concurrent_processes_do_not_lose_updates`：两个独立进程各对同一论文的不同字段写 30 次，两个字段都保留最终值（修复前 SQLite 下会丢）；旧快照覆盖场景 `test_update_merges_and_does_not_clobber` |
+| 重启恢复 | 解析中途重启后任务继续或明确失败，不卡在 parsing | `test_recover_stuck`：超时的中间状态按有无正文恢复为 completed / failed，翻译标为 failed，未超时的不动。持久化续跑并入 R3.4 |
+
+| 迁移体系 | 空库升级后与模型一致；旧库补齐后 stamp | `tests/test_migrations.py`：空库 `upgrade head` 后 autogenerate 对比 0 差异；模拟旧库（缺 2 表、5 列、1 索引，含存量用户）升级后无缺失且数据保留，再次升级无报错 |
+
+R2 本地测试：64 passed。
 
 ## R3
 | 项 | 标准 | 证据 |

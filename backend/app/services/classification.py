@@ -145,16 +145,6 @@ def find_similar_category(new_category: str, existing_categories: list[str], thr
     return None
 
 
-def get_all_categories() -> list[str]:
-    """获取所有已使用的分类"""
-    categories = set()
-    for paper_id in store.keys():
-        paper = store.get(paper_id)
-        if paper and paper.get("category"):
-            categories.add(paper["category"])
-    return list(categories)
-
-
 async def suggest_tags(paper_id: str) -> list[TagSuggestion]:
     """
     为论文生成 Category + Tags (v1.1.0)
@@ -228,8 +218,7 @@ async def suggest_tags(paper_id: str) -> list[TagSuggestion]:
         confirmed_tag_names = [s.name for s in high_confidence_tags]
         
         # ========== 更新论文: category + tags ==========
-        store.set(paper_id, {
-            **paper,
+        store.update(paper_id, {
             "category": category,  # v1.1.0: 直接使用 LLM 返回的 category
             "tags": confirmed_tag_names,
             "suggested_tags": [s.name for s in suggestions],
@@ -263,8 +252,7 @@ def confirm_tags(paper_id: str, tags: list[str]) -> bool:
     if not paper:
         return False
     
-    store.set(paper_id, {
-        **paper,
+    store.update(paper_id, {
         "tags": tags,
         "tags_confirmed": True,
     })
@@ -285,8 +273,7 @@ def add_tag(paper_id: str, tag: str) -> bool:
     if tag not in current_tags:
         current_tags.append(tag)
     
-    store.set(paper_id, {
-        **paper,
+    store.update(paper_id, {
         "tags": current_tags,
     })
     
@@ -305,8 +292,7 @@ def remove_tag(paper_id: str, tag: str) -> bool:
     if tag in current_tags:
         current_tags.remove(tag)
     
-    store.set(paper_id, {
-        **paper,
+    store.update(paper_id, {
         "tags": current_tags,
     })
     

@@ -62,6 +62,19 @@
 ### 2.4 部署模式
 `RID_MODE=standalone`（默认，行为与现在一致）| `linked`（启用 PaperDaily provider）。两种模式共用同一代码与同一数据模型，差别只在 provider 选择与少量界面开关。
 
+### 2.5 R2 实施细化（2026-10-25，实施前补充）
+
+审读存量代码后对 §2.1/§2.2 的落地方式做如下细化，目标不变（DB 唯一事实来源、多进程安全、不丢数据），改动面收窄：
+
+1. **保留 `store` / `workbench_store` 的调用接口，换掉实现**。全仓 75 处 `store.*` 调用、14 处 `workbench_store.*` 调用不逐一改写，而是把两个类改为基于数据库的实现（同步 SQLAlchemy 引擎：SQLite 用内置驱动，PostgreSQL 用 psycopg；每次调用一个短事务）。原实现是在事件循环里同步重写整个 JSON 文件，换成单行读写只会更快。
+2. **论文行 = 固定列 + `extra` JSON**。已有列（标题、正文、译文、状态等）照旧；JSON 里其余几十个字段（structure、summary、analysis、s2_graph、翻译进度、embedding 等）进 `papers.extra`。`get()` 返回与原来形状相同的 dict。正文暂不拆表：列表接口改为只取轻量列（`list_light`），大字段只在详情接口读取。
+3. **整条覆盖改为按字段合并**。原代码普遍是 `store.set(id, {**旧快照, 改动})`，长任务（翻译、分析）会用开始时的旧快照覆盖期间别人的修改。新增 `store.update(id, changes)`：在一个事务内读取当前行、合并改动、写回（PostgreSQL 加 `FOR UPDATE` 行锁）；所有存量写回点改用它，`set` 只用于新建。直接修改 `get()` 返回值而不写回的 1 处（embedding）一并修正。
+4. **工作台**：新表 `workbench_items`，`user_id` 为显式列；导入时按「条目 user_id → 来源论文所有者」回落规则写入，之后不再需要运行时回落。
+5. **迁移体系**：引入 Alembic。`0001` = 现有模型基线；`0002` = `papers.extra`、`papers.source_provider/source_id`（`(user_id, source_provider, source_id)` 唯一）、`workbench_items`、`data_migrations`。启动脚本：已有库但无版本记录 → 先跑旧的补列脚本再 `stamp 0001` → `upgrade head`；空库 → `upgrade head`。测试校验「迁移结果 = 模型定义」。
+6. **JSON → DB 导入**：`scripts/migrate_json_to_db.py`，启动时若发现 `data/papers.json` / `data/workbench.json` 且未记录导入，则自动执行；幂等（重复执行结果不变），JSON 字段覆盖 DB 中由旧同步逻辑写入的同名字段；用户不存在的 `user_id` 置空（只有管理员可见）并计入报告；原文件保留不删，作为一个版本周期的只读备份。
+7. **状态机推迟到 R4**：`metadata_imported / file_available` 只在从 PaperDaily 导入时出现，现有上传流程的 `status` 取值（uploading → parsing → … → completed / failed）前端与流水线大量依赖，R2 不改，R4 引入导入流程时再扩展。
+8. **任务恢复先做「明确失败」**：进程内后台任务保留；启动时把超过 60 分钟仍停在中间状态的论文/翻译标为失败并写明「服务重启中断，请重试」，用户可用现有「重新分析」入口重跑。持久化任务队列与并发上限并入 R3（与 LLMPool 一起做）。
+
 ## 3. 与 PaperDaily 关联（`RID_MODE=linked`）
 
 对应 PaperDaily 设计 v2.1 §3.3、§4.2、§4.3、§5；依赖主站 E2（connect，client `read`）与 E3。

@@ -2,17 +2,15 @@
 Read it DEEP - 工作台存储
 
 功能:
-- 工作台项目持久化 (data/workbench.json)
-- 论文关联 + 全局汇总
+- 工作台条目持久化（workbench_items 表；原 data/workbench.json 由迁移脚本导入）
+- 按用户归属：全局视图 = 本人全部条目，论文视图 = 本人在该论文上的条目
 - CRUD 操作
 """
 
-import json
-import os
 import uuid
 from typing import Optional, List
 from datetime import datetime
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 
 
 @dataclass
@@ -37,39 +35,38 @@ class WorkbenchItem:
 
 
 class WorkbenchStore:
-    """工作台存储管理"""
+    """工作台存储（数据库实现，与 app.core.store 共用同步引擎）"""
 
-    def __init__(self, file_path: str = "data/workbench.json"):
-        self.file_path = file_path
-        self._data = {
-            "items": {},  # id -> WorkbenchItem
-            "global_workbench": {
-                "methods": [],
-                "datasets": [],
-                "notes": [],
-            },
-            "paper_workbenches": {},  # paper_id -> zones
+    ZONES = ("methods", "datasets", "notes")
+
+    @property
+    def engine(self):
+        from app.core.store import store
+
+        return store.engine
+
+    @staticmethod
+    def _row_to_item(row) -> dict:
+        m = row._mapping
+        return {
+            "id": m["id"],
+            "type": m["type"],
+            "title": m["title"] or "",
+            "description": m["description"] or "",
+            "source_paper_id": m["paper_id"],
+            "zone": m["zone"],
+            "created_at": m["created_at"] or "",
+            "data": m["data"] or {},
+            "user_id": m["user_id"],
         }
-        self._ensure_dir()
-        self._load()
 
-    def _ensure_dir(self):
-        os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
+    def _select(self, *where) -> List[dict]:
+        from sqlalchemy import select
+        from app.models.workbench_item import WorkbenchItem as Row
 
-    def _load(self):
-        if os.path.exists(self.file_path):
-            try:
-                with open(self.file_path, 'r', encoding='utf-8') as f:
-                    self._data = json.load(f)
-            except Exception as e:
-                print(f"Error loading workbench store: {e}")
-
-    def _save(self):
-        try:
-            with open(self.file_path, 'w', encoding='utf-8') as f:
-                json.dump(self._data, f, indent=2, ensure_ascii=False)
-        except Exception as e:
-            print(f"Error saving workbench store: {e}")
+        stmt = select(Row.__table__).where(*where).order_by(Row.created_at, Row.id)
+        with self.engine.connect() as conn:
+            return [self._row_to_item(r) for r in conn.execute(stmt)]
 
     # --- Item CRUD ---
 
@@ -82,121 +79,76 @@ class WorkbenchStore:
         zone: str = "notes",
         data: dict = None,
         user_id: Optional[str] = None,
+        item_id: Optional[str] = None,
+        created_at: Optional[str] = None,
     ) -> WorkbenchItem:
-        """添加工作台项目"""
-        item_id = f"wb-{uuid.uuid4().hex[:8]}"
+        """添加工作台项目；未给 user_id 时归属来源论文的所有者"""
+        from app.models.workbench_item import WorkbenchItem as Row
+
+        if user_id is None and source_paper_id:
+            from app.core.store import store
+
+            user_id = (store.get(source_paper_id) or {}).get("user_id")
         item = WorkbenchItem(
-            id=item_id,
+            id=item_id or f"wb-{uuid.uuid4().hex[:8]}",
             type=type,
             title=title,
             description=description,
             source_paper_id=source_paper_id,
             zone=zone,
+            created_at=created_at or "",
             data=data or {},
             user_id=user_id,
         )
-
-        # 保存项目
-        self._data["items"][item_id] = asdict(item)
-
-        # 添加到全局工作台
-        if zone in self._data["global_workbench"]:
-            self._data["global_workbench"][zone].append(item_id)
-
-        # 添加到论文工作台
-        if source_paper_id:
-            if source_paper_id not in self._data["paper_workbenches"]:
-                self._data["paper_workbenches"][source_paper_id] = {
-                    "methods": [],
-                    "datasets": [],
-                    "notes": [],
-                }
-            if zone in self._data["paper_workbenches"][source_paper_id]:
-                self._data["paper_workbenches"][source_paper_id][zone].append(item_id)
-
-        self._save()
+        with self.engine.begin() as conn:
+            conn.execute(
+                Row.__table__.insert().values(
+                    id=item.id, user_id=item.user_id, paper_id=item.source_paper_id, type=item.type,
+                    zone=item.zone, title=item.title, description=item.description, data=item.data,
+                    created_at=item.created_at,
+                )
+            )
         return item
 
     def get_item(self, item_id: str) -> Optional[dict]:
-        """获取单个项目"""
-        return self._data["items"].get(item_id)
+        from app.models.workbench_item import WorkbenchItem as Row
+
+        items = self._select(Row.id == item_id)
+        return items[0] if items else None
 
     def update_item(self, item_id: str, updates: dict) -> bool:
-        """更新项目"""
-        if item_id not in self._data["items"]:
-            return False
+        """更新项目（title / description / zone / data / type）"""
+        from app.models.workbench_item import WorkbenchItem as Row
 
-        old_zone = self._data["items"][item_id].get("zone")
-        self._data["items"][item_id].update(updates)
-        new_zone = self._data["items"][item_id].get("zone")
-
-        # 如果区域变化，更新索引
-        if old_zone != new_zone:
-            self._move_item_zone(item_id, old_zone, new_zone)
-
-        self._save()
-        return True
+        values = {k: v for k, v in updates.items() if k in ("title", "description", "zone", "data", "type")}
+        if not values:
+            return self.get_item(item_id) is not None
+        with self.engine.begin() as conn:
+            result = conn.execute(Row.__table__.update().where(Row.id == item_id).values(**values))
+        return result.rowcount > 0
 
     def delete_item(self, item_id: str) -> bool:
-        """删除项目"""
-        if item_id not in self._data["items"]:
-            return False
+        from app.models.workbench_item import WorkbenchItem as Row
 
-        item = self._data["items"][item_id]
-        zone = item.get("zone", "notes")
-        paper_id = item.get("source_paper_id")
-
-        # 从全局工作台移除
-        if zone in self._data["global_workbench"]:
-            if item_id in self._data["global_workbench"][zone]:
-                self._data["global_workbench"][zone].remove(item_id)
-
-        # 从论文工作台移除
-        if paper_id and paper_id in self._data["paper_workbenches"]:
-            if zone in self._data["paper_workbenches"][paper_id]:
-                if item_id in self._data["paper_workbenches"][paper_id][zone]:
-                    self._data["paper_workbenches"][paper_id][zone].remove(item_id)
-
-        # 删除项目
-        del self._data["items"][item_id]
-        self._save()
-        return True
-
-    def _move_item_zone(self, item_id: str, old_zone: str, new_zone: str):
-        """移动项目区域"""
-        paper_id = self._data["items"][item_id].get("source_paper_id")
-
-        # 全局工作台
-        if old_zone in self._data["global_workbench"]:
-            if item_id in self._data["global_workbench"][old_zone]:
-                self._data["global_workbench"][old_zone].remove(item_id)
-        if new_zone in self._data["global_workbench"]:
-            self._data["global_workbench"][new_zone].append(item_id)
-
-        # 论文工作台
-        if paper_id and paper_id in self._data["paper_workbenches"]:
-            pw = self._data["paper_workbenches"][paper_id]
-            if old_zone in pw and item_id in pw[old_zone]:
-                pw[old_zone].remove(item_id)
-            if new_zone in pw:
-                pw[new_zone].append(item_id)
+        with self.engine.begin() as conn:
+            result = conn.execute(Row.__table__.delete().where(Row.id == item_id))
+        return result.rowcount > 0
 
     # --- Query ---
 
     def owner_of(self, item: dict) -> Optional[str]:
-        """条目归属：显式 user_id，否则回落到来源论文的所有者；都没有则无主（仅管理员可见）。"""
+        """条目归属。导入时已显式写入；为空的历史条目再回落到来源论文的所有者。"""
         if item.get("user_id"):
             return item["user_id"]
         paper_id = item.get("source_paper_id")
         if paper_id:
             from app.core.store import store
 
-            paper = store.get(paper_id) or {}
-            return paper.get("user_id")
+            return (store.get(paper_id) or {}).get("user_id")
         return None
 
     def _zones_of(self, items: List[dict]) -> dict:
-        result = {"methods": [], "datasets": [], "notes": []}
+        result = {zone: [] for zone in self.ZONES}
         for item in items:
             zone = item.get("zone", "notes")
             if zone in result:
@@ -204,7 +156,9 @@ class WorkbenchStore:
         return result
 
     def get_items_for_user(self, user_id: str) -> List[dict]:
-        return [i for i in self._data["items"].values() if self.owner_of(i) == user_id]
+        from app.models.workbench_item import WorkbenchItem as Row
+
+        return self._select(Row.user_id == user_id)
 
     def get_global_workbench(self, user_id: str) -> dict:
         """获取某用户的全局工作台（其所有条目按区域汇总）"""
@@ -215,16 +169,16 @@ class WorkbenchStore:
         return self._zones_of(self.get_items_by_paper(paper_id, owner_id=user_id))
 
     def get_all_items(self) -> List[dict]:
-        """获取所有项目"""
-        return list(self._data["items"].values())
+        return self._select()
 
     def get_items_by_paper(self, paper_id: str, owner_id: Optional[str] = None) -> List[dict]:
         """获取某论文的项目；给定 owner_id 时只返回该用户的条目"""
-        return [
-            item for item in self._data["items"].values()
-            if item.get("source_paper_id") == paper_id
-            and (owner_id is None or self.owner_of(item) == owner_id)
-        ]
+        from app.models.workbench_item import WorkbenchItem as Row
+
+        where = [Row.paper_id == paper_id]
+        if owner_id is not None:
+            where.append(Row.user_id == owner_id)
+        return self._select(*where)
 
     def get_stats(self, user_id: str) -> dict:
         """获取某用户的统计信息"""

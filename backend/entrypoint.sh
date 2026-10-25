@@ -6,9 +6,7 @@ set -e
 
 echo "=== Read it DEEP Backend 启动 ==="
 
-# 运行数据库迁移
-echo "🔄 检查数据库迁移..."
-python scripts/migrate_db.py
+# 数据库升级、旧 JSON 数据导入在应用启动时自动完成（app/main.py lifespan）
 
 # 启动服务器
 echo "🚀 启动 API 服务..."

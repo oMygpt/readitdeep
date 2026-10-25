@@ -4,7 +4,7 @@ Read it DEEP - Papers API
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Depends, status
@@ -49,35 +49,6 @@ class PaperDetail(BaseModel):
     error_message: Optional[str] = None
 
 
-async def sync_paper_to_db(paper_id: str, updates: dict):
-    """
-    同步论文状态到数据库 (用于团队分享功能)
-    
-    只同步 Paper 模型已定义的字段
-    """
-    import logging
-    logger = logging.getLogger(__name__)
-    
-    # Paper 模型包含的字段
-    valid_fields = {
-        'filename', 'file_path', 'title', 'category', 'authors', 
-        'abstract', 'doi', 'arxiv_id', 'markdown_content', 
-        'translated_content', 'status', 'error_message'
-    }
-    
-    try:
-        async with async_session_maker() as db:
-            result = await db.execute(select(Paper).where(Paper.id == paper_id))
-            db_paper = result.scalar_one_or_none()
-            if db_paper:
-                for key, value in updates.items():
-                    if key in valid_fields and hasattr(db_paper, key):
-                        setattr(db_paper, key, value)
-                await db.commit()
-    except Exception as e:
-        logger.warning(f"Failed to sync paper {paper_id} to DB: {e}")
-
-
 async def parse_paper_task(paper_id: str, file_path: str, file_content: bytes, filename: str, user_id: Optional[str] = None):
     """
     后台任务: 使用 Mineru API 解析论文
@@ -108,17 +79,9 @@ async def parse_paper_task(paper_id: str, file_path: str, file_content: bytes, f
     settings = get_settings()
     logger = logging.getLogger(__name__)
 
-    # 辅助更新函数 (同时更新 store 和 DB)
-    import asyncio
-    
+    # 辅助更新函数：只合并本次改动的字段
     def update_paper(updates: dict):
-        paper = store.get(paper_id)
-        if paper:
-            paper.update(updates)
-            paper["updated_at"] = datetime.utcnow()
-            store.set(paper_id, paper)
-            # 异步同步到数据库 (用于团队分享)
-            asyncio.create_task(sync_paper_to_db(paper_id, updates))
+        store.update(paper_id, {**updates, "updated_at": datetime.now(timezone.utc)})
 
     try:
         if not config.get("mineru_api_key"):
@@ -215,8 +178,7 @@ async def parse_paper_task(paper_id: str, file_path: str, file_content: bytes, f
                 snippet = markdown_content[:8000]
                 vector = await embedding_service.embed_single(snippet)
                 if vector:
-                    store.get(paper_id)["embedding"] = vector
-                    update_paper({"status": "embedding_done"})
+                    update_paper({"embedding": vector, "status": "embedding_done"})
                 await embedding_service.close()
             except Exception as e:
                 logger.error(f"Embedding failed: {e}")
@@ -383,23 +345,11 @@ async def upload_paper(
         "filename": file.filename,
         "file_path": file_path,
         "status": "uploading",
-        "created_at": datetime.now(),
-        "updated_at": datetime.now(),
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
         "user_id": current_user.id if current_user else None
     }
     store.set(paper_id, paper_data)
-    
-    # 同步到数据库 (用于团队分享功能)
-    async with async_session_maker() as db:
-        db_paper = Paper(
-            id=paper_id,
-            user_id=current_user.id if current_user else None,
-            filename=file.filename,
-            file_path=file_path,
-            status="uploading",
-        )
-        db.add(db_paper)
-        await db.commit()
     
     # 4. 启动后台解析任务
     background_tasks.add_task(
@@ -615,14 +565,9 @@ async def run_analysis_pipeline(paper_id: str, user_id: str):
 
     logger = logging.getLogger(__name__)
     
-    # helper (同步到 store 和 DB)
-    import asyncio
+    # helper：只合并本次改动的字段
     def update_paper(updates: dict):
-        p = store.get(paper_id)
-        if p:
-            p.update(updates)
-            store.set(paper_id, p)
-            asyncio.create_task(sync_paper_to_db(paper_id, updates))
+        store.update(paper_id, {**updates, "updated_at": datetime.now(timezone.utc)})
 
     paper = store.get(paper_id)
     if not paper: return

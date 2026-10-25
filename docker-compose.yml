@@ -6,7 +6,7 @@
 #   或: docker compose up -d --build
 #
 # 持久化数据目录: ./readit_data/
-#   - db/       SQLite数据库、papers.json、workbench.json、token_stats.json
+#   - db/       SQLite 数据库（旧版的 papers.json / workbench.json 首次启动时自动导入）、token_stats.json
 #   - uploads/  用户上传的PDF、Mineru解析结果、提取的Markdown
 #   - redis/    Redis持久化数据
 #   - logs/     LLM/LangGraph分析日志

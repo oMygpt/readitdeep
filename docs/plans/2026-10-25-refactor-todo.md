@@ -20,21 +20,24 @@
 - [x] R1.7 无 user_id 论文不再公开
 - [x] R1.8 LLM 触发路由计入 AI 配额
 
-## R2 单一存储
-- [ ] R2.1 Alembic 基线
-- [ ] R2.2 新表/新列：`paper_contents`、`workbench_items`、状态机与子状态、`source_provider/source_id`
-- [ ] R2.3 `scripts/migrate_json_to_db.py`（幂等 + 对账输出）
-- [ ] R2.4 移除 JSONStore / WorkbenchStore
-- [ ] R2.5 `jobs` 表 + worker，重启恢复
+## R2 单一存储（设计 §2.5）
+- [x] R2.1 Alembic：0001 基线、0002 新表新列、启动升级脚本、迁移=模型一致性测试
+- [x] R2.2 `store` 改为数据库实现（固定列 + extra JSON），`update()` 合并写、`list_light()`
+- [x] R2.3 存量 `set(id, {**旧快照, …})` 全部改为 `update()`；修正 embedding 原地修改未写回
+- [x] R2.4 `workbench_store` 改为 `workbench_items` 表实现
+- [x] R2.5 `scripts/migrate_json_to_db.py`（幂等 + 对账），启动自动执行一次
+- [x] R2.6 启动时恢复卡住的论文/翻译状态
+- [x] R2.7 迁移演练（历史 45 篇 / 620 条）与并发写测试
 
 ## R3 可插拔后端
 - [ ] R3.1 ParseProvider：mineru_cloud / grobid / paperdaily_markdown + 回退
 - [ ] R3.2 LLMPool：分任务、多端点、并发上限
+- [ ] R3.4 持久化任务队列（jobs 表 + worker，重启续跑）、token 统计迁入 DB（自 R2 移入）
 - [ ] R3.3 校内 GROBID + vLLM 实测记录
 
 ## R4 PaperDaily 关联（依赖主站 E2/E3）
 - [ ] R4.1 `RID_MODE=linked` 登录与身份映射
-- [ ] R4.2 `/open` 深链 + 幂等导入
+- [ ] R4.2 `/open` 深链 + 幂等导入；状态机扩展 metadata_imported / file_available（自 R2 移入）
 - [ ] R4.3 context-bundle 左栏、回传研究记忆、删号 webhook
 - [ ] R4.4 credits 计量对接
 - [ ] R4.5 端到端验收
@@ -50,3 +53,10 @@
 - [x] nginx `location ^~ /api`（否则带图片扩展名的 API 地址被静态规则截走）；SSE 关闭代理缓冲
 - [x] 前端 `authFetch` / `AuthEventSource`：原生 EventSource 无法带 Authorization 头
 - [x] `docs/UPGRADING.md` 记录对自托管用户的行为变化
+
+## R2 期间顺带处理
+- [x] 删除死代码 `services/analysis.py`、`get_all_categories`（跨用户读取分类名）
+- [x] 删除论文时一并删除解析出的图片目录
+- [x] 写入时间统一 UTC（原来混用本地时间与 UTC，影响「卡住任务」判断和排序）
+- [x] SQLite 合并写使用 `BEGIN IMMEDIATE`（无 FOR UPDATE 时防止跨进程丢更新）
+- [x] 旧数据里存成 JSON 字符串的标签，读取时统一为列表
