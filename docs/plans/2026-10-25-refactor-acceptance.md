@@ -10,9 +10,9 @@
 ## R0
 | 项 | 标准 | 证据 |
 |---|---|---|
-| 数据移除 | HEAD 中不存在 `backend/data/*.json`；`.gitignore` 生效 | |
+| 数据移除 | HEAD 中不存在 `backend/data/*.json`；`.gitignore` 生效 | 2026-10-25 R0 PR：`git rm` 删除 backend/data、jiejian、一次性脚本；`.gitignore` 增 `backend/data/`、`/data/`。原数据另存本机私有目录供 R2 迁移演练，不入库 |
 | 历史清除 | `git log --all -- backend/data` 为空；GitHub 上旧 blob 链接 404 或已请求清除缓存 | |
-| 测试地基 | `uv run pytest` 在干净环境可跑，CI 有 test job | |
+| 测试地基 | `uv run pytest` 在干净环境可跑，CI 有 test job | 2026-10-25 本地 `uv run pytest -q` → 9 passed（认证 4、论文上传/访问/列表 5）；CI 结果见 R0 PR |
 
 ## R1
 | 项 | 标准 | 证据 |
