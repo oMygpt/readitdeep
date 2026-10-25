@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     cors_origins: str = "*"
     # 是否允许普通用户自定义 LLM/MinerU 等服务地址（托管部署应保持 false，见 app/core/url_guard.py）
     allow_user_endpoints: bool = False
+    # 是否开放自助注册。关闭后只能由管理员创建账号（第一个账号仍可注册为管理员）；
+    # 关联 PaperDaily 后本地注册与密码登录整体关闭
+    allow_registration: bool = True
     
     # 数据库 (SQLite 本地开发 / PostgreSQL 生产)
     database_url: str = "sqlite"  # 使用 sqlite 自动创建本地数据库

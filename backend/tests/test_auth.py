@@ -29,3 +29,13 @@ async def test_login_and_me(client):
 async def test_garbage_token_rejected(client):
     r = await client.get("/api/v1/auth/me", headers={"Authorization": "Bearer not-a-jwt"})
     assert r.status_code == 401
+
+
+async def test_registration_can_be_closed(client, monkeypatch):
+    from app.api.v1 import auth
+
+    monkeypatch.setattr(auth.settings, "allow_registration", False)
+    first = await client.post("/api/v1/auth/register", json={"email": "root@example.com", "password": "x1234567"})
+    assert first.status_code == 200 and first.json()["user"]["role"] == "admin"  # 空库时仍可建第一个管理员
+    r = await client.post("/api/v1/auth/register", json={"email": "x@example.com", "password": "x1234567"})
+    assert r.status_code == 403
