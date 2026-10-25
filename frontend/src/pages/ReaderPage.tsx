@@ -1272,6 +1272,13 @@ export default function ReaderPage() {
                                     {extractedTitle || paper?.title || paper?.filename || 'Untitled Document'}
                                 </h1>
 
+                                {/* 解析来源：GROBID 只提取文字，不含图片与版面公式 */}
+                                {paper?.parser === 'grobid' && (
+                                    <p className="text-xs text-slate-400 mb-6">
+                                        本文由 GROBID 解析：保留章节、公式文本、图表标题与参考文献，不含图片
+                                    </p>
+                                )}
+
                                 {/* Tags */}
                                 {paper?.tags && paper.tags.length > 0 && (
                                     <div className="flex items-center justify-center gap-2 mb-8 flex-wrap">

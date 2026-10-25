@@ -35,11 +35,11 @@
 - [x] R3a.3 多端点故障转移传输层（冷却、仅响应头前重试）
 - [x] R3a.4 交互 / 批量两个并发通道
 - [x] R3a.5 `LLM_EXTRA_BODY`（校内 Qwen3 关闭思考输出）
-- [ ] R3b.1 ParseProvider 接口 + mineru / grobid / paperdaily_markdown 占位
-- [ ] R3b.2 `parse_providers` / `grobid_url` 配置与回退；`parser` 字段；MinerU Key 缺失不再失败
+- [x] R3b.1 ParseProvider 接口 + mineru / grobid / paperdaily_markdown 占位
+- [x] R3b.2 `parse_providers` / `grobid_url` 配置与回退；`parser` 字段；MinerU Key 缺失不再失败
 - [ ] R3c.1 `jobs` 表 + worker（认领、心跳、重试）；上传 / 重新分析 / 翻译入队
 - [ ] R3c.2 `token_usage` 表取代 token_stats.json
-- [ ] R3.3 校内 GROBID + vLLM 实测记录
+- [x] R3.3 校内 GROBID + vLLM 实测记录
 
 ## R4 PaperDaily 关联（依赖主站 E2/E3）
 - [ ] R4.1 `RID_MODE=linked` 登录与身份映射

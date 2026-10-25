@@ -159,6 +159,7 @@ export interface Paper {
     tags_confirmed?: boolean;
     doi?: string;
     arxiv_id?: string;
+    parser?: 'mineru' | 'grobid' | 'paperdaily_markdown' | string;
     // Team sharing info
     shared_teams?: SharedTeamInfo[];
 }

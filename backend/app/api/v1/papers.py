@@ -43,10 +43,10 @@ class PaperDetail(BaseModel):
     markdown_content: Optional[str] = None
     translated_content: Optional[str] = None
     created_at: datetime
-    created_at: datetime
     updated_at: datetime
     user_id: Optional[str] = None
     error_message: Optional[str] = None
+    parser: Optional[str] = None  # 实际使用的解析器（mineru / grobid / …）
 
 
 async def parse_paper_task(paper_id: str, file_path: str, file_content: bytes, filename: str, user_id: Optional[str] = None):
@@ -54,7 +54,7 @@ async def parse_paper_task(paper_id: str, file_path: str, file_content: bytes, f
     后台任务: 使用 Mineru API 解析论文
     
     增强流程:
-    1. Mineru 解析
+    1. 解析（MinerU / GROBID，按配置顺序回退）
     2. 提取 DOI/ArXiv ID
     3. 生成 Embedding
     4. 触发 AI 分析
@@ -66,7 +66,6 @@ async def parse_paper_task(paper_id: str, file_path: str, file_content: bytes, f
     from app.core.config_manager import ConfigManager
     from app.core.database import async_session_maker
     from app.config import get_settings
-    from app.services.mineru import MineruService
     from app.services.embedding import EmbeddingService
     from app.services.classification import suggest_tags
     from app.services.classification import suggest_tags
@@ -84,28 +83,16 @@ async def parse_paper_task(paper_id: str, file_path: str, file_content: bytes, f
         store.update(paper_id, {**updates, "updated_at": datetime.now(timezone.utc)})
 
     try:
-        if not config.get("mineru_api_key"):
-            logger.error(f"Paper {paper_id}: MINERU_API_KEY not configured for user {user_id}")
-            update_paper({"status": "failed", "error_message": "Mineru API Key missing in Config"})
-            return
-
-        # 1. Start Parsing
+        # 1. 解析（按系统配置的解析器顺序依次尝试：MinerU / GROBID / …）
         update_paper({"status": "parsing"})
-        logger.info(f"Starting parsing for {paper_id} with Mineru (User Config)")
+        from app.services.parsing import parse_with_fallback
 
-        mineru_service = MineruService(api_key=config.get("mineru_api_key"))
-        
-        # Parse
-        result = await mineru_service.parse_file(
-            filename=filename,
-            file_content=file_content,
-            data_id=paper_id
-        )
-
+        result = await parse_with_fallback(config, filename, file_content, paper_id)
         if not result.success:
             update_paper({"status": "failed", "error_message": result.error})
             return
-        
+        logger.info(f"Paper {paper_id}: parsed with {result.parser}")
+
         # 2. Indexing / Processing
         update_paper({"status": "indexing"})
         markdown_content = result.markdown_content
@@ -159,9 +146,11 @@ async def parse_paper_task(paper_id: str, file_path: str, file_content: bytes, f
         # Update Paper with Content
         update_paper({
             "status": "completed",
-            "title": title,
+            "title": (result.meta.get("title") or title)[:1000],
+            "doi": result.meta.get("doi") or None,
             "markdown_content": markdown_content,
             "arxiv_id": arxiv_id,
+            "parser": result.parser,
             "error_message": None # Clear previous errors
         })
         
@@ -389,6 +378,7 @@ async def get_paper(
         updated_at=paper.get("updated_at") or datetime.now(),
         user_id=paper.get("user_id"),
         error_message=paper.get("error_message"),
+        parser=paper.get("parser"),
     )
 
 
