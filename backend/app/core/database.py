@@ -44,6 +44,8 @@ def get_database_url() -> tuple[str, dict]:
             db_url = db_url.replace("postgres://", "postgresql+asyncpg://", 1)
         elif db_url.startswith("postgresql://") and "+asyncpg" not in db_url:
             db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        # 会话时区固定为 UTC：代码写入的不带时区时间（utcnow）按 UTC 解释
+        connect_args = {"server_settings": {"timezone": "UTC"}}
         print(f"📦 使用 PostgreSQL 数据库")
     
     return db_url, connect_args

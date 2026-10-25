@@ -66,12 +66,13 @@ _LIGHT_COLUMNS = [
 
 
 def _to_datetime(value: Any) -> Optional[datetime]:
-    if value is None or isinstance(value, datetime):
-        return value
-    try:
-        return datetime.fromisoformat(str(value))
-    except ValueError:
-        return None
+    """写入前统一为带时区的 UTC；不带时区的值（含旧 JSON 里的字符串）按 UTC 解释。"""
+    if value is not None and not isinstance(value, datetime):
+        try:
+            value = datetime.fromisoformat(str(value))
+        except ValueError:
+            return None
+    return _utc(value)
 
 
 def _utc(value: Any) -> Any:
@@ -136,7 +137,8 @@ class PaperStore:
             from app.core.database import sync_database_url
 
             url = sync_database_url()
-            kwargs: dict[str, Any] = {"pool_pre_ping": True}
+            # PostgreSQL 会话时区固定为 UTC，与异步引擎一致
+            kwargs: dict[str, Any] = {"pool_pre_ping": True, "connect_args": {"options": "-c timezone=utc"}}
             if url.startswith("sqlite"):
                 kwargs = {"connect_args": {"check_same_thread": False, "timeout": 30}}
             self._engine = create_engine(url, **kwargs)

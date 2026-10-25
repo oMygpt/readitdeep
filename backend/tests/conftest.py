@@ -12,7 +12,8 @@ import tempfile
 from pathlib import Path
 
 _TMP = Path(tempfile.mkdtemp(prefix="rid-test-"))
-os.environ["DATABASE_URL"] = f"sqlite:///{_TMP / 'test.db'}"
+# RID_TEST_DATABASE_URL=postgresql://... 时改用 PostgreSQL 跑同一套测试
+os.environ["DATABASE_URL"] = os.environ.get("RID_TEST_DATABASE_URL") or f"sqlite:///{_TMP / 'test.db'}"
 os.environ["SECRET_KEY"] = "test-secret-key-not-for-production"
 os.environ["STORAGE_PATH"] = str(_TMP / "uploads")
 os.environ["CORS_ORIGINS"] = "http://testserver"

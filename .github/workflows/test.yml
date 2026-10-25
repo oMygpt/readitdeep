@@ -10,9 +10,25 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        database: [sqlite, postgres]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: rid
+          POSTGRES_PASSWORD: rid
+          POSTGRES_DB: ridtest
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U rid" --health-interval 5s --health-timeout 5s --health-retries 10
     defaults:
       run:
         working-directory: backend
+    env:
+      RID_TEST_DATABASE_URL: ${{ matrix.database == 'postgres' && 'postgresql://rid:rid@localhost:5432/ridtest' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -20,5 +36,5 @@ jobs:
           python-version: '3.11'
       - run: uv sync --extra dev
       # 起步只拦语法错误与未定义名，规则随改造逐步收紧
-      - run: uv run ruff check --select E9,F63,F7,F82 app tests scripts
+      - run: uv run ruff check --select E9,F63,F7,F82 app tests scripts migrations
       - run: uv run pytest -q

@@ -42,3 +42,28 @@ def test_legacy_database_is_completed_and_stamped(tmp_path):
     missing = [d for d in _diff(engine) if d[0] in ("add_table", "add_column", "add_index")]
     assert missing == []
     assert upgrade_database(engine) == "upgrade"
+
+
+def test_fresh_postgres_matches_models():
+    import os
+
+    import pytest
+    from sqlalchemy.engine import make_url
+
+    base = os.environ.get("RID_TEST_DATABASE_URL", "")
+    if not base.startswith("postgresql"):
+        pytest.skip("需要 RID_TEST_DATABASE_URL=postgresql://...")
+    url = make_url(base).set(drivername="postgresql+psycopg")
+    admin = create_engine(url, isolation_level="AUTOCOMMIT")
+    with admin.connect() as conn:
+        conn.execute(text("DROP DATABASE IF EXISTS rid_migration_check"))
+        conn.execute(text("CREATE DATABASE rid_migration_check"))
+    engine = create_engine(url.set(database="rid_migration_check"))
+    try:
+        assert upgrade_database(engine) == "fresh"
+        assert _diff(engine) == []
+    finally:
+        engine.dispose()
+        with admin.connect() as conn:
+            conn.execute(text("DROP DATABASE IF EXISTS rid_migration_check"))
+        admin.dispose()
