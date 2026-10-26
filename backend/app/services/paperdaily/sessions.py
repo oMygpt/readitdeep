@@ -2,7 +2,7 @@
 关联模式的登录状态、provider session 与核验规则（设计 §2.7 / 主站 v2.2 §3.3）。
 
 - 授权跳转前保存 state + PKCE verifier，绑定浏览器 cookie（防登录 CSRF），10 分钟有效、用后即删；
-- 登录成功后建 provider session：委托 key 只存 AES-GCM 密文，绝对期限 = min(30 天, key 到期)；
+- 登录成功后按 subject.sub 建/取本地用户（永不按邮箱合并），建 provider session：委托 key 只存 AES-GCM 密文，绝对期限 = min(30 天, key 到期)；
 - 本地只发 ≤15 分钟的 JWT（含 sid），续签必须实时 introspect；
 - 请求核验：GET 读取接受 60 秒内的核验结果，写入/上传/AI/导出实时核验；主站无法确认 → 503。
 """
@@ -87,25 +87,16 @@ async def consume_state(state: str, browser_nonce: Optional[str]) -> ConnectStat
 # ---------------- 用户映射与会话 ----------------
 
 
-async def _find_or_link_user(db, subject: str, info: dict) -> User:
+async def _find_or_link_user(db, subject: str) -> User:
+    """只按 (provider, subject.sub) 映射，**永不按邮箱合并**（主站契约 identity_link）。
+    既有本地账号要继续使用，须由运维用 scripts/link_paperdaily_account.py 显式绑定。"""
     tomb = await db.get(AccountTombstone, (PROVIDER, subject))
     if tomb is not None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "该 PaperDaily 账号已删除")
     user = (await db.execute(select(User).where(User.external_provider == PROVIDER, User.external_subject == subject))).scalar_one_or_none()
-    email = (info.get("email") or "").strip().lower()
-    if user is None and email:
-        local = (await db.execute(select(User).where(User.email == email))).scalar_one_or_none()
-        if local is not None:
-            if local.external_subject:
-                raise HTTPException(status.HTTP_409_CONFLICT, "该邮箱已关联另一个 PaperDaily 账号")
-            if not info.get("email_verified"):
-                raise HTTPException(status.HTTP_409_CONFLICT, "该邮箱在本站已有账号，请先在 PaperDaily 验证邮箱后再登录以完成关联")
-            local.external_provider, local.external_subject = PROVIDER, subject
-            user = local
     if user is None:
-        # 主站首发不下发邮箱等资料（scope 为空）：用占位邮箱，只作本站内部唯一键
-        user = User(email=email or f"pd-{subject}@users.paperdaily.invalid",
-                    username=info.get("display_name") or "PaperDaily 用户",
+        # 主站不下发邮箱等资料（scope 为空）：用占位邮箱，只作本站内部唯一键
+        user = User(email=f"pd-{subject}@users.paperdaily.invalid", username="PaperDaily 用户",
                     role="user", external_provider=PROVIDER, external_subject=subject)
         user.set_password(secrets.token_urlsafe(32))  # 不可用的随机密码：关联模式不允许密码登录
         db.add(user)
@@ -120,7 +111,6 @@ async def _find_or_link_user(db, subject: str, info: dict) -> User:
 
 async def complete_login(token_response: dict) -> tuple[User, ProviderSession]:
     subject_obj = token_response.get("subject") or {}
-    info = token_response.get("user") or {}  # 主站目前不下发；将来若下发邮箱可用于关联既有本地账号
     subject = str(subject_obj.get("sub") or "") if isinstance(subject_obj, dict) else ""
     if not subject or not token_response.get("access_token") or not token_response.get("grant_id"):
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "PaperDaily 返回的授权信息不完整")
@@ -132,7 +122,7 @@ async def complete_login(token_response: dict) -> tuple[User, ProviderSession]:
         expires = utcnow() + timedelta(seconds=int(token_response.get("expires_in") or 0))
     now = utcnow()
     async with async_session_maker() as db:
-        user = await _find_or_link_user(db, subject, info)
+        user = await _find_or_link_user(db, subject)
         await db.flush()
         sid = secrets.token_urlsafe(32)
         aad = crypto.associated_data(user.id, get_settings().paperdaily_client_id, token_response["grant_id"], sid)

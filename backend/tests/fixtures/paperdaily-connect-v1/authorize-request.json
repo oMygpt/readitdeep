@@ -1,0 +1,9 @@
+{
+  "response_type": "code",
+  "client_id": "read",
+  "redirect_uri": "https://read.paperdaily.org/api/auth/paperdaily/callback",
+  "state": "sssssssssssssssssssssssssssssssssssssssssss",
+  "code_challenge": "ccccccccccccccccccccccccccccccccccccccccccc",
+  "code_challenge_method": "S256",
+  "scope": ""
+}

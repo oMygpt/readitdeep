@@ -1,0 +1,11 @@
+{
+  "active": true,
+  "subject": {
+    "issuer": "https://paperdaily.org",
+    "sub": "u-example"
+  },
+  "grant_id": "grt_example",
+  "auth_version": 7,
+  "expires_at": "2026-11-25T03:00:00+00:00",
+  "scope": ""
+}

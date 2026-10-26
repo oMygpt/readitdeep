@@ -1,0 +1,13 @@
+{
+  "access_token": "pd_live_EXAMPLE_ONLY_NOT_A_CREDENTIAL",
+  "token_type": "Bearer",
+  "expires_in": 2592000,
+  "expires_at": "2026-11-25T03:00:00+00:00",
+  "scope": "",
+  "grant_id": "grt_example",
+  "auth_version": 7,
+  "subject": {
+    "issuer": "https://paperdaily.org",
+    "sub": "u-example"
+  }
+}
