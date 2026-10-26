@@ -71,7 +71,7 @@ def authorize_url(state: str, code_challenge: str) -> str:
     }
     if s.paperdaily_scopes:
         params["scope"] = s.paperdaily_scopes
-    return _url(f"/connect/{s.paperdaily_client_id}") + "?" + urlencode(params)
+    return s.paperdaily_web_url.rstrip("/") + f"/connect/{s.paperdaily_client_id}?" + urlencode(params)
 
 
 def redirect_uri() -> str:
@@ -92,5 +92,7 @@ async def revoke(token: str) -> None:
     await _call("POST", "/api/auth/connect/revoke", json={"token": token})
 
 
-async def events_after(cursor: int, limit: int = 100) -> dict:
-    return await _call("GET", "/api/auth/connect/events", params={"after": cursor, "limit": limit})
+async def events_after(cursor: int, ack_event_ids: Optional[list[str]] = None, limit: int = 100) -> dict:
+    """拉取 cursor 之后的事件，同时确认（ack）上一批已处理的事件"""
+    return await _call("POST", "/api/auth/connect/events",
+                       json={"after_cursor": cursor, "limit": limit, "ack_event_ids": ack_event_ids or []})

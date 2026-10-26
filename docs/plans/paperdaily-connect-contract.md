@@ -1,137 +1,25 @@
-# PaperDaily connect ↔ Read it DEEP（client `read`）线上接口契约（提案）
+# PaperDaily connect ↔ Read it DEEP（client `read`）线上接口
 
-> 状态：**提案**，由 Read it DEEP 侧起草（2026-10-26），供主站 E2/E4a 实现者（Codex）审阅采纳或修改。
-> 上位设计：`docs/plans/research-suite-accounts-design.md` v2.2 §3.1–3.3、§7。本文只把其中未写死的**线上格式**定下来，
-> 不改变 v2.2 的任何语义。双方实现与测试以本文为准；任何一方要改字段，先改本文。
+> **以主站实现为准**：alonegg/new_paperdaily `api/routers/connect.py`、`api/connect.py`（Codex，E2a，2026-10-26 读取）。
+> 本仓库起草的提案（主站 PR #131）已由主站关闭，未采纳；下表记录主站实际格式与 RiD 的对应实现。
+> 上位设计：主站 `docs/plans/research-suite-accounts-design.md` v2.2 §3、§7。
 
-## 0. 约定
+## 主站接口（服务端调用一律 HTTP Basic：`read:<client_secret>`，secret ≥32 字节）
 
-- 主站基址 `PD = https://paperdaily.org`；RiD 基址 `RID = https://read.paperdaily.org`。
-- client 凭证：`client_id=read`，`client_secret`（≥32 字节随机，主站 `connect.clients` 保存哈希；RiD 放部署 vault）。
-  **服务端到服务端的调用一律用 HTTP Basic**（`Authorization: Basic base64(client_id:client_secret)`）。
-- 所有时间为 RFC 3339 UTC（`2026-11-25T03:00:00Z`）。错误体统一 `{"error": "<code>", "error_description": "<中文说明>"}`。
-- 日志不得记录 code、code_verifier、client_secret、委托 key 明文。
+| 接口 | 请求 | 响应 |
+|---|---|---|
+| 浏览器授权页 `GET {PAPERDAILY_WEB_URL}/connect/read` | `client_id=read&response_type=code&redirect_uri=https://read.paperdaily.org/api/auth/paperdaily/callback&state=<43–256 位 base64url>&code_challenge=<43 位>&code_challenge_method=S256`；**不能带 scope**（首发为空） | 主站前端调 `GET /api/auth/connect/request` 与 `POST /api/auth/connect/authorize` 后跳回 `callback?code&state` 或 `?error=access_denied&state` |
+| `POST /api/auth/connect/token` | `{"grant_type":"authorization_code","code","code_verifier","redirect_uri"}` | `{"access_token":"pd_live_…","token_type":"Bearer","scope":"","expires_in":2592000,"expires_at":"…+00:00","grant_id":"grt_…","auth_version":n,"subject":{"issuer":"https://paperdaily.org","sub":"<主站 user_id>"}}`；错误 `400 invalid_grant`；同一 code 重放会撤销已签发的授权 |
+| `POST /api/auth/connect/introspect` | `{"token"}` | `{"active":true,"subject":{…},"grant_id","auth_version","expires_at","scope":""}` 或 `{"active":false}` |
+| `POST /api/auth/connect/revoke` | `{"token"}` 或 `{"grant_id"}`（二选一） | `204` |
+| `POST /api/auth/connect/events` | `{"after_cursor":n,"limit":≤200,"ack_event_ids":[…]}` | `{"events":[…],"has_more":bool,"next_cursor":n}`；事件 `{event_id, client_id, type, version, cursor, occurred_at, subject:{issuer,sub}, grant_id?, auth_version, reason?}`，`type` ∈ `grant.revoked`、`account.deleted` |
 
-## 1. 授权（浏览器跳转）
+要点：共用样例 `backend/tests/fixtures/paperdaily-connect-v1/`（原样复制自主站）由 `tests/test_paperdaily_fixtures.py` 校验。主站**不下发邮箱或资料**；首发为封闭试点，只有 `connect.clients.read.user_allowlist` 里的主站用户能授权；**没有推送 webhook**，事件只能拉取并在下一次请求里 ack。
 
-RiD → 浏览器 302 到：
+## RiD 侧实现
 
-```
-GET {PD}/connect/read
-    ?response_type=code
-    &client_id=read
-    &redirect_uri=https%3A%2F%2Fread.paperdaily.org%2Fapi%2Fauth%2Fpaperdaily%2Fcallback   # 精确匹配注册值
-    &state=<≥32 字节随机，base64url>
-    &code_challenge=<base64url(SHA256(code_verifier))>
-    &code_challenge_method=S256                                                         # 只接受 S256
-    &scope=<空格分隔，可省略=该 client 的默认 scope>
-```
-
-- 主站页面完成登录/免邀请注册与授权确认后，302 回 `redirect_uri?code=<一次性 code>&state=<原样>`。
-- 用户拒绝：`redirect_uri?error=access_denied&state=…`；参数错误且 redirect_uri 可信时 `error=invalid_request`，
-  redirect_uri 不可信时**不跳转**，直接在主站显示错误。
-- code：60 秒、一次性，绑定 user/client/code_challenge/redirect_uri/scope。
-- `return_to`（站内相对路径）由 RiD 自己与 state 一起保存，**不经主站传递**。
-
-## 2. 换取委托 key
-
-```
-POST {PD}/api/auth/connect/token          Authorization: Basic …
-Content-Type: application/json
-{"grant_type": "authorization_code", "code": "…", "code_verifier": "…", "redirect_uri": "…"}
-```
-
-200：
-
-```json
-{
-  "access_token": "pd_…",                 // 委托 key（Bearer），30 天绝对有效期，无 refresh
-  "token_type": "Bearer",
-  "expires_at": "2026-11-25T03:00:00Z",   // = min(30 天, grant 到期)
-  "grant_id": "grt_…",
-  "auth_version": 7,                       // 账户认证版本：改密/找回/全设备退出时 +1
-  "scope": "read:paper read:contrib read:reading write:reading read:resources",
-  "user": {
-    "user_id": "…",                        // 主站稳定用户 ID → RiD external_subject
-    "email": "a@b.edu",
-    "email_verified": true,
-    "display_name": "…",
-    "locale": "zh-CN"
-  }
-}
-```
-
-错误：`400 invalid_grant`（code 过期/已用/challenge 不符/redirect_uri 不符）、`400 invalid_request`、`401 invalid_client`。
-同一 code 第二次使用必须失败，并且（v2.2 安全要求）撤销第一次签发的 key。
-
-## 3. 在线核验
-
-```
-POST {PD}/api/auth/connect/introspect     Authorization: Basic …
-{"token": "pd_…"}
-```
-
-200（凭证有效时）：
-
-```json
-{"active": true, "user_id": "…", "grant_id": "grt_…", "auth_version": 7,
- "expires_at": "2026-11-25T03:00:00Z", "scope": "…"}
-```
-
-key 已撤销/过期/不属于该 client：`200 {"active": false}`（不给原因，不泄露是否存在）。
-client 凭证错误 `401 invalid_client`。主站故障 `5xx`——**RiD 遇 5xx 或超时一律按「无法确认」处理（敏感操作返回 503）**。
-
-RiD 侧缓存规则（v2.2 §3.3）：普通私有读取 ≤60 秒；上传、写入、AI 入队/执行、导出、文件分段读取前实时核验；短 JWT 续签实时核验。
-
-## 4. 撤销（RiD 退出登录）
-
-```
-POST {PD}/api/auth/connect/revoke         Authorization: Basic …
-{"token": "pd_…"}
-```
-
-始终 `200 {}`（幂等）。主站随后照常向 RiD 推送 `grant.revoked`。
-
-## 5. 事件推送（主站 → RiD webhook）
-
-```
-POST {RID}/api/auth/paperdaily/events
-Content-Type: application/json
-X-PD-Client: read
-X-PD-Event-Id: evt_…                       // 稳定，重投不变
-X-PD-Timestamp: 1793000000                 // 本次投递的 Unix 秒，重投重新生成
-X-PD-Signature: v1=<hex(HMAC_SHA256(webhook_secret, "{timestamp}.{event_id}.{hex(sha256(body))}"))>
-```
-
-body：
-
-```json
-{"event_id": "evt_…", "type": "grant.revoked", "version": 1,
- "occurred_at": "2026-10-26T03:00:00Z", "cursor": 1234,
- "user_id": "…", "grant_id": "grt_…", "reason": "password_changed"}
-```
-
-- `type` ∈ `grant.revoked`（`grant_id` 必填；`reason` ∈ `logout|password_changed|password_reset|logout_all|client_disabled|user_revoked|device_evicted`）、
-  `account.deleted`（无 grant_id）、`entitlements.changed`（可选 `policy_version`）。
-- `webhook_secret` 与 `client_secret` 分开保管、分开轮换；轮换期内主站可在 `X-PD-Signature` 里并列两个 `v1=` 值（逗号分隔）。
-- RiD：签名或时间窗（±300 秒）不符 → `401`；`event_id` 已处理 → `200`（幂等）；**先持久化事件与 tombstone，再返回**
-  `200 {"ack": "evt_…"}`。非 2xx 时主站持续重试并报警。
-
-## 6. 游标对账
-
-```
-GET {PD}/api/auth/connect/events?after=<cursor>&limit=100     Authorization: Basic …
-```
-
-200：`{"events": [ <与 webhook body 相同的对象> … ], "next_cursor": 1300, "has_more": false}`。
-`cursor` 在该 client 范围内单调递增。RiD 每 5 分钟从自己记录的最大已处理 cursor 拉取一次，覆盖 webhook 丢失。
-
-## 7. RiD 侧对应行为（供主站验收对照）
-
-| 主站动作 | RiD 必须表现 |
-|---|---|
-| 授权成功 | 按 `user.user_id` 建或关联本地用户（仅在 `email_verified=true` 时按邮箱关联既有本地账号）；建 provider session（委托 key 以 AES-GCM 加密存储，关联数据 = user/client/grant/session）；签发 ≤15 分钟 JWT |
-| JWT 到期 | 浏览器经 RiD 会话 cookie 续签，续签前实时 introspect；`active=false` 或 auth_version 变化 → 会话失效，要求重新登录 |
-| `grant.revoked` | 对应 provider session 立即失效；停止该用户新任务与输出写入；**不删除数据** |
-| `account.deleted` | 删除该用户在 RiD 的论文、文件、批注、译文、工作台、会话；记 tombstone，拦截迟到的导入与写回 |
-| introspect 5xx/超时 | 普通读在 60 秒缓存内照常；敏感操作返回 503「无法确认 PaperDaily 授权」 |
+- 登录：`/api/auth/paperdaily/login` → 主站授权页 → `/callback`（校验 state 与浏览器 cookie、PKCE、`subject.issuer`）→ 建/取 `external_subject = subject.sub` 的本地用户 → provider session（委托 key AES-GCM 加密）→ HttpOnly 会话 cookie。
+- 只按 subject.sub 映射，**永不按邮箱合并**（主站契约 `identity_link`）。既有本地账号：由运维执行 `scripts/link_paperdaily_account.py --email … --subject <sub>` 绑定；`PAPERDAILY_ADMIN_SUBJECTS` 列出的用户登录即为管理员。
+- 本地 JWT ≤15 分钟，只能凭会话 cookie 经 `/api/auth/paperdaily/session` 续签（实时 introspect）；读请求接受 60 秒内的核验，写/上传/AI 实时核验，主站不可用 503；`auth_version` 或 `grant_id` 不符即作废会话。
+- 事件：每 60 秒 `POST /events` 拉取，处理（`grant.revoked` 作废会话、不删数据；`account.deleted` 删除数据并留墓碑）落库后在下一次请求 ack。主站另有推送 worker（`scripts/connect_events.py`，格式与本站 `/api/auth/paperdaily/events` 一致：`X-PD-Signature: v1=HMAC(secret, ts.event_id.sha256(body))`，可并列新旧两个签名）；本站配置 `PAPERDAILY_WEBHOOK_SECRET` 后接收推送，拉取照常作为兜底。
+- 退出：`POST /api/auth/paperdaily/logout` → 主站 revoke（token）+ 本地作废。

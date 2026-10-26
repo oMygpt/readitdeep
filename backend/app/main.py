@@ -75,7 +75,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         jobs.worker = jobs.Worker()
         jobs.worker.start()
 
-    # 关联模式：每 5 分钟按游标向主站补拉事件（webhook 丢失时兜底）
+    # 关联模式：每 60 秒按游标向主站拉取事件（主站目前只提供拉取，撤销与删号经此生效）
     pull_task = None
     if settings.rid_mode == "linked":
         import asyncio as _asyncio
@@ -88,7 +88,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                     await pd_events.pull_once()
                 except Exception as e:
                     print(f"⚠️  PaperDaily 事件对账失败: {e}")
-                await _asyncio.sleep(300)
+                await _asyncio.sleep(60)
 
         pull_task = _asyncio.create_task(_pull_loop())
     
@@ -119,7 +119,6 @@ def check_security_settings(settings) -> None:
     if settings.rid_mode == "linked":
         missing = [name for name, value in (
             ("PAPERDAILY_CLIENT_SECRET", settings.paperdaily_client_secret),
-            ("PAPERDAILY_WEBHOOK_SECRET", settings.paperdaily_webhook_secret),
             ("PAPERDAILY_TOKEN_KEYS", settings.paperdaily_token_keys),
         ) if not value]
         if not settings.public_base_url.startswith("https://") and not settings.debug:

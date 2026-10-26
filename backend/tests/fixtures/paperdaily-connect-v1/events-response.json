@@ -1,0 +1,19 @@
+{
+  "events": [
+    {
+      "event_id": "evt_example",
+      "client_id": "read",
+      "type": "account.deleted",
+      "version": 1,
+      "cursor": 42,
+      "occurred_at": "2026-10-26T03:00:00+00:00",
+      "subject": {
+        "issuer": "https://paperdaily.org",
+        "sub": "u-example"
+      },
+      "auth_version": 8
+    }
+  ],
+  "next_cursor": 42,
+  "has_more": false
+}

@@ -7,10 +7,10 @@
 默认 `RID_MODE=standalone`，行为不变，自托管用户无需处理。只有与 PaperDaily 关联部署（read.paperdaily.org）时才设 `RID_MODE=linked`：
 
 1. 本地注册、密码登录、refresh token 全部关闭，只能「使用 PaperDaily 账号登录」（授权码 + PKCE）。线上格式见 `docs/plans/paperdaily-connect-contract.md`。
-2. 必填：`PUBLIC_BASE_URL`（https）、`PAPERDAILY_CLIENT_SECRET`、`PAPERDAILY_WEBHOOK_SECRET`、`PAPERDAILY_TOKEN_KEYS`（`版本:base64(32 字节)`，逗号分隔可轮换）；缺任何一项拒绝启动。
+2. 必填：`PUBLIC_BASE_URL`（https）、`PAPERDAILY_CLIENT_SECRET`、`PAPERDAILY_TOKEN_KEYS`（`版本:base64(32 字节)`，逗号分隔可轮换）；缺任何一项拒绝启动。可选：`PAPERDAILY_WEB_URL`（授权页站点）、`PAPERDAILY_ADMIN_SUBJECTS`、`PAPERDAILY_WEBHOOK_SECRET`（主站目前不推送）。
 3. 本地 JWT 只有 15 分钟，前端凭 HttpOnly 会话 cookie 自动续签，续签时向主站实时核验。读取接受 60 秒内的核验结果，写入/上传/AI 实时核验，主站不可用时返回 503。
-4. 切换前已有的本地账号：PaperDaily 返回的邮箱已验证且与本地邮箱相同，首次登录时自动关联（保留角色与数据）。
-5. 主站推送 `grant.revoked` 时会话立即失效（不删数据）；`account.deleted` 删除该用户在本站的全部数据并留墓碑，拦截之后的登录与写入。另每 5 分钟按游标补拉事件。
+4. 主站不下发邮箱，切换前已有的本地账号要用 `scripts/link_paperdaily_account.py --email … --subject <主站 user_id>` 绑定，之后用 PaperDaily 登录即进入原账号（角色与数据保留）。
+5. 每 60 秒向主站拉取事件：`grant.revoked` 使会话失效（不删数据）；`account.deleted` 删除该用户在本站的全部数据并留墓碑，拦截之后的登录与写入。
 
 ## 视觉模型解析（2026-10，R3d）
 

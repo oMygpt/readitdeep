@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "issuer": "https://paperdaily.org",
+  "client_id": "read",
+  "authorization_path": "/connect/read",
+  "client_authentication": "HTTP Basic",
+  "redirect_uri": "https://read.paperdaily.org/api/auth/paperdaily/callback",
+  "scope": "",
+  "token_lifetime_seconds": 2592000,
+  "code_lifetime_seconds": 60,
+  "pkce": "S256",
+  "refresh": false,
+  "events_method": "POST",
+  "events_path": "/api/auth/connect/events",
+  "revoke_success_status": 204,
+  "identity_link": "external_provider + subject.sub; never email"
+}

@@ -34,13 +34,17 @@ class Settings(BaseSettings):
     # standalone（默认）：本地账号。linked：只用 PaperDaily 账号登录（见 docs/plans/paperdaily-connect-contract.md）
     rid_mode: Literal["standalone", "linked"] = "standalone"
     public_base_url: str = "http://localhost:3000"  # 本站对外地址，用于拼 OAuth 回调
-    paperdaily_base_url: str = "https://paperdaily.org"
+    paperdaily_base_url: str = "https://paperdaily.org"  # 服务端调用 /api/auth/connect/*
+    paperdaily_web_url: str = "https://paperdaily.org"   # 浏览器授权页 /connect/read 所在站点
+    paperdaily_issuer: str = "https://paperdaily.org"    # 令牌 subject.issuer 必须等于此值
+    # 登录后授予本站管理员的 PaperDaily 用户（subject.sub，逗号分隔）
+    paperdaily_admin_subjects: str = ""
     paperdaily_client_id: str = "read"
     paperdaily_client_secret: str = ""
-    paperdaily_webhook_secret: str = ""
+    paperdaily_webhook_secret: str = ""  # 主站目前只提供拉取接口；配置后才接受推送
     # 委托 key 加密密钥：逗号分隔的 "版本:base64(32 字节)"，第一个用于加密，其余仅用于解密（轮换）
     paperdaily_token_keys: str = ""
-    paperdaily_scopes: str = ""  # 空 = 主站为 read client 配置的默认 scope
+    paperdaily_scopes: str = ""  # 主站首发 read client 不接受任何 scope，保持为空
     # 关联模式下的本地 JWT 有效期（分钟），设计上限 15
     linked_jwt_minutes: int = 15
     
