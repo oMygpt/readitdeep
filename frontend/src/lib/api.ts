@@ -26,10 +26,46 @@ api.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
-// 响应拦截器：处理 401 未授权
+// ==================== PaperDaily 关联模式 ====================
+// 关联模式下本地 JWT 只有 15 分钟，过期后凭 HttpOnly 会话 cookie 向 /api/auth/paperdaily/session 续签
+let linkedMode = false;
+export function setLinkedMode(value: boolean) {
+    linkedMode = value;
+}
+export function isLinkedMode() {
+    return linkedMode;
+}
+
+let renewing: Promise<string | null> | null = null;
+/** 凭会话 cookie 续签本地 JWT；成功返回新 token 并写入 localStorage，失败返回 null */
+export function renewLinkedSession(): Promise<string | null> {
+    if (!renewing) {
+        renewing = fetch('/api/auth/paperdaily/session', { method: 'POST', credentials: 'same-origin' })
+            .then(async (r) => {
+                if (!r.ok) return null;
+                const data = await r.json();
+                localStorage.setItem(TOKEN_KEY, data.access_token);
+                return data.access_token as string;
+            })
+            .catch(() => null)
+            .finally(() => { renewing = null; });
+    }
+    return renewing;
+}
+
+// 响应拦截器：处理 401 未授权（关联模式先尝试续签一次）
 api.interceptors.response.use(
     (response) => response,
-    (error) => {
+    async (error) => {
+        const original = error.config as (typeof error.config & { _ridRetried?: boolean }) | undefined;
+        if (error.response?.status === 401 && linkedMode && original && !original._ridRetried) {
+            original._ridRetried = true;
+            const token = await renewLinkedSession();
+            if (token) {
+                original.headers = { ...(original.headers || {}), Authorization: `Bearer ${token}` };
+                return api(original);
+            }
+        }
         if (error.response?.status === 401) {
             // Token 无效，清除并跳转登录
             localStorage.removeItem(TOKEN_KEY);
@@ -721,6 +757,15 @@ export const authApi = {
     me: async (): Promise<User> => {
         const { data } = await api.get('/auth/me');
         return data;
+    },
+
+    mode: async (): Promise<{ mode: 'standalone' | 'linked'; login_url: string | null; registration_open: boolean }> => {
+        const { data } = await api.get('/auth/mode');
+        return data;
+    },
+
+    paperdailyLogout: async (): Promise<void> => {
+        await fetch('/api/auth/paperdaily/logout', { method: 'POST', credentials: 'same-origin' });
     },
 
     changePassword: async (oldPassword: string, newPassword: string): Promise<void> => {

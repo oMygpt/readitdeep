@@ -2,6 +2,16 @@
 
 自托管用户升级时需要注意的行为变化。按版本倒序。
 
+## PaperDaily 关联登录（2026-10，R4a）
+
+默认 `RID_MODE=standalone`，行为不变，自托管用户无需处理。只有与 PaperDaily 关联部署（read.paperdaily.org）时才设 `RID_MODE=linked`：
+
+1. 本地注册、密码登录、refresh token 全部关闭，只能「使用 PaperDaily 账号登录」（授权码 + PKCE）。线上格式见 `docs/plans/paperdaily-connect-contract.md`。
+2. 必填：`PUBLIC_BASE_URL`（https）、`PAPERDAILY_CLIENT_SECRET`、`PAPERDAILY_WEBHOOK_SECRET`、`PAPERDAILY_TOKEN_KEYS`（`版本:base64(32 字节)`，逗号分隔可轮换）；缺任何一项拒绝启动。
+3. 本地 JWT 只有 15 分钟，前端凭 HttpOnly 会话 cookie 自动续签，续签时向主站实时核验。读取接受 60 秒内的核验结果，写入/上传/AI 实时核验，主站不可用时返回 503。
+4. 切换前已有的本地账号：PaperDaily 返回的邮箱已验证且与本地邮箱相同，首次登录时自动关联（保留角色与数据）。
+5. 主站推送 `grant.revoked` 时会话立即失效（不删数据）；`account.deleted` 删除该用户在本站的全部数据并留墓碑，拦截之后的登录与写入。另每 5 分钟按游标补拉事件。
+
 ## 视觉模型解析（2026-10，R3d）
 
 1. 新解析器 `vlm`：PDF 逐页渲染后交给视觉语言模型（OpenAI 兼容，如 Qwen3-VL）转写为 Markdown，公式为 LaTeX、表格为 Markdown 表格，并按模型给出的坐标从页面裁出图片。设置 `VLM_MODEL` 即启用并排在解析器首位；`VLM_BASE_URL` / `VLM_API_KEY` 为空时沿用主模型的地址与 Key。

@@ -25,6 +25,12 @@ PUBLIC = {
     ("GET", "/api/v1/share/paper/{share_token}/content"): "分享链接，路由内校验 token",
     ("GET", "/api/v1/share/paper/{share_token}/analysis"): "分享链接，路由内校验 token",
     ("GET", "/api/v1/files/images/{paper_id}/{name}"): "签名链接，路由内验签",
+    ("GET", "/api/v1/auth/mode"): "公开：登录方式",
+    ("GET", "/api/auth/paperdaily/login"): "关联登录入口（跳转主站）",
+    ("GET", "/api/auth/paperdaily/callback"): "主站回调，路由内校验 state 与浏览器 cookie",
+    ("POST", "/api/auth/paperdaily/session"): "凭 HttpOnly 会话 cookie，路由内实时核验",
+    ("POST", "/api/auth/paperdaily/logout"): "凭会话 cookie",
+    ("POST", "/api/auth/paperdaily/events"): "主站 webhook，路由内验 HMAC 签名",
 }
 
 

@@ -48,8 +48,21 @@ R3 测试：SQLite 92 passed + PostgreSQL 93 passed。
 | 视觉解析 | 公式、表格、图片可用；失败可回退 | `tests/test_parsing_vlm.py`。2026-10-26 校内 API（`10.9.254.83`，Qwen3-VL-32B-Instruct 解析 + Qwen3.6-35B-A3B 分析）实测 arXiv 1706.03762：15 页视觉解析 24s，标题正确，42k 字，6 张图裁出且位置准确，公式为 LaTeX；上传到可读共 48s。模型对比（同一 3000 字分块翻译）：Qwen3.6-35B-A3B 3.5s、Qwen3.8-27B 3.4s、DeepSeek-V4-Flash 16s、GLM-5.2 35s、Qwen3.8-Flash-Next 73s |
 | 容量参考 | — | 单篇论文完整流程约 20 次模型调用、3.7 分钟（其中翻译 2.5 分钟）。批量通道 2 并发时单进程约每小时 30–40 篇「上传 + 分析」，翻译另计；与入库抽取共用 GPU 时建议保持批量并发 ≤2 |
 
-## R4 / R5
-见计划；依赖主站 E2/E3，届时补充具体标准。
+## R4a 关联登录（RiD 侧）
+| 项 | 标准 | 证据 |
+|---|---|---|
+| 登录链路 | 授权码 + PKCE S256；state 绑定浏览器 cookie；return_to 只接受站内相对路径 | `tests/test_paperdaily_linked.py`（按契约实现的模拟主站）：完整登录与重复登录复用账号、换浏览器的回调被拒、PKCE 篡改与用户拒绝、return_to 绕过样例（`//host`、编码、反斜杠、控制字符）全部回落 `/` |
+| 本地登录关闭 | linked 下注册、密码登录、refresh 均 403 | 同上 |
+| 核验 | 读 60 秒缓存、写实时；主站不可用 503；auth_version 变化失效 | 主站撤销后读取在缓存内仍可、写入 401 且会话作废；主站 503 时写入与续签 503；改密后续签 401 |
+| 事件 | 签名、±300 秒、去重、先落库后 ack；轮换期双签名 | 签名错误/过期 401，重投幂等；`grant.revoked` 作废会话；`account.deleted` 经游标对账删除数据并以墓碑拦截重新登录 |
+| 密钥 | AES-GCM 绑定会话，可轮换 | 密文挪到别的会话无法解密；新增密钥后旧密文仍可解 |
+| 联调 | 与主站真实实现对接 | **待 Codex 完成主站 E2/E4a 后进行**；生产仍为 standalone |
+
+R4a 测试：SQLite 114 passed，PostgreSQL 115 passed。
+
+## R5 部署（2026-10-26）
+- read.paperdaily.org 上线（standalone、自助注册关闭）；公网实测上传 15 页论文 54s 可读、6 张图经签名链接 200、注册 403、`/uploads` 404。
+- 每日备份到 RGW，恢复演练：备份恢复到临时库后论文/用户数与线上一致。
 
 | 配额 | 触发 LLM 的路由按调用者扣 AI 配额，用完 403 且不调用模型 | `tests/test_ai_quota.py`；他人论文上调用 AI 403 且不扣配额 |
 | 前端 | 编译通过；所有直连 fetch / EventSource 带凭证 | `tsc -b` 通过；Vite 构建（编程接口）2.7s 完成。本机 `vite build` CLI 无输出挂起，与改动无关（编程接口同配置可构建），以 CI 的 Docker 构建为准 |

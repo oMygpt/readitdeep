@@ -29,6 +29,20 @@ class Settings(BaseSettings):
     # 是否开放自助注册。关闭后只能由管理员创建账号（第一个账号仍可注册为管理员）；
     # 关联 PaperDaily 后本地注册与密码登录整体关闭
     allow_registration: bool = True
+
+    # ---------- 部署模式 ----------
+    # standalone（默认）：本地账号。linked：只用 PaperDaily 账号登录（见 docs/plans/paperdaily-connect-contract.md）
+    rid_mode: Literal["standalone", "linked"] = "standalone"
+    public_base_url: str = "http://localhost:3000"  # 本站对外地址，用于拼 OAuth 回调
+    paperdaily_base_url: str = "https://paperdaily.org"
+    paperdaily_client_id: str = "read"
+    paperdaily_client_secret: str = ""
+    paperdaily_webhook_secret: str = ""
+    # 委托 key 加密密钥：逗号分隔的 "版本:base64(32 字节)"，第一个用于加密，其余仅用于解密（轮换）
+    paperdaily_token_keys: str = ""
+    paperdaily_scopes: str = ""  # 空 = 主站为 read client 配置的默认 scope
+    # 关联模式下的本地 JWT 有效期（分钟），设计上限 15
+    linked_jwt_minutes: int = 15
     
     # 数据库 (SQLite 本地开发 / PostgreSQL 生产)
     database_url: str = "sqlite"  # 使用 sqlite 自动创建本地数据库

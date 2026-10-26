@@ -6,7 +6,7 @@ Read it DEEP - 用户模型
 
 from datetime import datetime, date
 from typing import Optional
-from sqlalchemy import String, DateTime, Integer, func
+from sqlalchemy import String, DateTime, Index, Integer, func
 from sqlalchemy.orm import Mapped, mapped_column
 import bcrypt
 import uuid
@@ -42,6 +42,9 @@ PLAN_LIMITS = {
 class User(Base):
     """用户表"""
     __tablename__ = "users"
+    __table_args__ = (
+        Index("uq_users_external", "external_provider", "external_subject", unique=True),
+    )
     
     id: Mapped[str] = mapped_column(
         String(36), 
@@ -71,6 +74,10 @@ class User(Base):
     # ================== 邀请相关 ==================
     invited_by: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
     invitation_count: Mapped[int] = mapped_column(Integer, default=0)  # 成功邀请人数
+
+    # 外部身份（关联 PaperDaily 时为 provider="paperdaily"，subject=主站 user_id）
+    external_provider: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    external_subject: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     
     # ================== 时间戳 ==================
     created_at: Mapped[datetime] = mapped_column(
