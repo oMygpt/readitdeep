@@ -56,7 +56,8 @@ R3 测试：SQLite 92 passed + PostgreSQL 93 passed。
 | 核验 | 读 60 秒缓存、写实时；主站不可用 503；auth_version 变化失效 | 主站撤销后读取在缓存内仍可、写入 401 且会话作废；主站 503 时写入与续签 503；改密后续签 401 |
 | 事件 | 签名、±300 秒、去重、先落库后 ack；轮换期双签名 | 签名错误/过期 401，重投幂等；`grant.revoked` 作废会话；`account.deleted` 经游标对账删除数据并以墓碑拦截重新登录 |
 | 密钥 | AES-GCM 绑定会话，可轮换 | 密文挪到别的会话无法解密；新增密钥后旧密文仍可解 |
-| 联调 | 与主站真实实现对接 | **待 Codex 完成主站 E2/E4a 后进行**；生产仍为 standalone |
+| 联调 | 与主站真实实现对接 | 2026-10-27 生产：主站 `connect.clients.read`（白名单仅站长 `u-c1ac8333e87e`、空 scope/operations、secret 仅存哈希，经 `just paperdaily-security-run` 写入，ask 配置读回不变）；RiD 切 `RID_MODE=linked`。切换前备份并列资产清单（1 用户 / 1 论文 / 6 工作台），本地管理员经 `scripts/link_paperdaily_account.py` 显式绑定该 subject。服务端：真实 client 凭证调 introspect（假 token → inactive）、token（假 code → invalid_grant）、events（空列表）；本地密码登录/注册 403；登录跳转参数通过主站 `/request` 校验规则；伪造 state 回登录页；无 cookie 换 token 401。站长浏览器真实登录：22:04:41 跳主站 → 22:04:51 回调 → 22:04:53 换取本地 token 200；本站 provider session 映射到原管理员（role admin），主站 read grant 有效、scope 为空、11-26 到期 |
+| 撤销 | 退出/改密等在本站生效 | 待验证（R4a.8）；当前靠每 60 秒拉取事件，主站尚未部署 read 推送 worker |
 
 R4a 测试：SQLite 114 passed，PostgreSQL 115 passed。
 

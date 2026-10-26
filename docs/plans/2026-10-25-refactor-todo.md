@@ -50,7 +50,9 @@
 - [x] R4a.4 请求核验：读 60 秒缓存、写/AI/上传实时，主站不可用 503
 - [x] R4a.5 退出 revoke；事件 webhook（签名、时间窗、去重、先落库后 ack）；游标补漏；account.deleted 删除 + tombstone
 - [x] R4a.6 前端：「使用 PaperDaily 账号登录」、cookie 续签、401 处理
-- [ ] R4a.7 与主站实现联调（等 Codex 的 E2/E4a）
+- [x] R4a.7a 对齐主站真实实现（subject、拉取 + ack、revoke 204、无邮箱 → 运维脚本绑定、管理员 subject）
+- [x] R4a.7b 与主站生产环境联调（2026-10-27，read.paperdaily.org 切为 linked；主站 read 白名单 1 人）
+- [ ] R4a.8 撤销链路生产验证（退出登录 → 主站 grant.revoked → 本站会话失效）；主站部署 read 推送 worker 后验证推送
 - [ ] R4b `/open` 深链与资源桥接导入、状态机（等主站 E4b）
 - [ ] R4c read-jobs 记账与受信 runner（等主站 E4d）
 - [ ] R4d context-bundle 左栏、阅读记忆回传（E4e）；个人 PD key 模式
