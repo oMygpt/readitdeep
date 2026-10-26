@@ -92,6 +92,21 @@
 6. `jobs` 表（kind = parse / analyze / translate，状态 queued → running → done / failed，attempts、心跳、错误）；进程内 worker 循环认领任务（PostgreSQL `FOR UPDATE SKIP LOCKED`，SQLite `BEGIN IMMEDIATE`），按 kind 限并发；心跳超时的 running 任务重新入队（最多 3 次）。上传、重新分析、翻译改为入队；R2 的 `recover_stuck` 只处理没有任务记录的历史论文。
 7. Token 用量从 `data/token_stats.json`（多进程互相覆盖）迁到 `token_usage` 表（按日、模型、任务累加）。
 
+### 2.7 R4 实施细化（2026-10-26，对齐主站 v2.2）
+
+主站 v2.2（alonegg/new_paperdaily `docs/plans/research-suite-accounts-design.md`）把 RiD 接入拆成 E4a–f，并比本文 §3 更严格。以 v2.2 为准，§3 的旧描述以此节为准更新。主站部分由 Codex 实现，本仓库只做 RiD 侧；双方线上格式见 `paperdaily-connect-contract.md`（同步提为主站 PR #131 待采纳）。
+
+**R4a 关联登录（本节实现）**
+1. `RID_MODE=linked` 时关闭本地注册与密码登录（`/auth/register`、`/auth/login` 返回 403），只能「使用 PaperDaily 账号登录」。`standalone`（默认）行为不变。
+2. 登录：`GET /api/auth/paperdaily/login?return_to=…` 生成 state 与 PKCE S256 verifier（存 `connect_states`，10 分钟，绑定浏览器 cookie），302 到主站；`/callback` 校验 state 与 cookie、用 Basic 凭证换委托 key、按主站 `user_id` 建立或关联本地用户（只有 `email_verified=true` 才按邮箱关联已有本地账号，例如现有管理员）、建 `provider_sessions`，设置 HttpOnly 会话 cookie 后回到站内相对路径。
+3. 委托 key 用 AES-GCM 加密存库：随机 nonce，关联数据 = `user|client|grant|session`，带密钥版本，支持新旧两把密钥并存轮换（`PAPERDAILY_TOKEN_KEYS`）。
+4. 前端仍用短 JWT（≤15 分钟，含 `sid`），**不发 refresh token**。续签只能凭会话 cookie 调 `POST /api/auth/paperdaily/session`，每次实时 introspect；`active=false` 或 `auth_version` 变化即作废会话。
+5. 每个请求检查会话未撤销、未过绝对期限；GET 读取允许 60 秒内的核验结果，POST/PUT/PATCH/DELETE（上传、写入、AI、导出）一律实时核验，主站无法确认时返回 503。
+6. 退出：`POST /api/auth/paperdaily/logout` 调主站 revoke 并作废本地会话。
+7. 事件：`POST /api/auth/paperdaily/events` 校验 HMAC 签名、±300 秒时间窗、按 event_id 去重，先落库再 ack；`grant.revoked` 作废会话（不删数据），`account.deleted` 删除该用户全部 RiD 数据并记 tombstone。worker 每 5 分钟按游标拉取补漏。
+
+**R4b 之后（等主站 E4b–E4d）**：资源桥接导入（`metadata_imported/file_available/…` 状态机）、公共/私有解析缓存隔离、主站 read-jobs 记账与受信 runner、context-bundle 左栏、阅读记忆回传。个人 PD key 模式（独立部署）与之共用同一个 PaperDaily 客户端。
+
 ## 3. 与 PaperDaily 关联（`RID_MODE=linked`）
 
 对应 PaperDaily 设计 v2.1 §3.3、§4.2、§4.3、§5；依赖主站 E2（connect，client `read`）与 E3。

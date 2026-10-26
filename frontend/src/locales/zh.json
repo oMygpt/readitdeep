@@ -49,7 +49,9 @@
         "registerSuccess": "注册成功！正在跳转...",
         "firstUserAdmin": "第一个注册的用户将自动成为管理员",
         "required": "*",
-        "copyright": "© 2024 Read it DEEP. AI Powered Reading."
+        "copyright": "© 2024 Read it DEEP. AI Powered Reading.",
+        "paperdaily": "使用 PaperDaily 账号登录",
+        "paperdailyHint": "Read it DEEP 与 PaperDaily 共用账号。首次登录会请你在 PaperDaily 确认授权。"
     },
     "library": {
         "title": "知识库",
@@ -370,5 +372,11 @@
         "wantMore": "想要更多功能？",
         "registerPromo": "登录后可以添加笔记、高亮、翻译等功能",
         "getStarted": "立即开始"
+    },
+    "open": {
+        "title": "从 PaperDaily 打开论文",
+        "pending": "直接导入 PaperDaily 论文的功能即将开放（需要主站资源接口上线）。现在可以先在知识库上传这篇论文的 PDF。",
+        "toLibrary": "去知识库上传",
+        "paper": "论文 ID"
     }
 }

@@ -74,11 +74,30 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if os.getenv("RID_WORKER", "1") != "0":
         jobs.worker = jobs.Worker()
         jobs.worker.start()
+
+    # 关联模式：每 5 分钟按游标向主站补拉事件（webhook 丢失时兜底）
+    pull_task = None
+    if settings.rid_mode == "linked":
+        import asyncio as _asyncio
+
+        from app.services.paperdaily import events as pd_events
+
+        async def _pull_loop():
+            while True:
+                try:
+                    await pd_events.pull_once()
+                except Exception as e:
+                    print(f"⚠️  PaperDaily 事件对账失败: {e}")
+                await _asyncio.sleep(300)
+
+        pull_task = _asyncio.create_task(_pull_loop())
     
     yield
 
     if jobs.worker is not None:
         await jobs.worker.stop()
+    if pull_task is not None:
+        pull_task.cancel()
     print(f"👋 {settings.app_name} shutting down...")
 
 
@@ -96,6 +115,20 @@ def check_security_settings(settings) -> None:
             print(f"⚠️  {message}")
         else:
             raise RuntimeError(message)
+
+    if settings.rid_mode == "linked":
+        missing = [name for name, value in (
+            ("PAPERDAILY_CLIENT_SECRET", settings.paperdaily_client_secret),
+            ("PAPERDAILY_WEBHOOK_SECRET", settings.paperdaily_webhook_secret),
+            ("PAPERDAILY_TOKEN_KEYS", settings.paperdaily_token_keys),
+        ) if not value]
+        if not settings.public_base_url.startswith("https://") and not settings.debug:
+            missing.append("PUBLIC_BASE_URL（必须是 https）")
+        if missing:
+            raise RuntimeError("RID_MODE=linked 需要配置: " + ", ".join(missing))
+        from app.services.paperdaily.crypto import _keys
+
+        _keys()  # 密钥格式错误时启动即失败
 
 
 def create_app() -> FastAPI:
@@ -127,6 +160,9 @@ def create_app() -> FastAPI:
     
     # API 路由
     app.include_router(api_v1_router, prefix="/api/v1")
+    from app.api.paperdaily_auth import router as paperdaily_auth_router
+
+    app.include_router(paperdaily_auth_router, prefix="/api/auth/paperdaily", tags=["PaperDaily Auth"])
     
     @app.get("/health")
     async def health_check():

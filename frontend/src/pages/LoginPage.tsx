@@ -15,7 +15,7 @@ export default function LoginPage() {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const location = useLocation();
-    const { login, isLoading: authLoading } = useAuth();
+    const { login, isLoading: authLoading, authMode, registrationOpen } = useAuth();
 
     const [mode, setMode] = useState<'login' | 'register'>('login');
     const [email, setEmail] = useState('');
@@ -27,6 +27,8 @@ export default function LoginPage() {
     const [isLoading, setIsLoading] = useState(false);
 
     const from = (location.state as { from?: string })?.from || '/library';
+    // PaperDaily 回调失败时带回的错误信息
+    const callbackError = new URLSearchParams(location.search).get('error') || '';
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -86,6 +88,35 @@ export default function LoginPage() {
         );
     }
 
+    if (authMode === 'linked') {
+        const loginHref = `/api/auth/paperdaily/login?return_to=${encodeURIComponent(from)}`;
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-background p-4">
+                <div className="w-full max-w-md bg-surface rounded-2xl shadow-xl border border-border p-8 md:p-10 text-center">
+                    <div className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-2xl mb-4">
+                        <BookOpen className="w-8 h-8 text-primary" />
+                    </div>
+                    <h1 className="text-3xl font-serif font-bold text-content-main mb-2">{t('login.title')}</h1>
+                    <p className="text-content-muted mb-8">{t('login.subtitle')}</p>
+                    {callbackError && (
+                        <div className="flex items-center gap-2 p-3 mb-4 bg-error/10 border border-error/20 rounded-lg text-error text-sm text-left">
+                            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                            <span>{callbackError}</span>
+                        </div>
+                    )}
+                    <a
+                        href={loginHref}
+                        className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-lg bg-primary text-white font-medium hover:bg-primary/90 transition-colors"
+                    >
+                        <LogIn className="w-4 h-4" />
+                        {t('login.paperdaily')}
+                    </a>
+                    <p className="text-xs text-content-muted mt-4">{t('login.paperdailyHint')}</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen flex items-center justify-center bg-background p-4">
             <div className="w-full max-w-md bg-surface rounded-2xl shadow-xl border border-border p-8 md:p-10">
@@ -110,7 +141,7 @@ export default function LoginPage() {
                         <LogIn className="w-4 h-4" />
                         {t('login.login')}
                     </button>
-                    <button
+                    {registrationOpen && <button
                         onClick={() => { setMode('register'); setError(''); setSuccess(''); }}
                         className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md text-sm font-medium transition-all ${mode === 'register'
                             ? 'bg-surface text-content-main shadow-sm'
@@ -119,7 +150,7 @@ export default function LoginPage() {
                     >
                         <UserPlus className="w-4 h-4" />
                         {t('login.register')}
-                    </button>
+                    </button>}
                 </div>
 
                 {/* Error/Success Messages */}

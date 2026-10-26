@@ -6,7 +6,7 @@ Read it DEEP - 认证 API
 
 from datetime import datetime, timedelta
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
@@ -61,15 +61,18 @@ class UserResponse(BaseModel):
 
 # ================== JWT 工具 ==================
 
-def create_access_token(user_id, role: str) -> str:
-    """创建访问令牌"""
+def create_access_token(user_id, role: str, *, sid: Optional[str] = None, minutes: Optional[int] = None) -> str:
+    """创建访问令牌。关联模式带 sid（provider session）且有效期 ≤15 分钟"""
+    lifetime = timedelta(minutes=minutes) if minutes else timedelta(hours=JWT_EXPIRATION_HOURS)
     payload = {
         "sub": str(user_id),  # Convert UUID to string
         "role": role,
         "type": "access",
-        "exp": datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS),
+        "exp": datetime.utcnow() + lifetime,
         "iat": datetime.utcnow(),
     }
+    if sid:
+        payload["sid"] = sid
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
@@ -104,6 +107,7 @@ def decode_token(token: str) -> dict:
 # ================== 依赖注入 ==================
 
 async def get_current_user(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db: AsyncSession = Depends(get_db),
 ) -> User:
@@ -137,6 +141,13 @@ async def get_current_user(
             detail="账户已禁用",
         )
 
+    if settings.rid_mode == "linked":
+        # 关联模式：令牌必须来自 PaperDaily 会话；读取接受 60 秒内的核验，写入/上传/AI 实时核验
+        from app.services.paperdaily import sessions as pd_sessions
+
+        sensitive = request.method not in ("GET", "HEAD", "OPTIONS")
+        await pd_sessions.verify(payload.get("sid"), user.id, sensitive=sensitive)
+
     return user
 
 
@@ -153,6 +164,7 @@ async def get_current_admin(
 
 
 async def get_optional_user(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)),
     db: AsyncSession = Depends(get_db),
 ) -> Optional[User]:
@@ -160,12 +172,28 @@ async def get_optional_user(
     if not credentials:
         return None
     try:
-        return await get_current_user(credentials, db)
+        return await get_current_user(request, credentials, db)
     except HTTPException:
         return None
 
 
 # ================== API 端点 ==================
+
+def _deny_in_linked_mode() -> None:
+    if settings.rid_mode == "linked":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="本站使用 PaperDaily 账号登录")
+
+
+@router.get("/mode")
+async def auth_mode():
+    """公开：前端据此决定显示本地登录还是「使用 PaperDaily 账号登录」"""
+    linked = settings.rid_mode == "linked"
+    return {
+        "mode": settings.rid_mode,
+        "login_url": "/api/auth/paperdaily/login" if linked else None,
+        "registration_open": (not linked) and settings.allow_registration,
+    }
+
 
 @router.post("/register", response_model=TokenResponse)
 async def register(
@@ -178,6 +206,7 @@ async def register(
     - 第一个用户自动成为管理员
     - 返回 JWT tokens
     """
+    _deny_in_linked_mode()
     # 检查邮箱是否已存在
     result = await db.execute(select(User).where(User.email == data.email))
     if result.scalar_one_or_none():
@@ -223,6 +252,7 @@ async def login(
     db: AsyncSession = Depends(get_db),
 ):
     """用户登录"""
+    _deny_in_linked_mode()
     result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalar_one_or_none()
     
@@ -260,6 +290,7 @@ async def refresh_token(
     db: AsyncSession = Depends(get_db),
 ):
     """刷新访问令牌"""
+    _deny_in_linked_mode()
     if credentials is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="请先登录")
     payload = decode_token(credentials.credentials)

@@ -29,6 +29,7 @@ dependencies = [
     "alembic>=1.13",
     "psycopg[binary]>=3.2",
     "pymupdf>=1.24",
+    "cryptography>=42",
 ]
 
 [project.optional-dependencies]

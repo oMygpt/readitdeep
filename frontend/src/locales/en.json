@@ -49,7 +49,9 @@
         "registerSuccess": "Registration successful! Redirecting...",
         "firstUserAdmin": "The first registered user will automatically become an administrator",
         "required": "*",
-        "copyright": "© 2024 Read it DEEP. AI Powered Reading."
+        "copyright": "© 2024 Read it DEEP. AI Powered Reading.",
+        "paperdaily": "Sign in with PaperDaily",
+        "paperdailyHint": "Read it DEEP uses your PaperDaily account. You will be asked to approve access on PaperDaily the first time."
     },
     "library": {
         "title": "Library",
@@ -340,5 +342,11 @@
         "addTag": "Add",
         "saving": "Saving...",
         "save": "Save"
+    },
+    "open": {
+        "title": "Open a paper from PaperDaily",
+        "pending": "Importing PaperDaily papers directly is coming soon (it needs the PaperDaily resource API). For now, upload the paper's PDF in your library.",
+        "toLibrary": "Go to library",
+        "paper": "Paper ID"
     }
 }

@@ -28,6 +28,7 @@ import LibraryPage from './pages/LibraryPage';
 import ReaderPage from './pages/ReaderPage';
 import WorkbenchPage from './pages/WorkbenchPage';
 import SettingsPage from './pages/SettingsPage';
+import OpenPage from './pages/OpenPage';
 import LoginPage from './pages/LoginPage';
 import AdminPage from './pages/AdminPage';
 import TeamsPage from './pages/TeamsPage';
@@ -59,7 +60,7 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+    return <Navigate to="/login" state={{ from: location.pathname + location.search }} replace />;
   }
 
   return <>{children}</>;
@@ -103,6 +104,7 @@ function AppRoutes() {
       <Route path="tasks/:taskId" element={<ProtectedRoute><TaskDetailsPage /></ProtectedRoute>} />
       <Route path="admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
       <Route path="settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+      <Route path="open" element={<ProtectedRoute><OpenPage /></ProtectedRoute>} />
 
       {/* 404 重定向 */}
       <Route path="*" element={<Navigate to="/library" replace />} />

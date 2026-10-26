@@ -43,29 +43,19 @@
 - [x] R3d 视觉模型解析（校内 Qwen3-VL，逐页转写 + 裁图，排在 GROBID 之前）
 - [x] R3c.3 启动时立即接管本机已退出进程留下的任务（不必等心跳超时）
 
-## R4 PaperDaily 关联（依赖主站 E2/E3）
-- [ ] R4.1 `RID_MODE=linked` 登录与身份映射
-- [ ] R4.2 `/open` 深链 + 幂等导入；状态机扩展 metadata_imported / file_available（自 R2 移入）
-- [ ] R4.3 context-bundle 左栏、回传研究记忆、删号 webhook
-- [ ] R4.4 credits 计量对接
-- [ ] R4.5 端到端验收
+## R4 PaperDaily 关联（设计 §2.7，契约 paperdaily-connect-contract.md；主站侧由 Codex 实现）
+- [x] R4a.1 `RID_MODE=linked` 关闭本地注册/密码登录；`GET /api/v1/auth/mode` 供前端判断
+- [x] R4a.2 授权码 + PKCE 登录、callback、外部身份映射（email_verified 才按邮箱关联）
+- [x] R4a.3 provider_sessions：委托 key AES-GCM 加密（双密钥轮换）、绝对期限、≤15 分钟 JWT、会话续签实时核验
+- [x] R4a.4 请求核验：读 60 秒缓存、写/AI/上传实时，主站不可用 503
+- [x] R4a.5 退出 revoke；事件 webhook（签名、时间窗、去重、先落库后 ack）；游标补漏；account.deleted 删除 + tombstone
+- [x] R4a.6 前端：「使用 PaperDaily 账号登录」、cookie 续签、401 处理
+- [ ] R4a.7 与主站实现联调（等 Codex 的 E2/E4a）
+- [ ] R4b `/open` 深链与资源桥接导入、状态机（等主站 E4b）
+- [ ] R4c read-jobs 记账与受信 runner（等主站 E4d）
+- [ ] R4d context-bundle 左栏、阅读记忆回传（E4e）；个人 PD key 模式
 
 ## R5 部署
-- [ ] R5.1 校内主机 compose + PostgreSQL + cloudflared → read.paperdaily.org
-- [ ] R5.2 备份与监控
-
-## R1 期间顺带处理
-- [x] `ai_assist` 两个接口把 AsyncSession 当同步用（实际不可用）→ 改为 async，并补论文/批注访问校验与配额
-- [x] 删除被 papers 路由遮蔽的 `api/v1/analysis.py`（同路径同方法，从未生效）
-- [x] 上传文件名去路径成分；`get_current_user` 不再把 token 内容写日志；缺凭证统一 401
-- [x] nginx `location ^~ /api`（否则带图片扩展名的 API 地址被静态规则截走）；SSE 关闭代理缓冲
-- [x] 前端 `authFetch` / `AuthEventSource`：原生 EventSource 无法带 Authorization 头
-- [x] `docs/UPGRADING.md` 记录对自托管用户的行为变化
-
-## R2 期间顺带处理
-- [x] 删除死代码 `services/analysis.py`、`get_all_categories`（跨用户读取分类名）
-- [x] 删除论文时一并删除解析出的图片目录
-- [x] 写入时间统一 UTC（原来混用本地时间与 UTC，影响「卡住任务」判断和排序）
-- [x] SQLite 合并写使用 `BEGIN IMMEDIATE`（无 FOR UPDATE 时防止跨进程丢更新）
-- [x] 旧数据里存成 JSON 字符串的标签，读取时统一为列表
-- [x] PostgreSQL 时区：会话 UTC、模型比较统一 `as_utc()`；CI 增加 PostgreSQL 矩阵
+- [x] R5.1 k8s-dslab-1-7 同机部署：独立 RBD 池 readitdeep-rbd（hybird）、独立 pg16 容器、paperdaily 隧道加 read.paperdaily.org（2026-10-26，运维仓库 `just readitdeep-*`）
+- [x] R5.2 每日备份到 RGW（pg_dump 30 天 + 上传文件同步），恢复演练通过
+- [x] R5.3 生产模型：校内推理 API（Qwen3-VL-32B 解析、Qwen3.6-35B-A3B 翻译/分析），自助注册关闭
