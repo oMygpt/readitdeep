@@ -1,4 +1,4 @@
-"""关联模式（RID_MODE=linked）端到端测试：按 docs/plans/paperdaily-connect-contract.md 实现的模拟主站。"""
+"""关联模式（RID_MODE=linked）端到端测试：模拟主站按其真实实现（alonegg/new_paperdaily api/routers/connect.py）的线上格式响应。"""
 
 import base64
 import hashlib
@@ -21,13 +21,20 @@ KEY_V2 = base64.b64encode(b"2" * 32).decode()
 BASIC = "Basic " + base64.b64encode(b"read:client-secret").decode()
 
 
+ISSUER = "https://paperdaily.org"
+
+
+def subj(uid):
+    return {"issuer": ISSUER, "sub": uid}
+
+
 class FakePaperDaily:
-    """主站 connect 接口的最小实现：授权码 + PKCE、introspect、revoke、事件游标。"""
+    """主站 connect 接口的最小实现：授权码 + PKCE、introspect、revoke、事件拉取 + ack。"""
 
     def __init__(self):
+        self.acked = []
         self.codes = {}
         self.tokens = {}  # token -> {user, grant_id, auth_version, active}
-        self.users = {"pd-u1": {"user_id": "pd-u1", "email": "alice@uni.edu", "email_verified": True, "display_name": "Alice"}}
         self.events = []
         self.down = False
         self.revoked = []
@@ -56,26 +63,29 @@ class FakePaperDaily:
             token = "pd_" + secrets.token_urlsafe(16)
             uid = c["user_id"]
             self.tokens[token] = {"user_id": uid, "grant_id": "grt_" + secrets.token_hex(4), "active": True}
-            exp = (datetime.now(timezone.utc) + timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            exp = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
             t = self.tokens[token]
-            return httpx.Response(200, json={"access_token": token, "token_type": "Bearer", "expires_at": exp,
-                                             "grant_id": t["grant_id"], "auth_version": self.auth_version[uid],
-                                             "scope": "read:paper", "user": self.users[uid]})
+            return httpx.Response(200, json={"access_token": token, "token_type": "Bearer", "scope": "",
+                                             "expires_in": 2592000, "expires_at": exp, "grant_id": t["grant_id"],
+                                             "auth_version": self.auth_version[uid], "subject": subj(uid)})
         if path == "/api/auth/connect/introspect":
             t = self.tokens.get(body.get("token"))
             if not t or not t["active"]:
                 return httpx.Response(200, json={"active": False})
-            return httpx.Response(200, json={"active": True, "user_id": t["user_id"], "grant_id": t["grant_id"],
-                                             "auth_version": self.auth_version[t["user_id"]], "expires_at": "2099-01-01T00:00:00Z"})
+            return httpx.Response(200, json={"active": True, "subject": subj(t["user_id"]), "grant_id": t["grant_id"],
+                                             "auth_version": self.auth_version[t["user_id"]],
+                                             "expires_at": "2099-01-01T00:00:00+00:00", "scope": ""})
         if path == "/api/auth/connect/revoke":
             self.revoked.append(body.get("token"))
             if body.get("token") in self.tokens:
                 self.tokens[body["token"]]["active"] = False
-            return httpx.Response(200, json={})
-        if path == "/api/auth/connect/events":
-            after = int(request.url.params.get("after", 0))
-            page = [e for e in self.events if e["cursor"] > after]
-            return httpx.Response(200, json={"events": page, "next_cursor": max([e["cursor"] for e in page] or [after]), "has_more": False})
+            return httpx.Response(204)
+        if path == "/api/auth/connect/events" and request.method == "POST":
+            self.acked += body.get("ack_event_ids", [])
+            after = int(body.get("after_cursor", 0))
+            page = [e for e in self.events if e["cursor"] > after][: body.get("limit", 100)]
+            return httpx.Response(200, json={"events": page, "has_more": False,
+                                             "next_cursor": page[-1]["cursor"] if page else after})
         return httpx.Response(404, json={"error": "not_found"})
 
     def grant_of(self, user_id="pd-u1"):
@@ -86,7 +96,7 @@ class FakePaperDaily:
 def pd(monkeypatch):
     s = get_settings()
     for k, v in {
-        "rid_mode": "linked", "public_base_url": "https://read.test", "paperdaily_base_url": "https://pd.test",
+        "rid_mode": "linked", "public_base_url": "https://read.test", "paperdaily_base_url": "https://pd.test", "paperdaily_web_url": "https://pd.test",
         "paperdaily_client_id": "read", "paperdaily_client_secret": "client-secret",
         "paperdaily_webhook_secret": "hook-secret", "paperdaily_token_keys": f"v2:{KEY_V2},v1:{KEY_V1}",
     }.items():
@@ -123,11 +133,11 @@ async def test_full_login_flow(pd, https_client):
     r = await login(c, pd)
     assert r.status_code == 302 and r.headers["location"] == "/open?paper=p1"
     h, body = await token(c)
-    assert body["user"]["email"] == "alice@uni.edu" and body["expires_in"] <= 15 * 60
+    assert body["user"]["email"] == "pd-pd-u1@users.paperdaily.invalid" and body["expires_in"] <= 15 * 60
     assert (await c.get("/api/v1/library/", headers=h)).status_code == 200
     # 本地注册、密码登录、refresh 一律关闭
     assert (await c.post("/api/v1/auth/register", json={"email": "x@y.org", "password": "x1234567"})).status_code == 403
-    assert (await c.post("/api/v1/auth/login", json={"email": "alice@uni.edu", "password": "x"})).status_code == 403
+    assert (await c.post("/api/v1/auth/login", json={"email": "a@uni.edu", "password": "x"})).status_code == 403
     # 再次登录复用同一本地用户
     await login(c, pd)
     _, again = await token(c)
@@ -195,7 +205,7 @@ async def test_webhook_grant_revoked(pd, https_client):
     c = https_client
     await login(c, pd)
     h, _ = await token(c)
-    event = {"event_id": "evt_1", "type": "grant.revoked", "version": 1, "cursor": 1, "user_id": "pd-u1",
+    event = {"event_id": "evt_1", "type": "grant.revoked", "version": 1, "cursor": 1, "subject": subj("pd-u1"),
              "grant_id": pd.grant_of(), "reason": "password_changed", "occurred_at": "2026-10-26T00:00:00Z"}
     body, headers = signed(event)
     r = await c.post("/api/auth/paperdaily/events", content=body, headers=headers)
@@ -229,9 +239,10 @@ async def test_account_deleted_removes_data_and_blocks_relogin(pd, https_client)
     uid = body["user"]["id"]
     store.set("p-del", {"id": "p-del", "filename": "a.pdf", "status": "completed", "user_id": uid})
     await c.post("/api/v1/workbench/items", json={"type": "note", "title": "t", "description": "d", "source_paper_id": "p-del"}, headers=h)
-    pd.events.append({"event_id": "evt_del", "type": "account.deleted", "version": 1, "cursor": 7, "user_id": "pd-u1",
-                      "occurred_at": "2026-10-26T00:00:00Z"})
-    assert await events.pull_once() == 1  # 走游标对账路径
+    pd.events.append({"event_id": "evt_del", "client_id": "read", "type": "account.deleted", "version": 1, "cursor": 7,
+                      "subject": subj("pd-u1"), "auth_version": 4, "occurred_at": "2026-10-26T00:00:00+00:00"})
+    assert await events.pull_once() == 1  # 主站只提供拉取
+    assert pd.acked == ["evt_del"]  # 处理完才 ack
     assert store.get("p-del") is None and store.get_by_user(uid) == []
     from app.core.workbench_store import workbench_store
 
@@ -241,23 +252,30 @@ async def test_account_deleted_removes_data_and_blocks_relogin(pd, https_client)
     assert await events.pull_once() == 0  # 已处理的不重复
 
 
-async def test_email_linking_requires_verified_email(pd, https_client):
-    # 切换到关联模式之前就存在的本地管理员（与 PaperDaily 同邮箱）
+async def test_existing_local_account_linked_by_subject(pd, https_client):
+    """主站不下发邮箱：既有本地账号（如原管理员）由运维脚本按 subject 绑定后，登录即进入该账号。"""
     from app.core.database import async_session_maker
     from app.models.user import User
 
     async with async_session_maker() as db:
-        admin = User(email="alice@uni.edu", role="admin", is_active=True)
+        admin = User(email="admin@uni.edu", role="admin", is_active=True,
+                     external_provider="paperdaily", external_subject="pd-u1")
         admin.set_password("x1234567")
         db.add(admin)
         await db.commit()
-    pd.users["pd-u1"]["email_verified"] = False
-    r = await login(https_client, pd)
-    assert r.headers["location"].startswith("/login?error=")
-    pd.users["pd-u1"]["email_verified"] = True
     await login(https_client, pd)
     _, body = await token(https_client)
-    assert body["user"]["role"] == "admin"  # 关联到既有本地账号，保留角色与数据
+    assert body["user"]["email"] == "admin@uni.edu" and body["user"]["role"] == "admin"
+
+
+async def test_admin_subjects_and_issuer_check(pd, https_client, monkeypatch):
+    monkeypatch.setattr(get_settings(), "paperdaily_admin_subjects", "pd-u1")
+    await login(https_client, pd)
+    _, body = await token(https_client)
+    assert body["user"]["role"] == "admin"
+    monkeypatch.setattr(get_settings(), "paperdaily_issuer", "https://other.example")
+    r = await login(https_client, pd)
+    assert r.headers["location"].startswith("/login?error=")
 
 
 async def test_logout_revokes_at_paperdaily(pd, https_client):

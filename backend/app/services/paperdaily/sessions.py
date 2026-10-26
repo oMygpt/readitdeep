@@ -87,8 +87,7 @@ async def consume_state(state: str, browser_nonce: Optional[str]) -> ConnectStat
 # ---------------- 用户映射与会话 ----------------
 
 
-async def _find_or_link_user(db, info: dict) -> User:
-    subject = str(info["user_id"])
+async def _find_or_link_user(db, subject: str, info: dict) -> User:
     tomb = await db.get(AccountTombstone, (PROVIDER, subject))
     if tomb is not None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "该 PaperDaily 账号已删除")
@@ -104,10 +103,15 @@ async def _find_or_link_user(db, info: dict) -> User:
             local.external_provider, local.external_subject = PROVIDER, subject
             user = local
     if user is None:
-        user = User(email=email or f"{subject}@users.paperdaily.invalid", username=info.get("display_name") or None,
+        # 主站首发不下发邮箱等资料（scope 为空）：用占位邮箱，只作本站内部唯一键
+        user = User(email=email or f"pd-{subject}@users.paperdaily.invalid",
+                    username=info.get("display_name") or "PaperDaily 用户",
                     role="user", external_provider=PROVIDER, external_subject=subject)
         user.set_password(secrets.token_urlsafe(32))  # 不可用的随机密码：关联模式不允许密码登录
         db.add(user)
+    admins = {x.strip() for x in get_settings().paperdaily_admin_subjects.split(",") if x.strip()}
+    if subject in admins:
+        user.role = "admin"
     if user.is_active is False:  # 新建对象在入库前为 None（列默认值 True）
         raise HTTPException(status.HTTP_403_FORBIDDEN, "账户已禁用")
     user.last_login = utcnow()
@@ -115,13 +119,20 @@ async def _find_or_link_user(db, info: dict) -> User:
 
 
 async def complete_login(token_response: dict) -> tuple[User, ProviderSession]:
-    info = token_response.get("user") or {}
-    if not info.get("user_id") or not token_response.get("access_token") or not token_response.get("grant_id"):
+    subject_obj = token_response.get("subject") or {}
+    info = token_response.get("user") or {}  # 主站目前不下发；将来若下发邮箱可用于关联既有本地账号
+    subject = str(subject_obj.get("sub") or "") if isinstance(subject_obj, dict) else ""
+    if not subject or not token_response.get("access_token") or not token_response.get("grant_id"):
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "PaperDaily 返回的授权信息不完整")
-    expires = as_utc(datetime.fromisoformat(token_response["expires_at"].replace("Z", "+00:00")))
+    if subject_obj.get("issuer") != get_settings().paperdaily_issuer:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "PaperDaily 授权签发方不符")
+    if token_response.get("expires_at"):
+        expires = as_utc(datetime.fromisoformat(str(token_response["expires_at"]).replace("Z", "+00:00")))
+    else:
+        expires = utcnow() + timedelta(seconds=int(token_response.get("expires_in") or 0))
     now = utcnow()
     async with async_session_maker() as db:
-        user = await _find_or_link_user(db, info)
+        user = await _find_or_link_user(db, subject, info)
         await db.flush()
         sid = secrets.token_urlsafe(32)
         aad = crypto.associated_data(user.id, get_settings().paperdaily_client_id, token_response["grant_id"], sid)

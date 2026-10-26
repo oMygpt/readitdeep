@@ -47,6 +47,17 @@ def verify_signature(headers: Mapping[str, str], body: bytes, now: Optional[floa
     return any(hmac.compare_digest(expected, p) for p in provided)
 
 
+def subject_of(event: dict) -> Optional[str]:
+    """主站事件里的用户标识：subject.sub（并核对 issuer）；兼容旧提案里的 user_id"""
+    subject = event.get("subject")
+    if isinstance(subject, dict):
+        if subject.get("issuer") != get_settings().paperdaily_issuer:
+            logger.warning("Event %s from unexpected issuer %s ignored", event.get("event_id"), subject.get("issuer"))
+            return None
+        return str(subject.get("sub") or "") or None
+    return str(event["user_id"]) if event.get("user_id") else None
+
+
 async def handle(event: dict) -> bool:
     """幂等处理一个事件。返回 True 表示本次新处理，False 表示此前已处理。"""
     event_id = str(event.get("event_id") or "")
@@ -65,8 +76,8 @@ async def handle(event: dict) -> bool:
     if etype == "grant.revoked" and event.get("grant_id"):
         n = await sessions.revoke_grant(str(event["grant_id"]), str(event.get("reason") or "grant_revoked"))
         logger.info("grant.revoked %s → %d sessions", event["grant_id"], n)
-    elif etype == "account.deleted" and event.get("user_id"):
-        await sessions.delete_account(str(event["user_id"]))
+    elif etype == "account.deleted" and subject_of(event):
+        await sessions.delete_account(subject_of(event))
     elif etype not in KNOWN_TYPES:
         logger.warning("Unknown PaperDaily event type %s (%s) recorded without action", etype, event_id)
 
@@ -87,11 +98,16 @@ async def pull_once() -> int:
     """从上次处理到的游标开始补拉事件。返回处理条数。"""
     cursor = await last_cursor()
     handled = 0
+    acks: list[str] = []
     while True:
-        page = await client.events_after(cursor)
+        page = await client.events_after(cursor, acks)
+        acks = []
         for event in page.get("events") or []:
             if await handle(event):
                 handled += 1
+            acks.append(str(event["event_id"]))  # 先落库处理，下一次请求再 ack
         cursor = int(page.get("next_cursor") or cursor)
         if not page.get("has_more"):
+            if acks:
+                await client.events_after(cursor, acks)
             return handled
