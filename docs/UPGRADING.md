@@ -2,6 +2,24 @@
 
 自托管用户升级时需要注意的行为变化。按版本倒序。
 
+## 系列站：题录/PDF 分离、按篇计费、配置分层（2026-10，R6）
+
+独立模式（`RID_MODE=standalone`）行为基本不变，只新增「阅读与翻译偏好」（目标语言、译文风格、术语表、解析质量、自动翻译，`GET/PUT /api/v1/preferences`）。自动翻译在独立模式下默认关闭，需要用户自己打开。
+
+关联模式（`RID_MODE=linked`）：
+1. **配置分层**：数据库里所有 `*_api_key`、`*_url`、`llm_mode / translation_mode / mineru_mode`、嵌入配置一律不生效，写接口返回 400，只认部署层环境变量。管理员只能从 `ALLOWED_MODELS`（逗号分隔）中为各任务选模型。用户只能改偏好。
+2. **题录与 PDF 分离**：
+   - `POST /api/v1/papers/import/paperdaily`（以及 `/collection`、`/review`）免费导入主站题录，论文状态为 `metadata`；
+   - 补传 PDF 用 `POST /papers/{id}/pdf`，抓取开放获取 PDF 用 `POST /papers/{id}/fetch-pdf`；白名单为 `OA_PDF_HOSTS`（默认 arXiv），大小上限为 `OA_PDF_MAX_BYTES`。
+3. **按篇计费**：每个用户每个 PDF 内容计费一次，覆盖解析、翻译与分析。
+   - `READ_BILLING=off`：只计篇数。这是默认值，用于主站计费开通前。
+   - `READ_BILLING=paperdaily`：经主站 read-jobs 预扣、结算，需要 `PAPERDAILY_RUNNER_SECRET`、`PAPERDAILY_ASSERTION_SECRET`（各 ≥32 字符，与主站配置一致），缺任一项拒绝启动。
+   - 注册用户每周期 `READ_FREE_PAPER_LIMIT` 篇（默认 5），周期 `READ_FREE_PAPER_PERIOD=month|lifetime`；Pro、机构、管理员不限篇数。
+   - 被拦下（待确认价格、积分不足、达到篇数）的 PDF 会保留，论文停在 `pdf_pending`，可以调 `POST /papers/{id}/process` 重试。
+4. **交互 AI**（问答、划词等）不扣积分，按档位限制每日次数：`READ_CHAT_DAILY_LIMIT_FREE`（默认 50）、`READ_CHAT_DAILY_LIMIT_PAID`（默认 300）。全文翻译已包含在每篇价格里。
+5. `PAPERDAILY_SCOPES` 要等主站 read client 开放对应 scope（主站 issue P1）后再设置为 `read:paper read:contrib read:history read:reading write:reading`。提前设置会导致主站拒绝授权请求，所有人都无法登录。在此之前，导入接口返回 403「授权不包含此操作」。
+6. 迁移 `0005`：新增 `read_charges` 表，`provider_sessions` 增加 `key_id` 列。主站 token 响应带 `key_id` 后才能签 read-jobs（主站 issue P9）。
+
 ## PaperDaily 关联登录（2026-10，R4a）
 
 默认 `RID_MODE=standalone`，行为不变，自托管用户无需处理。只有与 PaperDaily 关联部署（read.paperdaily.org）时才设 `RID_MODE=linked`：

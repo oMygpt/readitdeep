@@ -86,6 +86,19 @@ https://read.paperdaily.org/open?review=<query_history_id>&from=daily
 
 在 token 或 introspect 响应里可选增加 `display_name`（用户在主站设置的昵称，不含邮箱），供 RiD 小组成员列表显示。不做的话，RiD 让用户在本站自己设置昵称。
 
+## P9 返回委托 key 的 key_id
+
+read-jobs 的 client assertion 会把 `key_id` 签进去，但 token 和 introspect 的响应都不返回它。请在两处响应中增加 `key_id`（只是标识，不是秘密）。
+
+## P10 read-jobs 共享签名夹具
+
+请提供 `tests/fixtures/read-jobs-v1/`，内容包括：
+- preflight 回执的样例；
+- client assertion 与 runner assertion 的签名样例，并明确签名所用的 path 是完整路径还是子应用内的相对路径；
+- create、claim、heartbeat、complete 的请求和响应样例。
+
+RiD 会原样复制进自己的测试。
+
 ## 验收与对齐
 
 - 每项 PR 合并后在本 issue 回复 PR 链接和生产配置读回（脱敏）。

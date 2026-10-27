@@ -74,9 +74,11 @@ R1 本地测试：`uv run pytest -q` → 53 passed。
 
 | 项 | 标准 | 证据 |
 |---|---|---|
-| 配置分层 | linked 下数据库里的 key/地址不生效；写入返回 400；用户只能写偏好白名单；模型名必须在 ALLOWED_MODELS | 待测 |
-| 题录与 PDF | 导入题录不扣分、幂等；补传/抓取 PDF 后才进入解析；抓取只走白名单且拒内网、非 PDF、超 50MB | 待测 |
-| 按篇计费 | 同一用户同一内容哈希只计 1 次；失败冲正不占篇；注册第 6 篇被拒；付费不限篇；402/409 状态正确 | 待测（模拟主站） |
-| 与主站同步 | hold → claim → heartbeat → complete；重复提交幂等；重启后补交 complete | 待测（模拟主站），生产联调待主站 P3 |
-| 深链 | `/open` 三种形式；未登录先登录后继续；不信任链接里的元数据 | 待测 |
+| 配置分层 | linked 下数据库里的 key/地址不生效；写入返回 400；用户只能写偏好白名单；模型名必须在 ALLOWED_MODELS | `tests/test_series_config.py`（5 项）：数据库 Key/地址与未允许模型被忽略、用户模型覆盖不生效、偏好生效；用户/测试 Key/管理员写入 400；偏好校验；提示词含目标语言/风格/术语表；`parse_quality=fast` 跳过 VLM |
+| 题录与 PDF | 导入题录不扣分、幂等；补传/抓取 PDF 后才进入解析；抓取只走白名单且拒内网、非 PDF、超 50MB | `tests/test_series_billing.py`：单篇/合集/综述导入、幂等、余额不变；arXiv 跳转到白名单外被拒且不跟随；https 与子域伪装被拒；非 PDF 拒收 |
+| 按篇计费 | 同一用户同一内容哈希只计 1 次；失败冲正不占篇；注册第 6 篇被拒；付费不限篇；402/409 状态正确 | 模拟主站（校验 assertion/preflight 签名）：409 报价确认 → `/process` 预扣；同一 PDF 换题录不再扣；失败冲正且不占篇；注册达限 403 且不去主站预扣，Pro 不限；402 保留 pdf_pending，补发后可继续；`READ_BILLING=off` 只计篇；前端 `tests/series-charge.test.ts`（确认、取消不扣、达限提示） |
+| 与主站同步 | hold → claim → heartbeat → complete；重复提交幂等；重启后补交 complete | 模拟主站：claim/heartbeat/complete 走 runner 签名，结算后状态 settled；complete 时主站不可达 → 落库，`reconcile_pending` 补交成功。生产联调待主站 P1/P3/P9/P10 |
+| 深链 | `/open` 三种形式；未登录先登录后继续；不信任链接里的元数据 | 前端实现（paper 可重复、collection、review；单篇已可读直接进阅读器；title 只作标签）；端到端待主站 P1 后在生产验证 |
 | 组内共享 | 组员阅读不扣分、不占篇 | 待测 |
+
+R6 测试：后端 SQLite 140 passed + 1 skipped、PostgreSQL 141 passed；前端 vitest 15 passed、`tsc -b` 通过、Vite 构建通过。

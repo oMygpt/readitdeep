@@ -344,9 +344,16 @@
         "save": "Save"
     },
     "open": {
-        "title": "Open a paper from PaperDaily",
-        "pending": "Importing PaperDaily papers directly is coming soon (it needs the PaperDaily resource API). For now, upload the paper's PDF in your library.",
+        "title": "Open papers from PaperDaily",
         "toLibrary": "Go to library",
-        "paper": "Paper ID"
+        "paper": "Paper ID",
+        "notLinked": "This site is not linked to PaperDaily. Upload the PDF in your library instead.",
+        "empty": "The link has no paper, collection or review to open.",
+        "importing": "Importing records from PaperDaily…",
+        "reviewAnswer": "Review",
+        "hint": "Records imported (free). Upload a PDF or fetch the open-access PDF to start parsing — credits are charged per PDF at that point. Parsed papers open directly.",
+        "notFound": "Paper not found on PaperDaily",
+        "processing": "Parsing…",
+        "read": "Read"
     }
 }

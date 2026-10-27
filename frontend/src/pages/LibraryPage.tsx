@@ -30,7 +30,10 @@ import {
     ChevronDown,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { libraryApi, papersApi, monitorApi, analysisApi, citationApi, type CitationFormat } from '../lib/api';
+import { libraryApi, papersApi, monitorApi, analysisApi, citationApi, isLinkedMode, type CitationFormat } from '../lib/api';
+import { seriesApi, withPriceConfirm } from '../lib/series';
+import PaperIntakeActions from '../components/PaperIntakeActions';
+import BillingBadge from '../components/BillingBadge';
 import UserMenu from '../components/UserMenu';
 import CategoryTagEditor from '../components/CategoryTagEditor';
 import QuotaBadge from '../components/QuotaBadge';
@@ -102,7 +105,10 @@ export default function LibraryPage() {
 
     // Upload Mutation
     const uploadMutation = useMutation({
-        mutationFn: papersApi.upload,
+        // 关联 PaperDaily 时按篇计费：主站报价需要确认时弹窗确认
+        mutationFn: (file: File) => isLinkedMode()
+            ? withPriceConfirm((price) => seriesApi.upload(file, price))
+            : papersApi.upload(file),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['library'] });
         },
@@ -169,8 +175,10 @@ export default function LibraryPage() {
                 if (err.response?.status === 403 && err.response?.data?.detail?.error === 'quota_exceeded') {
                     setShowUpgradeModal(true);
                 } else {
-                    alert("Upload failed");
+                    alert(isLinkedMode() ? err.message : "Upload failed");
                 }
+                queryClient.invalidateQueries({ queryKey: ['library'] });
+                queryClient.invalidateQueries({ queryKey: ['billing-status'] });
             } finally {
                 if (fileInputRef.current) fileInputRef.current.value = '';
             }
@@ -365,7 +373,9 @@ export default function LibraryPage() {
                         <Sparkles className="w-3 h-3" />
                         {t('library.quota') || '配额状态'}
                     </h2>
-                    <QuotaBadge onUpgradeClick={() => setShowUpgradeModal(true)} showDetails={true} />
+                    {isLinkedMode()
+                        ? <BillingBadge />
+                        : <QuotaBadge onUpgradeClick={() => setShowUpgradeModal(true)} showDetails={true} />}
                 </div>
 
                 {/* Copyright Footer */}
@@ -391,7 +401,7 @@ export default function LibraryPage() {
                         </div>
                         <div className="flex gap-3 items-center">
                             {/* Quota Badge */}
-                            <QuotaBadge onUpgradeClick={() => setShowUpgradeModal(true)} />
+                            {!isLinkedMode() && <QuotaBadge onUpgradeClick={() => setShowUpgradeModal(true)} />}
 
                             {/* View Mode Toggle */}
                             <div className="flex bg-slate-100 rounded-lg p-1">
@@ -669,6 +679,9 @@ export default function LibraryPage() {
 
                                         {/* Status */}
                                         <div className="col-span-1">
+                                            {(paper.status === 'metadata' || paper.status === 'pdf_pending') && (
+                                                <PaperIntakeActions paper={paper} compact />
+                                            )}
                                             {isProcessing && (
                                                 <div className="flex flex-col">
                                                     <span className="flex items-center gap-1 text-xs text-yellow-600">
@@ -794,6 +807,9 @@ export default function LibraryPage() {
                                                     </>
                                                 )}
                                                 {isProcessing && <Loader2 className="w-4 h-4 animate-spin text-yellow-500" />}
+                                                {(paper.status === 'metadata' || paper.status === 'pdf_pending') && (
+                                                    <PaperIntakeActions paper={paper} />
+                                                )}
                                                 {isFailed && (
                                                     <>
                                                         <AlertCircle className="w-4 h-4 text-red-500" />

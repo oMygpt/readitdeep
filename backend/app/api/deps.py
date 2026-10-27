@@ -72,7 +72,19 @@ async def require_paper_owner(
 
 
 async def charge_ai_quota(user_id: str) -> None:
-    """检查并预扣一次 AI 配额；用完时 403 quota_exceeded（与上传配额同一格式）。"""
+    """检查并预扣一次 AI 配额；用完时 403 quota_exceeded（与上传配额同一格式）。
+    关联模式按 PaperDaily 档位限每日次数（不扣积分，见 app/services/billing.py）。"""
+    from app.config import get_settings
+
+    if get_settings().rid_mode == "linked":
+        from app.services import billing
+
+        async with async_session_maker() as db:
+            user = await db.get(User, user_id)
+        if user is None:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "用户不存在")
+        await billing.charge_chat(user, None)
+        return
     async with async_session_maker() as db:
         result = await db.execute(select(User).where(User.id == user_id))
         user = result.scalar_one_or_none()

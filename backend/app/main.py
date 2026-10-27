@@ -82,12 +82,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
         from app.services.paperdaily import events as pd_events
 
+        from app.services import billing as _billing
+
         async def _pull_loop():
+            tick = 0
             while True:
                 try:
                     await pd_events.pull_once()
                 except Exception as e:
                     print(f"⚠️  PaperDaily 事件对账失败: {e}")
+                if tick % 5 == 0:  # 启动时与每 5 分钟补交未送达主站的计费结算
+                    try:
+                        await _billing.reconcile_pending()
+                    except Exception as e:
+                        print(f"⚠️  计费结算补交失败: {e}")
+                tick += 1
                 await _asyncio.sleep(60)
 
         pull_task = _asyncio.create_task(_pull_loop())
@@ -123,6 +132,11 @@ def check_security_settings(settings) -> None:
         ) if not value]
         if not settings.public_base_url.startswith("https://") and not settings.debug:
             missing.append("PUBLIC_BASE_URL（必须是 https）")
+        if settings.read_billing == "paperdaily":
+            missing += [name for name, value in (
+                ("PAPERDAILY_RUNNER_SECRET", settings.paperdaily_runner_secret),
+                ("PAPERDAILY_ASSERTION_SECRET", settings.paperdaily_assertion_secret),
+            ) if len(value) < 32]
         if missing:
             raise RuntimeError("RID_MODE=linked 需要配置: " + ", ".join(missing))
         from app.services.paperdaily.crypto import _keys

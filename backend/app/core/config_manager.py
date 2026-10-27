@@ -9,6 +9,7 @@ from sqlalchemy import select
 from app.config import get_settings
 from app.models.system_config import SystemConfig, DEFAULT_SYSTEM_CONFIG
 from app.models.user_config import UserConfig
+from app.core.config_policy import system_value_allowed, user_value_allowed
 
 class ConfigManager:
     """配置管理器"""
@@ -55,7 +56,7 @@ class ConfigManager:
             result = await db.execute(select(SystemConfig))
             system_configs = result.scalars().all()
             for sc in system_configs:
-                if sc.value is not None:
+                if sc.value is not None and system_value_allowed(sc.key, sc.value):
                     config[sc.key] = sc.value
         except Exception as e:
             print(f"Error loading system config: {e}")
@@ -69,7 +70,7 @@ class ConfigManager:
 
                 allow_urls = get_settings().allow_user_endpoints
                 for uc in user_configs:
-                    if uc.value is None:
+                    if uc.value is None or not user_value_allowed(uc.key):
                         continue
                     # 未开放自定义地址时，历史遗留的用户地址配置不生效
                     if is_url_config_key(uc.key) and not allow_urls:

@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import base64
+import contextvars
 import hashlib
 import logging
 import secrets
@@ -32,6 +33,8 @@ from app.services.paperdaily import client, crypto
 logger = logging.getLogger(__name__)
 
 PROVIDER = "paperdaily"
+# 本次请求已核验的 provider session（get_current_user 设置）；计费、导入等服务端调用主站时使用
+current_sid: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("pd_current_sid", default=None)
 STATE_TTL = timedelta(minutes=10)
 READ_CACHE = timedelta(seconds=60)
 MAX_SESSION = timedelta(days=30)
@@ -129,6 +132,7 @@ async def complete_login(token_response: dict) -> tuple[User, ProviderSession]:
         version, nonce, ct = crypto.encrypt(token_response["access_token"], aad)
         session = ProviderSession(
             id=sid, user_id=user.id, provider=PROVIDER, grant_id=token_response["grant_id"],
+            key_id=(str(token_response["key_id"])[:100] if token_response.get("key_id") else None),
             auth_version=int(token_response.get("auth_version") or 0), key_version=version, key_nonce=nonce,
             key_ciphertext=ct, scope=token_response.get("scope"), expires_at=min(expires, now + MAX_SESSION),
             last_verified_at=now, created_at=now,

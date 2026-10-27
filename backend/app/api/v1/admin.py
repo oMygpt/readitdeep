@@ -232,7 +232,13 @@ async def update_system_config(
     db: AsyncSession = Depends(get_db),
 ):
     """更新系统配置 (仅管理员)"""
+    from app.core.config_policy import check_admin_updates
+
     updates = data.model_dump(exclude_none=True)
+    try:
+        check_admin_updates(updates)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     
     for key, value in updates.items():
         await set_config_value(db, key, value, admin.id)

@@ -147,6 +147,8 @@ async def get_current_user(
 
         sensitive = request.method not in ("GET", "HEAD", "OPTIONS")
         await pd_sessions.verify(payload.get("sid"), user.id, sensitive=sensitive)
+        request.state.pd_sid = payload.get("sid")  # 需要以用户身份回主站（导入题录、计费）的接口使用
+        pd_sessions.current_sid.set(payload.get("sid"))
 
     return user
 
@@ -541,7 +543,11 @@ async def update_user_config_endpoint(
     """更新用户配置覆盖"""
     from app.core.config_manager import ConfigManager
     
+    from app.core.config_policy import is_linked
+
     updates = data.model_dump(exclude_none=True)
+    if is_linked() and updates:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "模型与服务由站点统一配置（校内模型），个人只能设置偏好")
     _check_user_urls({k: v for k, v in updates.items() if is_url_config_key(k)})
     await ConfigManager.set_user_config(db, user.id, updates)
     
@@ -560,7 +566,10 @@ async def test_api_key_endpoint(
     api_type 支持: 'llm', 'mineru', 'translation'
     """
     import httpx
+    from app.core.config_policy import is_linked
 
+    if is_linked():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "模型与服务由站点统一配置（校内模型），无需测试个人 Key")
     if data.base_url:
         _check_user_urls({"base_url": data.base_url})
 

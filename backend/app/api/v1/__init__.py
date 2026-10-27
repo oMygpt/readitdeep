@@ -37,6 +37,12 @@ router.include_router(prompts.router, prefix="/admin/prompts", tags=["Prompts"])
 # Quota (配额与邀请码)
 router.include_router(quota.router, prefix="/quota", tags=["Quota"])
 
+# 题录导入、PDF 入库与按篇计费（放在 papers 之前，避免被 /{paper_id} 路由吞掉）
+from app.api.v1 import intake
+
+router.include_router(intake.router, prefix="/papers", tags=["Intake"])
+router.include_router(intake.billing_router, prefix="/billing", tags=["Billing"])
+
 # Papers 相关
 router.include_router(papers.router, prefix="/papers", tags=["Papers"])
 router.include_router(library.router, prefix="/library", tags=["Library"])
@@ -52,3 +58,7 @@ router.include_router(workbench.paper_workbench_router, prefix="/papers", tags=[
 from app.api.v1 import reading_workspace
 
 router.include_router(reading_workspace.router, tags=["Reading Workspace"])
+
+from app.api.v1 import preferences
+
+router.include_router(preferences.router, tags=["Preferences"])
