@@ -39,6 +39,16 @@ STALE_AFTER = timedelta(minutes=5)
 # 每个进程每类任务的并发数（解析与翻译会占用外部解析服务和模型批量通道）
 KIND_CONCURRENCY = {"parse": 2, "analyze": 2, "translate": 1}
 
+
+def kind_concurrency() -> dict[str, int]:
+    """每个进程每类任务的并发：默认见 KIND_CONCURRENCY，部署可用 JOBS_*_CONCURRENCY 覆盖（如校内模型下解析设 4）"""
+    from app.config import get_settings
+
+    s = get_settings()
+    overrides = {"parse": s.jobs_parse_concurrency, "analyze": s.jobs_analyze_concurrency,
+                 "translate": s.jobs_translate_concurrency}
+    return {k: max(1, overrides[k] or n) for k, n in KIND_CONCURRENCY.items()}
+
 _table = Job.__table__
 
 
@@ -290,7 +300,8 @@ async def drain(kinds: Optional[list[str]] = None) -> int:
 class Worker:
     def __init__(self) -> None:
         self.name = f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex[:8]}"
-        self.running: dict[str, int] = {k: 0 for k in KIND_CONCURRENCY}
+        self.limits = kind_concurrency()
+        self.running: dict[str, int] = {k: 0 for k in self.limits}
         self._task: Optional[asyncio.Task] = None
         self._wake = asyncio.Event()
 
@@ -324,7 +335,7 @@ class Worker:
                     await asyncio.to_thread(requeue_stale)
                     last_sweep = loop.time()
                 while True:
-                    free = [k for k, n in KIND_CONCURRENCY.items() if self.running[k] < n]
+                    free = [k for k, n in self.limits.items() if self.running[k] < n]
                     job = await asyncio.to_thread(claim, self.name, free)
                     if job is None:
                         break

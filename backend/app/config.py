@@ -81,6 +81,10 @@ class Settings(BaseSettings):
     llm_concurrency_interactive: int = 8
     llm_concurrency_batch: int = 2
     llm_concurrency_vlm: int = 4
+    # 每个进程同时处理的任务数（0 = 默认：解析 2、分析 2、翻译 1）。关联主站计费时，解析数不应超过主站 read.bridge.concurrency
+    jobs_parse_concurrency: int = 0
+    jobs_analyze_concurrency: int = 0
+    jobs_translate_concurrency: int = 0
 
     # 视觉模型（PDF 逐页转写）。地址/Key 为空时沿用主 LLM 的；vlm_model 为空则不启用
     vlm_base_url: str = ""

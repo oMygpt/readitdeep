@@ -148,3 +148,13 @@ async def test_local_orphans_requeued_on_startup(users):
             conn.execute(update(Job.__table__).where(Job.id == jid).values(status="running", worker=w))
     assert jobs.requeue_local_orphans(f"{host}:{os.getpid()}:meboot00") == 2
     assert [jobs.get(j)["status"] for j in ids] == ["queued", "queued", "running", "running"]
+
+
+def test_job_concurrency_configurable(monkeypatch):
+    """部署可覆盖每类任务的并发（校内模型下解析设 4）；未设置时沿用默认"""
+    from app.config import get_settings
+
+    assert jobs.kind_concurrency() == jobs.KIND_CONCURRENCY
+    monkeypatch.setattr(get_settings(), "jobs_parse_concurrency", 4)
+    assert jobs.kind_concurrency() == {"parse": 4, "analyze": 2, "translate": 1}
+    assert jobs.Worker().limits["parse"] == 4
