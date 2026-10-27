@@ -375,8 +375,15 @@
     },
     "open": {
         "title": "从 PaperDaily 打开论文",
-        "pending": "直接导入 PaperDaily 论文的功能即将开放（需要主站资源接口上线）。现在可以先在知识库上传这篇论文的 PDF。",
-        "toLibrary": "去知识库上传",
-        "paper": "论文 ID"
+        "toLibrary": "去知识库",
+        "paper": "论文 ID",
+        "notLinked": "本站没有关联 PaperDaily，无法从主站导入。可以在知识库直接上传 PDF。",
+        "empty": "链接里没有要打开的论文、合集或综述。",
+        "importing": "正在从 PaperDaily 导入题录…",
+        "reviewAnswer": "综述内容",
+        "hint": "题录已导入（不消耗积分）。上传 PDF 或获取开放获取 PDF 后开始解析，此时按篇消耗积分；已解析的论文可直接阅读。",
+        "notFound": "PaperDaily 上找不到这篇论文",
+        "processing": "正在解析…",
+        "read": "阅读"
     }
 }

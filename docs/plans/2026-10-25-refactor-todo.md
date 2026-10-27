@@ -63,10 +63,10 @@
 - [x] R5.3 生产模型：校内推理 API（Qwen3-VL-32B 解析、Qwen3.6-35B-A3B 翻译/分析），自助注册关闭
 
 ## R6 系列站：题录/PDF 分离、按篇计费、配置分层（设计 2026-10-27-series-site-quota-config-design.md v0.2）
-- [ ] R6.1 配置分层：linked 下忽略/拒绝 key 与地址类配置；`ALLOWED_MODELS`；用户偏好白名单（目标语言、风格、术语表、解析质量、自动翻译）接入翻译
-- [ ] R6.2 题录态 `metadata`；主站题录导入（委托 key `get_paper`，幂等）；`/papers/{id}/pdf` 补传；`/papers/{id}/fetch-pdf` 开放获取抓取（白名单）；PDF 哈希/页数
-- [ ] R6.3 计费：`read_charges`（迁移 0004）、篇数与周期、`READ_BILLING`、主站 read-jobs 客户端（assertion/preflight/create/claim/heartbeat/complete/对账）、402/409 状态、问答限速；linked 停用本地 PLAN_LIMITS
-- [ ] R6.4 `/open` 深链（paper 可重复 / collection / review）与「从 PaperDaily 导入」面板（等主站 P1）
-- [ ] R6.5 前端计费体验：价格、余额、n/5 篇、题录卡片、待确认/余额不足；昵称
-- [ ] R6.6 主站 issue（P1–P8）与 ask issue（A1–A3）提交并对齐各自 PR
+- [x] R6.1 配置分层：linked 下忽略/拒绝 key 与地址类配置；`ALLOWED_MODELS`；用户偏好白名单（目标语言、风格、术语表、解析质量、自动翻译）接入翻译
+- [x] R6.2 题录态 `metadata`；主站题录导入（委托 key `get_paper`，幂等）；`/papers/{id}/pdf` 补传；`/papers/{id}/fetch-pdf` 开放获取抓取（白名单）；PDF 哈希/页数
+- [x] R6.3 计费（代码与模拟主站测试；生产联调等主站 P1/P3/P9）：`read_charges`（迁移 0004）、篇数与周期、`READ_BILLING`、主站 read-jobs 客户端（assertion/preflight/create/claim/heartbeat/complete/对账）、402/409 状态、问答限速；linked 停用本地 PLAN_LIMITS
+- [x] R6.4 `/open` 深链（paper 可重复 / collection / review）与「从 PaperDaily 导入」面板（等主站 P1）
+- [x] R6.5 前端计费体验：价格、余额、n/5 篇、题录卡片、待确认/余额不足（昵称待主站 P8 决定）
+- [ ] R6.6 主站 issue alonegg/new_paperdaily#176（P1–P10）与 ask issue alonegg/paperdaily-ask#16（A1–A3）已提交；待各自 PR 对齐
 - [ ] R6.7 生产验收：注册与 Pro 测试账号全链路 + 主站 ledger 对账

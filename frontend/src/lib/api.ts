@@ -184,7 +184,8 @@ export interface Paper {
     filename: string;
     title?: string;
     category?: string;
-    status: 'uploading' | 'parsing' | 'indexing' | 'embedding_done' | 'analyzing' | 'classifying' | 'completed' | 'failed' | 'analyzed';
+    // metadata：只有 PaperDaily 题录；pdf_pending：PDF 已保存、等待确认价格/积分/篇数后处理
+    status: 'metadata' | 'pdf_pending' | 'uploading' | 'parsing' | 'indexing' | 'embedding_done' | 'analyzing' | 'classifying' | 'completed' | 'failed' | 'analyzed';
     content_ready?: boolean;
     has_original?: boolean;
     created_at: string;
@@ -198,6 +199,9 @@ export interface Paper {
     tags_confirmed?: boolean;
     doi?: string;
     arxiv_id?: string;
+    error_message?: string;
+    external_full_text_url?: string;
+    source_provider?: string;
     parser?: 'mineru' | 'grobid' | 'paperdaily_markdown' | string;
     // Team sharing info
     shared_teams?: SharedTeamInfo[];

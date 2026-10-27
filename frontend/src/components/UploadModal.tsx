@@ -5,7 +5,9 @@
 import { useState, useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, Upload, FileText, Loader2 } from 'lucide-react';
-import { papersApi } from '../lib/api';
+import { isLinkedMode, papersApi } from '../lib/api';
+import { seriesApi, withPriceConfirm } from '../lib/series';
+import BillingBadge from './BillingBadge';
 
 interface UploadModalProps {
     onClose: () => void;
@@ -16,12 +18,18 @@ export default function UploadModal({ onClose }: UploadModalProps) {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const queryClient = useQueryClient();
 
+    const linked = isLinkedMode();
     const uploadMutation = useMutation({
-        mutationFn: papersApi.upload,
+        // 关联 PaperDaily：只收 PDF，按篇计费，报价需要确认时弹窗
+        mutationFn: (file: File) => linked
+            ? withPriceConfirm((price) => seriesApi.upload(file, price))
+            : papersApi.upload(file),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['library'] });
+            queryClient.invalidateQueries({ queryKey: ['billing-status'] });
             onClose();
         },
+        onSettled: () => queryClient.invalidateQueries({ queryKey: ['library'] }),
     });
 
     const handleDrag = useCallback((e: React.DragEvent) => {
@@ -99,10 +107,10 @@ export default function UploadModal({ onClose }: UploadModalProps) {
                         <>
                             <Upload className="w-12 h-12 text-content-muted mx-auto mb-4" />
                             <p className="text-content-dim mb-2">拖拽文件到此处，或点击选择</p>
-                            <p className="text-sm text-content-muted">支持 PDF、LaTeX、Word 格式</p>
+                            <p className="text-sm text-content-muted">{linked ? '支持 PDF' : '支持 PDF、LaTeX、Word 格式'}</p>
                             <input
                                 type="file"
-                                accept=".pdf,.tex,.docx,.doc"
+                                accept={linked ? '.pdf,application/pdf' : '.pdf,.tex,.docx,.doc'}
                                 onChange={handleFileSelect}
                                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                             />
@@ -112,9 +120,11 @@ export default function UploadModal({ onClose }: UploadModalProps) {
 
                 {/* Info */}
                 <div className="mt-4 p-3 bg-surface rounded-lg">
-                    <p className="text-sm text-content-muted">
-                        📝 上传后将使用 Mineru API 解析，预计需要 1-2 分钟
-                    </p>
+                    {linked ? <BillingBadge /> : (
+                        <p className="text-sm text-content-muted">
+                            📝 上传后将使用 Mineru API 解析，预计需要 1-2 分钟
+                        </p>
+                    )}
                 </div>
 
                 {/* Error */}

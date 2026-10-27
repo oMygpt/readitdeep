@@ -5,7 +5,8 @@
  */
 
 import { useEffect, useState } from 'react';
-import { authApi, type UserConfigUpdate, type UserConfigResponse } from '../lib/api';
+import { authApi, isLinkedMode, type UserConfigUpdate, type UserConfigResponse } from '../lib/api';
+import PreferencesPanel from '../components/PreferencesPanel';
 import {
     Key, Save, AlertCircle, CheckCircle, ArrowLeft, Brain,
     Languages, FileText, Sparkles, ChevronDown, ChevronRight,
@@ -234,7 +235,7 @@ export default function SettingsPage() {
                         </div>
                         <div>
                             <h1 className="text-xl font-bold text-slate-900">个人设置</h1>
-                            <p className="text-sm text-slate-500">管理您的 API 配置</p>
+                            <p className="text-sm text-slate-500">{isLinkedMode() ? '阅读与翻译偏好' : '管理您的偏好与 API 配置'}</p>
                         </div>
                     </div>
                 </div>
@@ -249,7 +250,12 @@ export default function SettingsPage() {
                     </div>
                 )}
 
-                {loading ? (
+                <div className="mb-6">
+                    <PreferencesPanel managedHint={isLinkedMode()} />
+                </div>
+
+                {/* 关联 PaperDaily 时模型与 Key 由站点统一配置（部署层），不显示个人 API 配置 */}
+                {isLinkedMode() ? null : loading ? (
                     <div className="flex items-center justify-center py-20">
                         <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full" />
                     </div>

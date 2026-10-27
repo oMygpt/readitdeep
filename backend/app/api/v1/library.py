@@ -39,6 +39,11 @@ class PaperSummary(BaseModel):
     created_at: datetime
     tags: Optional[List[str]] = None
     shared_teams: Optional[List[SharedTeamInfo]] = None  # 分享给哪些团队
+    # 题录态（metadata）/ PDF 待处理（pdf_pending）的论文需要这些字段显示操作与原因
+    error_message: Optional[str] = None
+    arxiv_id: Optional[str] = None
+    external_full_text_url: Optional[str] = None
+    source_provider: Optional[str] = None
 
 
 class LibraryResponse(BaseModel):
@@ -148,6 +153,10 @@ async def list_papers(
             created_at=p.get("created_at"),
             tags=tags,
             shared_teams=shared_teams if shared_teams else None,
+            error_message=p.get("error_message") if p["status"] in ("pdf_pending", "failed") else None,
+            arxiv_id=p.get("arxiv_id"),
+            external_full_text_url=p.get("external_full_text_url"),
+            source_provider=p.get("source_provider"),
         ))
     
     return LibraryResponse(

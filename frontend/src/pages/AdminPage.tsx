@@ -13,7 +13,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { adminApi, type SystemConfig, type User as AdminUser, type TokenStats, type AdminInvitationCodeItem } from '../lib/api';
+import { adminApi, isLinkedMode, type SystemConfig, type User as AdminUser, type TokenStats, type AdminInvitationCodeItem } from '../lib/api';
 import {
     Settings,
     Users,
@@ -353,16 +353,20 @@ export default function AdminPage() {
         setSaveMessage('');
         try {
             const updates: Record<string, unknown> = {};
+            // 关联 PaperDaily 时地址、Key、模式与嵌入由部署层（保险库）管理，网页只能改模型选择与开关
+            const deploymentOnly = (key: string) => key.endsWith('_api_key') || key.endsWith('_url')
+                || ['llm_mode', 'translation_mode', 'mineru_mode', 'embedding_provider', 'embedding_model', 'llm_extra_body'].includes(key);
             Object.entries(configForm).forEach(([key, value]) => {
-                if (value !== '' && value !== undefined) {
+                if (value !== '' && value !== undefined && !(isLinkedMode() && deploymentOnly(key))) {
                     updates[key] = value;
                 }
             });
             await adminApi.updateConfig(updates);
             setSaveMessage(t('admin.configSaved'));
             await loadData();
-        } catch (error) {
-            setSaveMessage(t('admin.saveFailed'));
+        } catch (error: any) {
+            const detail = error?.response?.data?.detail;
+            setSaveMessage(typeof detail === 'string' ? detail : t('admin.saveFailed'));
             console.error('Failed to save config:', error);
         } finally {
             setIsSaving(false);
@@ -498,6 +502,12 @@ export default function AdminPage() {
                     </div>
                 ) : activeTab === 'config' ? (
                     <div className="space-y-6">
+                        {isLinkedMode() && (
+                            <div className="p-4 rounded-xl border border-blue-200 bg-blue-50 text-sm text-blue-800">
+                                本站已关联 PaperDaily：模型地址、API Key 与嵌入配置由部署层（运维保险库）统一管理，这里的地址与 Key 不会生效；
+                                管理员只能从部署允许的模型列表中为各任务选择模型。计费按篇在主站结算。
+                            </div>
+                        )}
                         {/* Token 用量统计 */}
                         <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
                             <div className="flex items-center justify-between mb-4">
