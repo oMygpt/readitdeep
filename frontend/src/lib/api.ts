@@ -181,7 +181,6 @@ export interface SharedTeamInfo {
 
 export interface Paper {
     resource_imported?: boolean;
-    source_provider?: string;
     source_id?: string;
     id: string;
     filename: string;

@@ -23,7 +23,7 @@ async def delegation(request: Request, user: User, required: str | None) -> str:
     if not sessions.is_linked():
         raise HTTPException(409, "此部署未关联 PaperDaily，个人阅读仍可使用")
     header = request.headers.get("authorization", "")
-    token = header.removeprefix("Bearer ")
+    token = header.partition(" ")[2]
     payload = decode_token(token)
     session = await sessions.verify(payload.get("sid"), user.id, sensitive=True)
     if required and required not in (session.scope or "").split():

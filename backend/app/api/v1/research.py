@@ -20,26 +20,12 @@ from app.core.database import get_db
 from app.core.timeutil import as_utc, utcnow
 from app.models.annotation import TeamAnnotation
 from app.models.paper import Paper
-from app.models.provider import AccountTombstone
 from app.models.research import ResearchComparison, ResearchPublication
 from app.models.user import User
 from app.services.paperdaily import research_client as pd
+from app.services.paperdaily.documents import live_owner, store_document
 
 router = APIRouter(prefix="/research")
-
-
-async def live_owner(db: AsyncSession, user: User) -> None:
-    """Re-check after remote waits; account deletion must never recreate content."""
-    exists = await db.scalar(
-        select(User.id).where(User.id == user.id, User.is_active.is_(True)).with_for_update()
-    )
-    tomb = (
-        await db.get(AccountTombstone, ("paperdaily", user.external_subject))
-        if user.external_subject
-        else None
-    )
-    if not exists or tomb:
-        raise HTTPException(401, "账号已失效")
 
 
 async def question_snapshot(token: str, question_id: int) -> dict:
@@ -77,100 +63,11 @@ async def import_paper(
 ) -> dict:
     token = await pd.delegation(request, user, "read:paper")
     metadata = await pd.call(token, "GET", "/api/v1/papers/resolve", params={"id": body.paper_id})
-    canonical = metadata.get("id") if isinstance(metadata, dict) else None
-    if not isinstance(canonical, str) or not 0 < len(canonical) <= 200:
-        raise HTTPException(502, "PaperDaily 论文身份无效")
-    existing = await db.scalar(
-        select(Paper).where(
-            Paper.user_id == user.id,
-            Paper.source_provider == "paperdaily",
-            Paper.source_id == canonical,
-        )
-    )
-    if existing and existing.markdown_content:
-        return {"paper_id": existing.id, "duplicate": True, "availability": "available"}
-    if existing and existing.file_path:
-        return {"paper_id": existing.id, "duplicate": True, "availability": "processing"}
-    markdown, resource, unavailable = None, None, "metadata_only"
-    if body.fulltext:
-        try:
-            resource_token = await pd.delegation(request, user, "read:resources")
-            manifest = await pd.call(resource_token, "GET", pd.paper_path(canonical) + "/resources")
-            if (
-                manifest.get("manifest_version") != "read-resources-v1"
-                or manifest.get("paper_id") != canonical
-            ):
-                raise HTTPException(502, "全文清单身份无效")
-            candidates = [
-                r
-                for r in manifest.get("resources", [])
-                if r.get("media_type", "").split(";")[0] == "text/markdown"
-            ]
-            if candidates:
-                resource = candidates[0]
-                raw = await pd.resource_bytes(resource_token, canonical, resource)
-                try:
-                    markdown = raw.decode("utf-8")
-                except UnicodeDecodeError as exc:
-                    raise HTTPException(502, "全文编码无效") from exc
-                if not markdown.strip() or "\x00" in markdown:
-                    raise HTTPException(502, "全文内容无效")
-                unavailable = "available"
-            else:
-                unavailable = "no_transferable_markdown"
-        except HTTPException as exc:
-            if exc.status_code not in (403, 404, 503):
-                raise
-            unavailable = (
-                "scope_required"
-                if isinstance(exc.detail, dict)
-                and exc.detail.get("code") == "paperdaily_scope_required"
-                else "resource_unavailable"
-            )
-    # Imported resource identity is preserved verbatim; the reader blocks external images.
-    await pd.delegation(request, user, "read:paper")
-    await live_owner(db, user)
-    pid = str(uuid.uuid5(uuid.NAMESPACE_URL, f"rid:{user.id}:paperdaily:{canonical}"))
-    values = dict(
-        id=pid,
-        user_id=user.id,
-        filename=str(metadata.get("title") or canonical)[:500],
-        title=str(metadata.get("title") or canonical)[:1000],
-        abstract=metadata.get("abstract"),
-        authors=json.dumps(metadata.get("authors") or [], ensure_ascii=False),
-        doi=metadata.get("doi"),
-        source_provider="paperdaily",
-        source_id=canonical,
-        status="content_ready" if markdown else "metadata",
-        markdown_content=markdown,
-        extra={
-            "paperdaily_resource": resource,
-            "resource_availability": unavailable,
-            "content_ready": bool(markdown),
-        },
-    )
-    insert = sqlite_insert if db.bind.dialect.name == "sqlite" else pg_insert
-    await db.execute(
-        insert(Paper)
-        .values(**values)
-        .on_conflict_do_nothing(index_elements=["user_id", "source_provider", "source_id"])
-    )
-    row = await db.scalar(
-        select(Paper).where(
-            Paper.user_id == user.id,
-            Paper.source_provider == "paperdaily",
-            Paper.source_id == canonical,
-        )
-    )
-    if markdown and not row.markdown_content:
-        # Upgrade metadata only; never replace any existing reading content or annotations.
-        await db.execute(
-            update(Paper)
-            .where(Paper.id == row.id, Paper.markdown_content.is_(None), Paper.file_path.is_(None))
-            .values(markdown_content=markdown, status="content_ready", extra=values["extra"])
-        )
-    await db.commit()
-    return {"paper_id": row.id, "duplicate": existing is not None, "availability": unavailable}
+
+    async def recheck(scope: str) -> str:
+        return await pd.delegation(request, user, scope)
+
+    return await store_document(metadata, user, db, recheck, fulltext=body.fulltext)
 
 
 class ComparisonItem(BaseModel):

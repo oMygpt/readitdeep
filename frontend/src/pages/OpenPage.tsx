@@ -17,10 +17,11 @@ import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, BookOpen, CheckCircle, Loader2 } from 'lucide-react';
 import { isLinkedMode, libraryApi, type Paper } from '../lib/api';
 import { errorMessage, seriesApi, type ImportItem } from '../lib/series';
+import { researchApi, researchError, researchLogin } from '../lib/research';
 import BillingBadge from '../components/BillingBadge';
 import PaperIntakeActions from '../components/PaperIntakeActions';
 
-const READY = ['completed', 'analyzed', 'embedding_done', 'analyzing', 'classifying'];
+const READY = ['content_ready', 'completed', 'analyzed', 'embedding_done', 'analyzing', 'classifying'];
 
 interface Imported {
     title?: string;
@@ -36,6 +37,9 @@ export default function OpenPage() {
     const [result, setResult] = useState<Imported | null>(null);
     const [error, setError] = useState<string | null>(null);
     const started = useRef(false);
+    const [manualId, setManualId] = useState('');
+    const [resourceBusy, setResourceBusy] = useState<string | null>(null);
+    const [resourceMessages, setResourceMessages] = useState<Record<string, string>>({});
 
     const paperIds = params.getAll('paper').filter(Boolean).slice(0, 50);
     const collection = params.get('collection');
@@ -83,6 +87,21 @@ export default function OpenPage() {
     });
     const papers = new Map<string, Paper>((library?.items || []).filter((p) => ids.has(p.id)).map((p) => [p.id, p]));
 
+    const loadResource = async (item: ImportItem) => {
+        setResourceBusy(item.source_id);
+        try {
+            const imported = await researchApi.importPaper(item.source_id, true);
+            setResourceMessages(previous => ({ ...previous, [item.source_id]: imported.availability === 'available' ? '主站允许转移的全文已就绪。' : imported.availability === 'scope_required' ? '需要连接研究权限后重试全文导入。' : '主站全文当前不可用，题录已保留；可使用下方 PDF 入库操作。' }));
+            await refetch();
+        } catch (e) { setResourceMessages(previous => ({ ...previous, [item.source_id]: researchError(e) })); }
+        finally { setResourceBusy(null); }
+    };
+    const importManual = async () => {
+        setError(null); setResourceBusy('manual');
+        try { const value = await researchApi.importPaper(manualId.trim(), false); setResult({items:[{source_id:manualId.trim(),paper_id:value.paper_id,status:'metadata',created:!value.duplicate}]}); }
+        catch (e) { setError(researchError(e)); } finally { setResourceBusy(null); }
+    };
+
     return (
         <div className="min-h-screen bg-background p-4 md:p-8">
             <div className="max-w-3xl mx-auto bg-surface rounded-2xl shadow-xl border border-border p-6 md:p-8">
@@ -96,9 +115,14 @@ export default function OpenPage() {
                     </div>
                 </div>
 
+                {!paperIds.length && !collection && !review && isLinkedMode() && <form className="mb-5" onSubmit={event => { event.preventDefault(); void importManual(); }}>
+                    <label htmlFor="manual-paper" className="block text-sm font-medium">论文 ID、DOI 或 arXiv ID</label>
+                    <input id="manual-paper" className="research-input mt-2" maxLength={512} value={manualId} onChange={event => setManualId(event.target.value)} />
+                    <button className="research-primary mt-3" disabled={!!resourceBusy || !manualId.trim()}>导入题录</button>
+                </form>}
                 {error && (
                     <div className="flex items-start gap-2 p-3 rounded-lg bg-error/10 text-error text-sm mb-4">
-                        <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />{error}
+                        <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" /><div>{error}{isLinkedMode() && <a className="block underline mt-2" href={researchLogin(location.pathname + location.search)}>连接 PaperDaily 研究权限</a>}</div>
                     </div>
                 )}
                 {!error && !result && (
@@ -130,12 +154,14 @@ export default function OpenPage() {
                                                 <p className="text-xs text-warning flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />{t('open.processing')}</p>
                                             )}
                                         </div>
-                                        <div className="flex-shrink-0">
+                                        <div className="flex-shrink-0 max-w-[240px] flex flex-col items-end gap-2">
                                             {ready && (
                                                 <Link to={`/read/${paper!.id}`} className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
                                                     <CheckCircle className="w-4 h-4" />{t('open.read')}
                                                 </Link>
                                             )}
+                                            {paper && !ready && paper.status === 'metadata' && <button className="research-text-button text-xs" disabled={!!resourceBusy} onClick={() => void loadResource(item)}>{resourceBusy === item.source_id ? '正在导入…' : '导入主站可用全文'}</button>}
+                                            {resourceMessages[item.source_id] && <p role="status" className="text-xs text-content-muted leading-5">{resourceMessages[item.source_id]} <a className="underline" href={researchLogin(location.pathname + location.search)}>研究权限</a></p>}
                                             {paper && (paper.status === 'metadata' || paper.status === 'pdf_pending') && (
                                                 <PaperIntakeActions paper={paper} compact onDone={() => refetch()} />
                                             )}

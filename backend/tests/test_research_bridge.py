@@ -452,49 +452,6 @@ async def test_uploaded_source_binding_requires_confirmation_and_preserves_conte
     ).status_code == 404
 
 
-async def test_metadata_import_attaches_original_in_place(client, users, bridge, no_parse):
-    alice = users["alice"]
-    h = alice["headers"]
-    imported = await client.post(
-        "/api/v1/research/import", headers=h, json={"paper_id": "EX1", "fulltext": False}
-    )
-    pid = imported.json()["paper_id"]
-    workspace = f"/api/v1/papers/{pid}/reading-workspace"
-    await client.put(workspace, headers=h, json={"version": 0, "focus": "Preserve my focus"})
-    uploaded = await client.post(
-        "/api/v1/papers/upload",
-        headers=h,
-        data={"attach_to": pid},
-        files={"file": ("original.pdf", b"%PDF-fixture-original", "application/pdf")},
-    )
-    assert uploaded.status_code == 200, uploaded.text
-    assert uploaded.json()["id"] == pid
-    paper = store.get(pid)
-    assert paper["source_id"] == "EX1" and paper["title"] == "A research paper"
-    assert (await client.get(workspace, headers=h)).json()["focus"] == "Preserve my focus"
-    repeated = await client.post(
-        "/api/v1/papers/upload",
-        headers=h,
-        data={"attach_to": pid},
-        files={"file": ("replace.pdf", b"wrong", "application/pdf")},
-    )
-    assert repeated.status_code == 409
-    assert store.get(pid)["file_path"] == paper["file_path"]
-    from pathlib import Path
-
-    assert Path(paper["file_path"]).read_bytes() == b"%PDF-fixture-original"
-    assert (
-        await client.post("/api/v1/research/import", headers=h, json={"paper_id": "EX1"})
-    ).json()["availability"] == "processing"
-    foreign = await client.post(
-        "/api/v1/papers/upload",
-        headers=users["bob"]["headers"],
-        data={"attach_to": pid},
-        files={"file": ("other.pdf", b"no", "application/pdf")},
-    )
-    assert foreign.status_code == 404
-
-
 async def test_unknown_then_denied_stays_unknown(client, users, bridge, monkeypatch):
     alice = users["alice"]
     aid = await evidence(client, alice, "a")
@@ -519,3 +476,145 @@ async def test_unknown_then_denied_stays_unknown(client, users, bridge, monkeypa
     assert status.json()["status"] == "unknown" and status.json()["id"] == preview["id"]
     assert status.headers["cache-control"] == "private, no-store"
     assert (await client.delete(url, headers=alice["headers"])).status_code == 409
+
+
+async def test_resource_wait_preserves_new_pdf_and_metadata_extra(
+    client, users, bridge, monkeypatch
+):
+    import asyncio
+    from types import SimpleNamespace
+
+    from app.services import billing
+    from tests.test_series_billing import make_pdf
+
+    alice = users["alice"]
+    h = alice["headers"]
+    pid = (
+        await client.post(
+            "/api/v1/research/import", headers=h, json={"paper_id": "EX1", "fulltext": False}
+        )
+    ).json()["paper_id"]
+    store.update(
+        pid,
+        {
+            "oa_pdf_url": "https://arxiv.org/pdf/1",
+            "venue_name": "Fixture venue",
+            "publication_date": "2025-01-01",
+            "custom": "keep",
+        },
+    )
+    started, release = asyncio.Event(), asyncio.Event()
+    original = pd.call
+
+    async def resources(*args, **kwargs):
+        if args[2].endswith("/resources"):
+            return {
+                "manifest_version": "read-resources-v1",
+                "paper_id": "EX1",
+                "resources": [{"media_type": "text/markdown"}],
+            }
+        return await original(*args, **kwargs)
+
+    async def content(*args):
+        started.set()
+        await release.wait()
+        return b"Late Markdown must not replace PDF"
+
+    async def admit(*args):
+        return SimpleNamespace(price=0, funding="standalone"), True
+
+    monkeypatch.setattr(pd, "call", resources)
+    monkeypatch.setattr(pd, "resource_bytes", content)
+    monkeypatch.setattr(billing, "admit", admit)
+    importing = asyncio.create_task(
+        client.post("/api/v1/research/import", headers=h, json={"paper_id": "EX1"})
+    )
+    await started.wait()
+    attached = await client.post(
+        f"/api/v1/papers/{pid}/pdf",
+        headers=h,
+        files={"file": ("first.pdf", make_pdf(), "application/pdf")},
+    )
+    assert attached.status_code == 200, attached.text
+    release.set()
+    result = await importing
+    assert result.json()["availability"] == "processing"
+    paper = store.get(pid)
+    assert not paper.get("markdown_content") and paper["file_path"]
+    assert paper["custom"] == "keep" and paper["venue_name"] == "Fixture venue"
+
+
+async def test_late_pdf_read_cannot_replace_registered_markdown(client, users, bridge, monkeypatch):
+    import asyncio
+
+    from starlette.datastructures import UploadFile
+
+    from app.services import billing
+    from tests.test_series_billing import make_pdf
+
+    alice = users["alice"]
+    h = alice["headers"]
+    pid = (
+        await client.post(
+            "/api/v1/research/import", headers=h, json={"paper_id": "EX1", "fulltext": False}
+        )
+    ).json()["paper_id"]
+    store.update(
+        pid,
+        {
+            "oa_pdf_url": "https://arxiv.org/pdf/1",
+            "venue_name": "Fixture venue",
+            "publication_date": "2025-01-01",
+            "custom": "keep",
+        },
+    )
+    entered, release = asyncio.Event(), asyncio.Event()
+    original_read = UploadFile.read
+    original_call = pd.call
+
+    async def delayed_read(self, *args, **kwargs):
+        if self.filename == "late.pdf":
+            entered.set()
+            await release.wait()
+        return await original_read(self, *args, **kwargs)
+
+    async def resources(*args, **kwargs):
+        if args[2].endswith("/resources"):
+            return {
+                "manifest_version": "read-resources-v1",
+                "paper_id": "EX1",
+                "resources": [{"media_type": "text/markdown"}],
+            }
+        return await original_call(*args, **kwargs)
+
+    async def content(*args):
+        return b"First registered Markdown"
+
+    from unittest.mock import AsyncMock
+
+    admit = AsyncMock()
+    monkeypatch.setattr(UploadFile, "read", delayed_read)
+    monkeypatch.setattr(pd, "call", resources)
+    monkeypatch.setattr(pd, "resource_bytes", content)
+    monkeypatch.setattr(billing, "admit", admit)
+    uploading = asyncio.create_task(
+        client.post(
+            f"/api/v1/papers/{pid}/pdf",
+            headers=h,
+            files={"file": ("late.pdf", make_pdf(), "application/pdf")},
+        )
+    )
+    await entered.wait()
+    imported = await client.post("/api/v1/research/import", headers=h, json={"paper_id": "EX1"})
+    assert imported.json()["availability"] == "available"
+    release.set()
+    rejected = await uploading
+    assert rejected.status_code == 409
+    admit.assert_not_called()
+    paper = store.get(pid)
+    assert paper["markdown_content"] == "First registered Markdown" and not paper.get("file_path")
+    assert (
+        paper["custom"] == "keep"
+        and paper["oa_pdf_url"] == "https://arxiv.org/pdf/1"
+        and paper["publication_date"] == "2025-01-01"
+    )

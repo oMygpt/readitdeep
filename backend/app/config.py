@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     paperdaily_webhook_secret: str = ""  # 主站目前只提供拉取接口；配置后才接受推送
     # 委托 key 加密密钥：逗号分隔的 "版本:base64(32 字节)"，第一个用于加密，其余仅用于解密（轮换）
     paperdaily_token_keys: str = ""
-    paperdaily_scopes: str = ""  # 主站首发 read client 不接受任何 scope，保持为空
+    paperdaily_scopes: str = ""  # Default identity only; research scopes require an explicit consent flow.
     # 关联模式下的本地 JWT 有效期（分钟），设计上限 15
     linked_jwt_minutes: int = 15
 
