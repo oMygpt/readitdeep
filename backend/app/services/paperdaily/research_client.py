@@ -14,7 +14,18 @@ from app.api.v1.auth import decode_token
 from app.models.user import User
 from app.services.paperdaily import client, sessions
 
-SCOPES = "read:paper read:resources read:reading write:reading"
+RESEARCH_SCOPES = "read:paper read:resources read:reading write:reading"
+
+
+def research_scopes() -> str:
+    """研究授权会生成新的 grant 并取代旧的：必须包含默认登录的全部 scope（收藏/合集/综述导入等），再加研究所需的"""
+    from app.config import get_settings
+
+    merged: list[str] = []
+    for scope in (get_settings().paperdaily_scopes + " " + RESEARCH_SCOPES).split():
+        if scope not in merged:
+            merged.append(scope)
+    return " ".join(merged)
 MAX_BYTES = 32 * 1024 * 1024
 CHUNK = 1024 * 1024
 

@@ -71,8 +71,8 @@ async def begin_login(return_to: Optional[str], *, research: bool = False) -> tu
         db.add(ConnectState(state=state, browser_nonce=browser_nonce, code_verifier=verifier,
                             return_to=safe_return_to(return_to), created_at=utcnow()))
         await db.commit()
-    from app.services.paperdaily.research_client import SCOPES
-    return client.authorize_url(state, challenge, SCOPES if research else None), browser_nonce
+    from app.services.paperdaily.research_client import research_scopes
+    return client.authorize_url(state, challenge, research_scopes() if research else None), browser_nonce
 
 
 async def consume_state(state: str, browser_nonce: Optional[str]) -> ConnectState:
