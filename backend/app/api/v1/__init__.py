@@ -48,3 +48,7 @@ router.include_router(classification.tags_router, prefix="/library", tags=["Tags
 router.include_router(translate.router, prefix="/papers", tags=["Translation"])
 router.include_router(workbench.router, prefix="/workbench", tags=["Workbench"])
 router.include_router(workbench.paper_workbench_router, prefix="/papers", tags=["Paper Workbench"])
+
+from app.api.v1 import reading_workspace
+
+router.include_router(reading_workspace.router, tags=["Reading Workspace"])

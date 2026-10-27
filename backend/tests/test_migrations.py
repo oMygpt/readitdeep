@@ -21,6 +21,22 @@ def test_fresh_database_matches_models(tmp_path):
     assert upgrade_database(engine) == "upgrade"  # 再跑一次不报错
 
 
+def test_reading_upgrade_preserves_existing_annotations(tmp_path):
+    from alembic import command
+    from app.core.migrations import _alembic_config
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'before-reading.db'}")
+    with engine.begin() as conn:
+        command.upgrade(_alembic_config(conn), "0003")
+        conn.execute(text("INSERT INTO team_annotations (id,paper_id,user_id,type,visibility,selected_text) "
+                          "VALUES ('old-note','old-paper','old-user','note','private','历史原文')"))
+    assert upgrade_database(engine) == "upgrade"
+    with engine.connect() as conn:
+        row = conn.execute(text("SELECT selected_text,anchor,is_evidence FROM team_annotations WHERE id='old-note'" )).first()
+        assert tuple(row) == ("历史原文", None, 0)
+    assert _diff(engine) == []
+
+
 def test_legacy_database_is_completed_and_stamped(tmp_path):
     engine = create_engine(f"sqlite:///{tmp_path / 'legacy.db'}")
     # 模拟 R2 之前的库：create_all 建成，但缺新表、缺新列、缺新索引

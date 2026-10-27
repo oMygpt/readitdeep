@@ -7,7 +7,7 @@ Read it DEEP - Annotations API
 from datetime import datetime
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 from sqlalchemy import select, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -26,6 +26,24 @@ router = APIRouter()
 
 # ================== Schemas ==================
 
+class TextAnchor(BaseModel):
+    """Offsets are UTF-16 code units in rendered text, scoped to a revision."""
+    model_config = ConfigDict(extra="forbid")
+    revision_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    representation: str = Field(pattern=r"^(original|translation)$")
+    exact: str = Field(min_length=1, max_length=20000)
+    prefix: str = Field(default="", max_length=64)
+    suffix: str = Field(default="", max_length=64)
+    start: int = Field(ge=0)
+    end: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def valid_range(self) -> "TextAnchor":
+        if self.end <= self.start or self.end - self.start != len(self.exact.encode("utf-16-le")) // 2:
+            raise ValueError("Anchor range must match the exact quote in UTF-16 code units")
+        return self
+
+
 class AnnotationCreate(BaseModel):
     """创建标注"""
     type: str = AnnotationType.HIGHLIGHT
@@ -41,6 +59,9 @@ class AnnotationCreate(BaseModel):
     # 内容
     content: Optional[str] = None
     color: Optional[str] = None
+    anchor: Optional[TextAnchor] = None
+    is_evidence: bool = False
+    research_question: Optional[str] = Field(default=None, max_length=2000)
 
 
 class AnnotationUpdate(BaseModel):
@@ -48,6 +69,8 @@ class AnnotationUpdate(BaseModel):
     content: Optional[str] = None
     color: Optional[str] = None
     visibility: Optional[str] = None
+    is_evidence: Optional[bool] = None
+    research_question: Optional[str] = Field(default=None, max_length=2000)
 
 
 class AnnotationReply(BaseModel):
@@ -79,6 +102,9 @@ class AnnotationResponse(BaseModel):
     content: Optional[str]
     color: Optional[str]
     parent_id: Optional[str]
+    anchor: Optional[dict] = None
+    is_evidence: bool = False
+    research_question: Optional[str] = None
     replies_count: int = 0
     created_at: Optional[str]
     updated_at: Optional[str]
@@ -209,6 +235,9 @@ async def list_annotations(
             end_offset=annotation.end_offset,
             line_number=annotation.line_number,
             selected_text=annotation.selected_text,
+            anchor=annotation.anchor,
+            is_evidence=annotation.is_evidence,
+            research_question=annotation.research_question,
             content=annotation.content,
             color=annotation.color,
             parent_id=annotation.parent_id,
@@ -228,6 +257,21 @@ async def create_annotation(
     db: AsyncSession = Depends(get_db),
 ):
     """创建标注"""
+    from app.api.deps import user_can_access_paper, get_paper_or_404
+    from app.models.reading_workspace import ReadingRevision
+
+    paper = get_paper_or_404(paper_id)
+    if not await user_can_access_paper(paper_id, paper, user):
+        raise HTTPException(403, "无权访问此论文")
+    if data.anchor:
+        revision = await db.get(ReadingRevision, data.anchor.revision_id)
+        if (not revision or revision.paper_id != paper_id
+                or revision.representation != data.anchor.representation
+                or data.anchor.exact != data.selected_text):
+            raise HTTPException(422, "批注的内容版本或原文摘录不一致")
+    if data.is_evidence and not data.selected_text:
+        raise HTTPException(422, "请先选择原文再收进证据篮")
+
     # 验证类型
     if data.type not in (AnnotationType.HIGHLIGHT, AnnotationType.NOTE, AnnotationType.COMMENT):
         raise HTTPException(
@@ -269,6 +313,9 @@ async def create_annotation(
         end_offset=data.end_offset,
         line_number=data.line_number,
         selected_text=data.selected_text,
+        anchor=data.anchor.model_dump() if data.anchor else None,
+        is_evidence=data.is_evidence,
+        research_question=data.research_question,
         content=data.content,
         color=data.color,
     )
@@ -291,6 +338,9 @@ async def create_annotation(
         end_offset=annotation.end_offset,
         line_number=annotation.line_number,
         selected_text=annotation.selected_text,
+        anchor=annotation.anchor,
+        is_evidence=annotation.is_evidence,
+        research_question=annotation.research_question,
         content=annotation.content,
         color=annotation.color,
         parent_id=annotation.parent_id,
@@ -317,6 +367,13 @@ async def update_annotation(
             detail="只有标注创建者可以更新"
         )
     
+    if data.is_evidence is not None:
+        if data.is_evidence and not annotation.selected_text:
+            raise HTTPException(422, "没有原文摘录的批注无法收进证据篮")
+        annotation.is_evidence = data.is_evidence
+    if data.research_question is not None:
+        annotation.research_question = data.research_question
+
     # 更新字段
     if data.content is not None:
         annotation.content = data.content
@@ -345,6 +402,9 @@ async def update_annotation(
         end_offset=annotation.end_offset,
         line_number=annotation.line_number,
         selected_text=annotation.selected_text,
+        anchor=annotation.anchor,
+        is_evidence=annotation.is_evidence,
+        research_question=annotation.research_question,
         content=annotation.content,
         color=annotation.color,
         parent_id=annotation.parent_id,
@@ -445,6 +505,9 @@ async def reply_to_annotation(
         end_offset=reply.end_offset,
         line_number=reply.line_number,
         selected_text=reply.selected_text,
+        anchor=reply.anchor,
+        is_evidence=reply.is_evidence,
+        research_question=reply.research_question,
         content=reply.content,
         color=reply.color,
         parent_id=reply.parent_id,
@@ -504,6 +567,9 @@ async def get_annotation_replies(
             end_offset=reply.end_offset,
             line_number=reply.line_number,
             selected_text=reply.selected_text,
+            anchor=reply.anchor,
+            is_evidence=reply.is_evidence,
+            research_question=reply.research_question,
             content=reply.content,
             color=reply.color,
             parent_id=reply.parent_id,

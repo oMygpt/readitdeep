@@ -35,6 +35,7 @@ class PaperSummary(BaseModel):
     title: Optional[str] = None
     category: Optional[str] = None
     status: str
+    content_ready: bool = False
     created_at: datetime
     tags: Optional[List[str]] = None
     shared_teams: Optional[List[SharedTeamInfo]] = None  # 分享给哪些团队
@@ -143,6 +144,7 @@ async def list_papers(
             title=p.get("title"),
             category=p.get("category"),
             status=p["status"],
+            content_ready=bool(p.get("content_ready") or p["status"] in ("completed", "analyzed", "embedding_done", "analyzing", "classifying")),
             created_at=p.get("created_at"),
             tags=tags,
             shared_teams=shared_teams if shared_teams else None,

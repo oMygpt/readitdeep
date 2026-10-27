@@ -46,6 +46,8 @@ class PaperDetail(BaseModel):
     updated_at: datetime
     user_id: Optional[str] = None
     error_message: Optional[str] = None
+    content_ready: bool = False
+    has_original: bool = False
     parser: Optional[str] = None  # 实际使用的解析器（mineru / grobid / …）
 
 
@@ -149,6 +151,7 @@ async def parse_paper_task(paper_id: str, file_path: str, file_content: bytes, f
             "title": (result.meta.get("title") or title)[:1000],
             "doi": result.meta.get("doi") or None,
             "markdown_content": markdown_content,
+            "content_ready": True,
             "arxiv_id": arxiv_id,
             "parser": result.parser,
             "error_message": None # Clear previous errors
@@ -373,6 +376,8 @@ async def get_paper(
         user_id=paper.get("user_id"),
         error_message=paper.get("error_message"),
         parser=paper.get("parser"),
+        content_ready=bool(paper.get("markdown_content")),
+        has_original=bool(paper.get("file_path") and str(paper["file_path"]).lower().endswith(".pdf")),
     )
 
 
@@ -384,7 +389,15 @@ async def get_paper_content(
 ):
     """获取论文内容 (Markdown)"""
 
+    import asyncio
+    from app.services.reading_workspace import ensure_revision
+
+    original, translation = await asyncio.gather(
+        asyncio.to_thread(ensure_revision, paper, "original"),
+        asyncio.to_thread(ensure_revision, paper, "translation"),
+    )
     return {
+        "revisions": {"original": original, "translation": translation},
         "markdown": sign_markdown_images(paper.get("markdown_content", "")),
         "translated": sign_markdown_images(paper.get("translated_content", ""))
     }
@@ -758,3 +771,16 @@ async def get_paper_reference_analysis(
         }
     
     return {"paper_id": paper_id, "cached": False, "message": "未找到缓存的分析结果"}
+
+
+@router.get("/{paper_id}/original")
+async def get_original(paper_id: str, paper: dict = Depends(require_paper_access)):
+    """Serve the authorized original PDF without publishing its storage path."""
+    from pathlib import Path
+    from fastapi.responses import FileResponse
+
+    path = Path(paper.get("file_path") or "")
+    if not path.is_file() or path.suffix.lower() != ".pdf":
+        raise HTTPException(404, "没有可核验的原 PDF")
+    return FileResponse(path, media_type="application/pdf", filename=path.name,
+                        content_disposition_type="inline", headers={"Cache-Control": "private, no-store"})

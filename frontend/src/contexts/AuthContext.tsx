@@ -5,6 +5,7 @@
  */
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { authApi, renewLinkedSession, setLinkedMode, type User } from '../lib/api';
 
 interface AuthContextType {
@@ -25,6 +26,7 @@ const TOKEN_KEY = 'readitdeep_token';
 const REFRESH_TOKEN_KEY = 'readitdeep_refresh_token';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+    const queryClient = useQueryClient();
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [authMode, setAuthMode] = useState<'standalone' | 'linked'>('standalone');
@@ -72,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const response = await authApi.login(email, password);
         localStorage.setItem(TOKEN_KEY, response.access_token);
         localStorage.setItem(REFRESH_TOKEN_KEY, response.refresh_token);
+        queryClient.clear();
         setUser(response.user);
     };
 
@@ -88,6 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         localStorage.removeItem(TOKEN_KEY);
         localStorage.removeItem(REFRESH_TOKEN_KEY);
+        queryClient.clear();
         setUser(null);
     };
 

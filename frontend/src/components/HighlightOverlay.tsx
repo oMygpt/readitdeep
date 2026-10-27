@@ -13,11 +13,13 @@ import { getHighlightBackgroundColor } from '../lib/highlight';
 import { annotationsApi } from '../lib/api';
 import type { Annotation } from '../lib/api';
 import DiscussionThread from './DiscussionThread';
+import { resolveAnchor } from '../lib/anchors';
 
 // ================== Types ==================
 
 interface HighlightOverlayProps {
     annotations: Annotation[];
+    revisionId?: string;
     contentRef: React.RefObject<HTMLElement>;
     currentUserId?: string;
     paperId?: string;
@@ -37,44 +39,6 @@ type FilterMode = 'all' | 'mine' | 'others';
 /**
  * 在 DOM 中查找包含指定文本的元素
  */
-function findTextInDOM(container: HTMLElement, searchText: string): Range | null {
-    if (!searchText || searchText.length < 5) return null;
-
-    const treeWalker = document.createTreeWalker(
-        container,
-        NodeFilter.SHOW_TEXT,
-        null
-    );
-
-    // 规范化搜索文本
-    const normalizedSearch = searchText.replace(/\s+/g, ' ').trim().toLowerCase();
-    const searchWords = normalizedSearch.split(' ').slice(0, 10); // 只取前10个词
-
-    let node: Text | null;
-    while ((node = treeWalker.nextNode() as Text)) {
-        const nodeText = node.textContent?.replace(/\s+/g, ' ').toLowerCase() || '';
-
-        // 检查是否包含搜索词的开头部分
-        const firstWords = searchWords.slice(0, 5).join(' ');
-        const startIndex = nodeText.indexOf(firstWords);
-
-        if (startIndex !== -1) {
-            try {
-                const range = document.createRange();
-                // 找到匹配的起始位置
-                const matchLength = Math.min(searchText.length, node.length - startIndex);
-                range.setStart(node, startIndex);
-                range.setEnd(node, Math.min(startIndex + matchLength, node.length));
-                return range;
-            } catch (e) {
-                continue;
-            }
-        }
-    }
-
-    return null;
-}
-
 /**
  * 为指定范围创建高亮标记
  */
@@ -411,6 +375,7 @@ function HighlightFilter({
 
 export default function HighlightOverlay({
     annotations,
+    revisionId,
     contentRef,
     currentUserId,
     paperId,
@@ -435,7 +400,7 @@ export default function HighlightOverlay({
     const filteredAnnotations = useMemo(() => {
         if (!isVisible) return [];
 
-        const highlights = annotations.filter(a => a.type === 'highlight');
+        const highlights = annotations.filter(a => a.selected_text && !a.parent_id);
 
         switch (filterMode) {
             case 'mine':
@@ -469,7 +434,7 @@ export default function HighlightOverlay({
         filteredAnnotations.forEach(annotation => {
             if (!annotation.selected_text) return;
 
-            const range = findTextInDOM(contentRef.current!, annotation.selected_text);
+            const range = resolveAnchor(contentRef.current!, annotation, revisionId);
             if (range) {
                 const elements = createHighlightMark(range, annotation);
                 if (elements.length > 0) {
@@ -511,7 +476,7 @@ export default function HighlightOverlay({
                 mark.elements.forEach(el => el.remove());
             });
         };
-    }, [filteredAnnotations, contentRef, isVisible]);
+    }, [filteredAnnotations, contentRef, isVisible, revisionId]);
 
     // Update positions on scroll/resize
     useEffect(() => {
@@ -521,7 +486,7 @@ export default function HighlightOverlay({
             highlightMarks.forEach(mark => {
                 if (!mark.annotation.selected_text) return;
 
-                const range = findTextInDOM(contentRef.current!, mark.annotation.selected_text);
+                const range = resolveAnchor(contentRef.current!, mark.annotation, revisionId);
                 if (range) {
                     const rects = range.getClientRects();
                     mark.elements.forEach((el, i) => {
@@ -544,7 +509,7 @@ export default function HighlightOverlay({
             window.removeEventListener('scroll', updatePositions, true);
             window.removeEventListener('resize', updatePositions);
         };
-    }, [highlightMarks, contentRef]);
+    }, [highlightMarks, contentRef, revisionId]);
 
     const handleDelete = useCallback(() => {
         if (hoveredAnnotation && onDeleteAnnotation) {
@@ -577,7 +542,7 @@ export default function HighlightOverlay({
 
             {/* Filter bar */}
             {hasHighlights && (
-                <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[50]">
+                <div className="reader-highlight-filter fixed bottom-4 left-1/2 -translate-x-1/2 z-[50] w-max max-w-[calc(100vw-24px)] whitespace-nowrap">
                     <HighlightFilter
                         mode={filterMode}
                         onModeChange={setFilterMode}

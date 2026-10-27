@@ -19,7 +19,7 @@
  * Read it DEEP - 应用入口
  */
 
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { createBrowserRouter, createRoutesFromElements, RouterProvider, Outlet, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
@@ -85,9 +85,13 @@ function PublicRoute({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-function AppRoutes() {
-  return (
-    <Routes>
+function AuthLayout() {
+  return <AuthProvider><Outlet /></AuthProvider>;
+}
+
+const router = createBrowserRouter(createRoutesFromElements(
+  <Route element={<AuthLayout />}>
+
       {/* 公开路由 */}
       <Route path="login" element={<PublicRoute><LoginPage /></PublicRoute>} />
 
@@ -108,18 +112,13 @@ function AppRoutes() {
 
       {/* 404 重定向 */}
       <Route path="*" element={<Navigate to="/library" replace />} />
-    </Routes>
-  );
-}
+  </Route>
+));
 
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AuthProvider>
-          <AppRoutes />
-        </AuthProvider>
-      </BrowserRouter>
+      <RouterProvider router={router} />
     </QueryClientProvider>
   );
 }

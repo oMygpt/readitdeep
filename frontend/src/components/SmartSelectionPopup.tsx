@@ -20,6 +20,8 @@ import {
     Minimize2,
     Maximize2,
     Send,
+    Bookmark,
+    Sparkles,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -47,6 +49,7 @@ interface SmartSelectionPopupProps {
     position: SelectionPosition;
     paperId: string;
     paperTitle: string;
+    researchQuestion?: string;
     fullContent?: string;  // For Chat with PDF context
     location?: TextLocation | null;
     onClose: () => void;
@@ -283,7 +286,7 @@ export default function SmartSelectionPopup({
     paperId,
     paperTitle,
     fullContent,
-    location,
+    researchQuestion,    location,
     onClose,
     onNoteAdded,
     onHighlightCreated,
@@ -303,6 +306,8 @@ export default function SmartSelectionPopup({
     const [isChatLoading, setIsChatLoading] = useState(false);
     const [workbenchStatus, setWorkbenchStatus] = useState<{ type: string; success: boolean } | null>(null);
     const [isHighlighting, setIsHighlighting] = useState(false);
+    const [showTools, setShowTools] = useState(false);
+    const [saveError, setSaveError] = useState('');
 
     // Note dialog state
     const [showNoteDialog, setShowNoteDialog] = useState(false);
@@ -364,9 +369,10 @@ export default function SmartSelectionPopup({
                 type: 'highlight',
                 visibility: teamId ? 'team' : 'private',
                 team_id: teamId,
-                start_offset: location?.start_line,
-                end_offset: location?.end_line,
-                line_number: location?.start_line,
+                start_offset: location?.anchor?.start,
+                end_offset: location?.anchor?.end,
+                anchor: location?.anchor,
+                research_question: researchQuestion,
                 selected_text: text,
                 color: color,
             });
@@ -384,7 +390,7 @@ export default function SmartSelectionPopup({
         } finally {
             setIsHighlighting(false);
         }
-    }, [text, paperId, location, teamId, userId, onHighlightCreated, onClose, isHighlighting]);
+    }, [text, paperId, location, teamId, userId, researchQuestion, onHighlightCreated, onClose, isHighlighting]);
 
     // 创建团队笔记
     const handleCreateNote = useCallback(async () => {
@@ -396,9 +402,10 @@ export default function SmartSelectionPopup({
                 type: 'note',
                 visibility: noteVisibility,
                 team_id: noteVisibility === 'team' ? teamId : undefined,
-                start_offset: location?.start_line,
-                end_offset: location?.end_line,
-                line_number: location?.start_line,
+                start_offset: location?.anchor?.start,
+                end_offset: location?.anchor?.end,
+                anchor: location?.anchor,
+                research_question: researchQuestion,
                 selected_text: text,
                 content: noteContent.trim(),
             });
@@ -412,6 +419,7 @@ export default function SmartSelectionPopup({
                 onClose();
             }, 1000);
         } catch (error) {
+            setSaveError('批注保存失败，文字仍保留在编辑框中。');
             console.error('Failed to create note:', error);
             setWorkbenchStatus({ type: 'note', success: false });
             setTimeout(() => setWorkbenchStatus(null), 2000);
@@ -485,12 +493,12 @@ export default function SmartSelectionPopup({
             setChatHistory([
                 {
                     role: 'assistant',
-                    content: `我已准备好讨论这篇论文。您选中的内容是：\n\n> ${text.slice(0, 200)}${text.length > 200 ? '...' : ''}\n\n请问您有什么问题？`,
+                    content: `当前讨论使用选段和有限的正文上下文，回答请回到原文核对。您选中的内容是：\n\n> ${text.slice(0, 200)}${text.length > 200 ? '...' : ''}\n\n请问您有什么问题？`,
                 },
             ]);
             setActiveWindow({
                 type: 'chat',
-                title: 'Chat with PDF',
+                title: '围绕当前选段追问',
                 icon: action.icon,
                 content: '',
                 isLoading: false,
@@ -584,7 +592,7 @@ export default function SmartSelectionPopup({
                 action_type: 'chat',
                 context: fullContent?.slice(0, 8000),
                 chat_history: chatHistory,
-                user_message: message,
+                user_message: researchQuestion ? `当前研究问题：${researchQuestion}\n用户追问：${message}` : message,
             },
             (content) => {
                 setChatHistory(prev => {
@@ -611,7 +619,7 @@ export default function SmartSelectionPopup({
                 setIsChatLoading(false);
             }
         );
-    }, [text, paperId, paperTitle, fullContent, chatHistory]);
+    }, [text, paperId, paperTitle, fullContent, chatHistory, researchQuestion]);
 
     return (
         <>
@@ -619,82 +627,32 @@ export default function SmartSelectionPopup({
             <div
                 className="fixed z-[99] animate-in fade-in zoom-in-95 duration-200 smart-selection-popup"
                 style={{
-                    left: position.x,
-                    top: position.y - 50,
+                    left: Math.min(Math.max(position.x, Math.min(210, window.innerWidth / 2)), window.innerWidth - Math.min(210, window.innerWidth / 2)),
+                    top: Math.max(8, position.y - 50),
+                    maxWidth: 'calc(100vw - 16px)',
                     transform: 'translateX(-50%)',
                 }}
             >
                 <div className="flex items-center gap-1 bg-surface rounded-full shadow-xl border border-border px-2 py-1.5">
-                    {/* 智能分析按钮 */}
-                    {actions.map((action) => (
-                        <button
-                            key={action.id}
-                            onClick={() => handleAction(action)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-content-main hover:bg-primary/10 hover:text-primary rounded-full transition-all"
-                            title={action.label}
-                        >
-                            <span className="text-base">{action.icon}</span>
-                            <span className="hidden sm:inline">{action.label}</span>
-                        </button>
-                    ))}
-
-                    {/* 分隔线 */}
-                    <div className="w-px h-5 bg-border mx-1" />
-
-                    {/* 高亮按钮 */}
-                    <button
-                        onClick={handleHighlight}
-                        disabled={isHighlighting}
-                        className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-yellow-600 hover:bg-yellow-100 dark:hover:bg-yellow-900/30 rounded-full transition-all disabled:opacity-50"
-                        title="高亮标注"
-                    >
-                        {isHighlighting ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                            <Highlighter className="w-4 h-4" />
-                        )}
-                        <span className="hidden lg:inline">高亮</span>
+                    <button onClick={() => setShowNoteDialog(true)} className="research-text-button px-2 py-1.5" title="为选段添加批注"><StickyNote className="w-4 h-4" />批注</button>
+                    <button onClick={async () => {
+                        if (isHighlighting) return;
+                        setIsHighlighting(true); setSaveError('');
+                        try {
+                            await annotationsApi.create(paperId, {
+                                type: 'highlight', visibility: 'private', selected_text: text,
+                                anchor: location?.anchor, start_offset: location?.anchor?.start, end_offset: location?.anchor?.end,
+                                is_evidence: true, research_question: researchQuestion || '', color: '#D5E2B8',
+                            });
+                            onHighlightCreated?.(); onClose();
+                        } catch { setSaveError('保存未完成，请重试。'); }
+                        finally { setIsHighlighting(false); }
+                    }} disabled={isHighlighting} className="research-text-button px-2 py-1.5" title="收进当前问题的证据篮">
+                        {isHighlighting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bookmark className="w-4 h-4" />}收进证据篮
                     </button>
-
-                    {/* 工作台快捷按钮 */}
-                    <button
-                        onClick={() => handleWorkbenchAdd('method')}
-                        className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 rounded-full transition-all"
-                        title="添加到方法炼金台"
-                    >
-                        <span className="text-sm">🔬</span>
-                        <span className="hidden lg:inline">方法</span>
-                    </button>
-                    <button
-                        onClick={() => handleWorkbenchAdd('asset')}
-                        className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-info hover:bg-info/10 rounded-full transition-all"
-                        title="添加到资产仓库"
-                    >
-                        <span className="text-sm">📊</span>
-                        <span className="hidden lg:inline">资产</span>
-                    </button>
-                    <button
-                        onClick={() => handleWorkbenchAdd('note')}
-                        className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-secondary hover:bg-secondary/10 rounded-full transition-all"
-                        title="添加到智能笔记"
-                    >
-                        <span className="text-sm">💡</span>
-                        <span className="hidden lg:inline">笔记</span>
-                    </button>
-
-                    {/* 团队笔记按钮 */}
-                    <button
-                        onClick={() => setShowNoteDialog(true)}
-                        className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-purple-600 hover:bg-purple-100 dark:hover:bg-purple-900/30 rounded-full transition-all"
-                        title="添加团队笔记"
-                    >
-                        <StickyNote className="w-4 h-4" />
-                        <span className="hidden lg:inline">{teamId ? '团队' : '私密'}笔记</span>
-                    </button>
-
-                    {/* 分隔线 */}
-                    <div className="w-px h-5 bg-border mx-1" />
-
+                    <button onClick={handleHighlight} disabled={isHighlighting} className="research-icon-button" title="只做高亮"><Highlighter className="w-4 h-4" /></button>
+                    <span className="w-px h-4 bg-border mx-1" />
+                    <button onClick={() => setShowTools(value => !value)} aria-expanded={showTools} className="research-text-button px-2 py-1.5"><Sparkles className="w-3.5 h-3.5" />AI 辅助</button>
                     {/* 关闭按钮 */}
                     <button
                         onClick={onClose}
@@ -704,6 +662,13 @@ export default function SmartSelectionPopup({
                     </button>
                 </div>
 
+                {showTools && <div className="mt-2 rounded-xl border border-border bg-surface shadow-xl p-2 flex flex-wrap gap-1 max-w-[400px]">
+                    <p className="w-full text-[11px] text-content-muted px-2 py-1">AI 内容是候选解释，请结合原文核对。</p>
+                    {actions.map(action => <button key={action.id} onClick={() => handleAction(action)} className="research-text-button px-2 py-2">{action.label}</button>)}
+                    <button onClick={() => handleWorkbenchAdd('method')} className="research-text-button px-2 py-2">提炼方法</button>
+                    <button onClick={() => handleWorkbenchAdd('asset')} className="research-text-button px-2 py-2">提炼资产</button>
+                </div>}
+                {saveError && <p role="alert" className="research-warning mt-2">{saveError}</p>}
                 {/* 工作台操作反馈 */}
                 {workbenchStatus && (
                     <div className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 rounded-lg text-xs font-medium shadow-lg animate-in fade-in zoom-in-95 ${workbenchStatus.success
@@ -749,7 +714,7 @@ export default function SmartSelectionPopup({
                     <div className="px-3 py-2 flex items-center justify-between bg-purple-500/10">
                         <div className="flex items-center gap-2">
                             <StickyNote className="w-4 h-4 text-purple-600" />
-                            <span className="text-sm font-medium text-content-main">添加笔记</span>
+                            <span className="text-sm font-medium text-content-main">添加批注</span>
                         </div>
                         <button
                             onClick={() => setShowNoteDialog(false)}
@@ -796,6 +761,7 @@ export default function SmartSelectionPopup({
                         </div>
                     </div>
 
+                    {saveError && <p role="alert" className="research-warning mx-3 mt-2">{saveError}</p>}
                     {/* Note input */}
                     <div className="p-3">
                         <textarea

@@ -569,9 +569,9 @@ export default function LibraryPage() {
 
                             {/* Paper Rows */}
                             {filteredPapers.map((paper) => {
-                                const isProcessing = ['uploading', 'parsing', 'indexing', 'embedding', 'analyzing', 'classifying'].includes(paper.status);
+                                const isProcessing = !paper.content_ready && ['uploading', 'parsing', 'indexing', 'embedding', 'analyzing', 'classifying'].includes(paper.status);
                                 const isFailed = paper.status === 'failed';
-                                const isCompleted = paper.status === 'completed' || paper.status === 'analyzed';
+                                const isCompleted = paper.content_ready || paper.status === 'completed' || paper.status === 'analyzed';
                                 const statusInfo = paperStatuses[paper.id];
 
                                 return (
@@ -745,9 +745,9 @@ export default function LibraryPage() {
                     {viewMode === 'grid' && (
                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                             {filteredPapers.map((paper) => {
-                                const isProcessing = ['uploading', 'parsing', 'indexing'].includes(paper.status);
+                                const isProcessing = !paper.content_ready && ['uploading', 'parsing', 'indexing'].includes(paper.status);
                                 const isFailed = paper.status === 'failed';
-                                const isCompleted = paper.status === 'completed';
+                                const isCompleted = paper.content_ready || paper.status === 'completed';
 
                                 return (
                                     <div
