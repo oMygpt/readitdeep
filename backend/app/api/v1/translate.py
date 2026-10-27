@@ -24,6 +24,8 @@ from app.services.translation import (
 )
 
 logger = logging.getLogger(__name__)
+# 有正文即可翻译：解析完成的，以及直接导入主站全文的（content_ready）
+TRANSLATABLE = ("completed", "analyzed", "content_ready")
 router = APIRouter()
 
 
@@ -67,7 +69,7 @@ async def trigger_translation(
     翻译会在后台继续，即使客户端断开连接。
     使用 GET /translation 查询状态和结果。
     """
-    if paper.get("status") not in ["completed", "analyzed"]:
+    if paper.get("status") not in TRANSLATABLE:
         raise HTTPException(status_code=400, detail="论文尚未解析完成")
 
     await _charge_if_new_translation(paper_id, current_user)
@@ -94,7 +96,7 @@ async def stream_translate_paper(
     
     如果后台任务已在运行，会监听其进度。
     """
-    if paper.get("status") not in ["completed", "analyzed"]:
+    if paper.get("status") not in TRANSLATABLE:
         raise HTTPException(status_code=400, detail="论文尚未解析完成")
 
     await _charge_if_new_translation(paper_id, current_user)
