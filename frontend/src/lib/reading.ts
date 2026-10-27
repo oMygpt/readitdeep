@@ -1,3 +1,4 @@
+import type { ResearchQuestion } from './research';
 import { api } from './api';
 import type { TextAnchor } from './anchors';
 
@@ -11,6 +12,7 @@ export interface ReadingCheckpoint {
 }
 
 export interface ReadingWorkspace {
+    question?: ResearchQuestion | null;
     version: number;
     focus: string;
     next_action: string;
@@ -23,6 +25,6 @@ export const readingApi = {
         (await api.get(`/papers/${paperId}/reading-workspace`)).data,
     save: async (paperId: string, body: ReadingWorkspace): Promise<ReadingWorkspace> =>
         (await api.put(`/papers/${paperId}/reading-workspace`, {
-            version: body.version, focus: body.focus, next_action: body.next_action, checkpoint: body.checkpoint,
+            version: body.version, question_id: body.question?.id ?? null, focus: body.focus, next_action: body.next_action, checkpoint: body.checkpoint,
         })).data,
 };

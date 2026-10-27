@@ -34,6 +34,7 @@ class ReadingWorkspace(Base):
     paper_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("papers.id", ondelete="CASCADE"), primary_key=True
     )
+    question: Mapped[Optional[dict]] = mapped_column(JSON)
     focus: Mapped[str] = mapped_column(Text, default="")
     next_action: Mapped[str] = mapped_column(Text, default="")
     checkpoint: Mapped[Optional[dict]] = mapped_column(JSON)

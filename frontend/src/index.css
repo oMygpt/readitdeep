@@ -169,3 +169,23 @@ body {
 .card-hover {
   @apply transition-all duration-200 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10;
 }
+/* Research drafts keep sources and human judgements in adjacent columns. */
+.research-primary { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; padding: .65rem 1rem; background: #24594b; color: white; border-radius: .55rem; font-size: .85rem; }
+.research-primary:disabled { opacity: .55; cursor: wait; }
+.question-picker { padding: 1rem; border: 1px solid var(--color-border, #dce3df); background: #f5f8f5; border-radius: .7rem; }
+.research-hub { min-height: 100vh; background: #fafbf8; color: #243d35; }
+.research-hub-header { display: flex; justify-content: space-between; gap: 1rem; align-items: center; padding: 1rem 2rem; border-bottom: 1px solid #dce3df; background: white; }
+.research-hub-grid { display: grid; grid-template-columns: 260px minmax(0, 1fr); max-width: 1600px; margin: auto; }
+.research-hub-sidebar { padding: 2rem 1.5rem; border-right: 1px solid #dce3df; }
+.research-hub-main { min-width: 0; padding: 2rem; }
+.comparison-title { display: block; width: 100%; background: transparent; font-size: 1.6rem; font-family: Georgia, serif; padding: .5rem 0; border-bottom: 1px solid #dce3df; }
+.comparison-list-item { display: block; text-align: left; width: 100%; padding: .75rem; margin-bottom: .5rem; border-radius: .5rem; }
+.comparison-list-item.active { background: #e8f0e9; }
+.comparison-matrix { display: flex; overflow-x: auto; gap: 1rem; padding-bottom: .5rem; align-items: stretch; }
+.comparison-column { background: white; border: 1px solid #dce3df; border-radius: .75rem; padding: 1.25rem; width: 340px; min-width: 280px; flex-shrink: 0; }
+.comparison-column .research-quote { max-height: 220px; overflow-y: auto; }
+.evidence-library { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: .75rem; }
+.evidence-library-item { display: flex; align-items: flex-start; gap: .8rem; padding: 1rem; border: 1px solid #dce3df; background: white; border-radius: .6rem; cursor: pointer; }
+.evidence-library-item input { margin-top: .35rem; accent-color: #24594b; }
+.publication-preview { padding: 1.5rem; border: 1px solid #8ca998; background: #f0f6ef; border-radius: .75rem; }
+@media (max-width: 760px) { .research-hub-grid { grid-template-columns: minmax(0, 1fr); } .research-hub-sidebar { border-right: 0; border-bottom: 1px solid #dce3df; padding: 1.25rem; } .research-hub-main { padding: 1.25rem; } .research-hub-header { padding: 1rem; flex-wrap: wrap; } .comparison-column { width: 85vw; min-width: 250px; } }

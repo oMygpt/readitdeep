@@ -14,3 +14,5 @@ from .provider import ConnectState, ProviderSession, ProviderEvent, AccountTombs
 
 from .reading_workspace import ReadingRevision, ReadingWorkspace
 from .read_charge import ReadCharge
+
+from .research import ResearchComparison, ResearchPublication

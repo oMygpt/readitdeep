@@ -57,7 +57,7 @@ async def _call(method: str, path: str, *, json: Optional[dict] = None, params: 
     return body
 
 
-def authorize_url(state: str, code_challenge: str) -> str:
+def authorize_url(state: str, code_challenge: str, scopes: str | None = None) -> str:
     from urllib.parse import urlencode
 
     s = get_settings()
@@ -69,8 +69,9 @@ def authorize_url(state: str, code_challenge: str) -> str:
         "code_challenge": code_challenge,
         "code_challenge_method": "S256",
     }
-    if s.paperdaily_scopes:
-        params["scope"] = s.paperdaily_scopes
+    selected = s.paperdaily_scopes if scopes is None else scopes
+    if selected:
+        params["scope"] = selected
     return s.paperdaily_web_url.rstrip("/") + f"/connect/{s.paperdaily_client_id}?" + urlencode(params)
 
 

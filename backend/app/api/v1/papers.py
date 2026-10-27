@@ -48,6 +48,9 @@ class PaperDetail(BaseModel):
     error_message: Optional[str] = None
     content_ready: bool = False
     has_original: bool = False
+    resource_imported: bool = False
+    source_provider: Optional[str] = None
+    source_id: Optional[str] = None
     parser: Optional[str] = None  # 实际使用的解析器（mineru / grobid / …）
 
 
@@ -400,6 +403,9 @@ async def get_paper(
         updated_at=paper.get("updated_at") or datetime.now(),
         user_id=paper.get("user_id"),
         error_message=paper.get("error_message"),
+        resource_imported=bool(paper.get("paperdaily_resource")),
+        source_provider=paper.get("source_provider"),
+        source_id=paper.get("source_id"),
         parser=paper.get("parser"),
         content_ready=bool(paper.get("markdown_content")),
         has_original=bool(paper.get("file_path") and str(paper["file_path"]).lower().endswith(".pdf")),

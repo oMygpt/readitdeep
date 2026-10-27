@@ -50,9 +50,9 @@ def _login_error(message: str) -> RedirectResponse:
 
 
 @router.get("/login")
-async def login(return_to: Optional[str] = None):
+async def login(return_to: Optional[str] = None, research: bool = False):
     _require_linked()
-    url, browser_nonce = await sessions.begin_login(return_to)
+    url, browser_nonce = await sessions.begin_login(return_to, research=research)
     response = RedirectResponse(url, status_code=302)
     response.set_cookie(STATE_COOKIE, browser_nonce, max_age=600, path=COOKIE_PATH,
                         httponly=True, secure=_secure(), samesite="lax")
