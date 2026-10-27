@@ -14,7 +14,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
 
 # 占用篇数、且不允许再次扣费的状态
-COUNTED = ("held", "running", "settled", "free", "unknown")
+COUNTED = ("admitting", "held", "running", "settled", "free", "unknown")
 
 
 class ReadCharge(Base):
@@ -37,5 +37,7 @@ class ReadCharge(Base):
     error: Mapped[Optional[str]] = mapped_column(String(500))
     # 已执行完但还没送达主站的 complete 请求体（主站不可达时由对账循环补交）
     completion: Mapped[Optional[dict]] = mapped_column(JSON)
+    # Exact admission body/key survives response loss; never stores a delegated token.
+    admission: Mapped[Optional[dict]] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

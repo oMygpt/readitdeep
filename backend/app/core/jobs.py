@@ -206,13 +206,16 @@ async def _handle_parse(job: dict) -> None:
 
     async def work() -> None:
         await parse_paper_task(job["paper_id"], payload["file_path"], content, payload["filename"], job["user_id"])
+        if billing.billing_mode() == "paperdaily":
+            await _auto_translate(job["paper_id"], job["user_id"], inline=True)
 
     # 主站计费的作业：claim → heartbeat → complete；其余直接执行
     await billing.run_billed(job["paper_id"], work)
-    await _auto_translate(job["paper_id"], job["user_id"])
+    if billing.billing_mode() != "paperdaily":
+        await _auto_translate(job["paper_id"], job["user_id"])
 
 
-async def _auto_translate(paper_id: str, user_id: Optional[str]) -> None:
+async def _auto_translate(paper_id: str, user_id: Optional[str], *, inline: bool = False) -> None:
     """解析成功后按用户偏好自动全文翻译（关联模式默认开启，已含在每篇价格里；独立模式需用户显式开启）"""
     from app.config import get_settings
     from app.core.config_manager import ConfigManager
@@ -225,7 +228,11 @@ async def _auto_translate(paper_id: str, user_id: Optional[str]) -> None:
         stored = await ConfigManager.get_user_config(db, user_id)
     default = get_settings().rid_mode == "linked"
     if stored.get("auto_translate", default) is True:
-        submit("translate", paper_id, user_id)
+        if inline:
+            from app.services.translation import _translate_paper_background
+            await _translate_paper_background(paper_id, user_id)
+        else:
+            submit("translate", paper_id, user_id)
 
 
 async def _handle_analyze(job: dict) -> None:

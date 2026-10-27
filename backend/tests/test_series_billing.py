@@ -21,7 +21,7 @@ from tests.test_paperdaily_linked import KEY_V1, KEY_V2, FakePaperDaily, https_c
 
 RUNNER_SECRET = "r" * 40
 ASSERTION_SECRET = "a" * 40
-PRICE, VERSION = 30, "read-per-pdf-v1"
+PRICE, VERSION = 25, "read-per-pdf-25-v1"
 
 
 def canonical(v):
@@ -53,6 +53,7 @@ class FakePD(FakePaperDaily):
             "doi:10.1/x": {"id": "doi:10.1/x", "title": "Paywalled", "doi": "10.1/x"},
         }
         self.jobs = {}
+        self.admissions = {}
         self.nonces = set()
         self.down_v1 = False
 
@@ -105,8 +106,8 @@ class FakePD(FakePaperDaily):
             return httpx.Response(200, json=p) if p else httpx.Response(404, json={"detail": "paper not found"})
         if path == "/api/v1/me/library/collections":
             return httpx.Response(200, json=[{"id": "c1", "name": "Transformers", "n_papers": 2}])
-        if path == "/api/v1/me/library":
-            assert request.url.params.get("collection") == "c1"
+        if path == "/api/v1/me/library/items":
+            assert request.url.params.get("collection_id") == "c1"
             return httpx.Response(200, json={"items": [{"paper_id": "W1"}, {"paper_id": "doi:10.1/x"}]})
         if path == "/api/v1/me/query-history/7":
             return httpx.Response(200, json={"id": 7, "question": "What is attention?", "answer": "It is [1].",
@@ -119,6 +120,12 @@ class FakePD(FakePaperDaily):
         if not self._verify(request, "read", ASSERTION_SECRET, t["key_id"]):
             return httpx.Response(401, json={"detail": "read_assertion_invalid"})
         body = json.loads(request.content)
+        idem = request.headers["idempotency-key"]
+        if idem in self.admissions:
+            old_body, old_result = self.admissions[idem]
+            if old_body != request.content:
+                return httpx.Response(409, json={"detail": "read_idempotency_body_conflict"})
+            return httpx.Response(200, json=old_result)
         asset = body["asset"]
         expected = hmac.new(RUNNER_SECRET.encode(), canonical({"version": "read-preflight-v1",
                             **{k: v for k, v in asset.items() if k != "signature"}}), hashlib.sha256).hexdigest()
@@ -134,7 +141,9 @@ class FakePD(FakePaperDaily):
         self.balance[uid] -= PRICE
         job_id = f"rj_{len(self.jobs) + 1}"
         self.jobs[job_id] = {"user": uid, "status": "queued", "fence": 0, "asset": asset, "stop": False, "price": PRICE}
-        return httpx.Response(200, json={"job_id": job_id, "status": "queued", "price": PRICE, "price_version": VERSION})
+        result = {"job_id": job_id, "status": "queued", "price": PRICE, "price_version": VERSION}
+        self.admissions[idem] = (request.content, result)
+        return httpx.Response(200, json=result)
 
     def _runner(self, request):
         if not self._verify(request, "rid", RUNNER_SECRET, "-"):
@@ -192,6 +201,9 @@ def fake_parse(monkeypatch):
         else:
             store.update(paper_id, {"status": "failed", "error_message": "boom"})
 
+    async def translate(paper_id, user_id=None):
+        store.update(paper_id, {"translation_status": "completed", "translated_content": "translated fixture"})
+    monkeypatch.setattr("app.services.translation._translate_paper_background", translate)
     monkeypatch.setattr("app.api.v1.papers.parse_paper_task", parse)
     return outcome
 
@@ -244,17 +256,18 @@ async def test_pdf_charge_confirm_hold_claim_complete(pd, https_client, fake_par
     assert st["price"] == PRICE and st["tier"] == "registered" and st["papers_limit"] == 2 and st["papers_used"] == 0
     r = await c.post(f"/api/v1/papers/{pid}/process", json={"confirm_price": PRICE}, headers=h)
     assert r.status_code == 200 and r.json()["charged"] is True and r.json()["pdf"]["pages"] == 3
-    assert pd.balance["pd-u1"] == 70 and pd.jobs["rj_1"]["status"] == "queued"
+    assert pd.balance["pd-u1"] == 100 - PRICE and pd.jobs["rj_1"]["status"] == "queued"
     fake_parse["delay"] = 0.2  # 让心跳至少跑一次
     assert await jobs.drain(["parse"]) == 1
-    assert pd.jobs["rj_1"]["status"] == "succeeded" and pd.balance["pd-u1"] == 70
+    assert pd.jobs["rj_1"]["status"] == "succeeded" and pd.balance["pd-u1"] == 100 - PRICE
     charge = await billing._charge(uid, hashlib.sha256(pdf).hexdigest())
     assert charge.status == "settled" and charge.price == PRICE and charge.completion is None
-    assert jobs.active_paper_ids() == {pid}  # 自动翻译已排队（关联模式默认开启，含在价格里）
+    assert jobs.active_paper_ids() == set()
+    assert store.get(pid)["translation_status"] == "completed"  # Translation finishes inside the billed lease.
     # 同一 PDF 挂到另一条题录：不再扣费
     pid2 = (await _import(c, h, ["doi:10.1/x"]))[0]["paper_id"]
     r = await _attach(c, h, pid2, pdf)
-    assert r.status_code == 200 and r.json()["charged"] is False and pd.balance["pd-u1"] == 70 and len(pd.jobs) == 1
+    assert r.status_code == 200 and r.json()["charged"] is False and pd.balance["pd-u1"] == 100 - PRICE and len(pd.jobs) == 1
 
 
 async def test_failed_parse_refunds_and_frees_quota(pd, https_client, fake_parse):
@@ -277,7 +290,7 @@ async def test_paper_limit_for_registered_not_for_pro(pd, https_client, fake_par
     r = await c.post("/api/v1/papers/upload", files={"file": ("n.pdf", make_pdf("p3"), "application/pdf")},
                      data={"confirm_price": str(PRICE)}, headers=h)
     assert r.status_code == 403 and r.json()["detail"]["error"] == "paper_limit_reached" and r.json()["detail"]["limit"] == 2
-    assert pd.balance["pd-u1"] == 40 and len(pd.jobs) == 2  # 达限不会去主站预扣
+    assert pd.balance["pd-u1"] == 100 - 2 * PRICE and len(pd.jobs) == 2  # 达限不会去主站预扣
     # Pro 用户不限篇数，只受积分约束
     c.cookies.clear()
     h2, _ = await _session(c, pd, "pd-u2")
@@ -285,7 +298,7 @@ async def test_paper_limit_for_registered_not_for_pro(pd, https_client, fake_par
         r = await c.post("/api/v1/papers/upload", files={"file": ("n.pdf", make_pdf(f"q{n}"), "application/pdf")},
                          data={"confirm_price": str(PRICE)}, headers=h2)
         assert r.status_code == 200, r.text
-    assert pd.balance["pd-u2"] == 210
+    assert pd.balance["pd-u2"] == 300 - 3 * PRICE
 
 
 async def test_insufficient_credits_keeps_pdf_pending(pd, https_client):
@@ -319,6 +332,9 @@ async def test_complete_deferred_when_paperdaily_down(pd, https_client, fake_par
         store.update(paper_id, {"status": "completed", "markdown_content": "# ok"})
         pd.down = True
 
+    async def translate(paper_id, user_id=None):
+        store.update(paper_id, {"translation_status": "completed", "translated_content": "translated fixture"})
+    monkeypatch.setattr("app.services.translation._translate_paper_background", translate)
     monkeypatch.setattr("app.api.v1.papers.parse_paper_task", parse)
     await jobs.drain(["parse"])
     charge = await billing._charge(uid, hashlib.sha256(pdf).hexdigest())
@@ -369,7 +385,7 @@ async def test_open_access_fetch_allowlist(pd, https_client, fake_parse, monkeyp
     monkeypatch.setattr(pdf_intake, "http_client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(oa_ok)))
     r = await c.post(f"/api/v1/papers/{pid}/fetch-pdf", json={"confirm_price": PRICE}, headers=h)
     assert r.status_code == 200, r.text
-    assert store.get(pid)["pdf"]["sha256"] == hashlib.sha256(pdf).hexdigest() and pd.balance["pd-u1"] == 70
+    assert store.get(pid)["pdf"]["sha256"] == hashlib.sha256(pdf).hexdigest() and pd.balance["pd-u1"] == 100 - PRICE
     # 没有 OA 的论文
     pid2 = (await _import(c, h, ["doi:10.1/x"]))[0]["paper_id"]
     assert (await c.post(f"/api/v1/papers/{pid2}/fetch-pdf", json={}, headers=h)).status_code == 404
@@ -430,3 +446,91 @@ async def test_admission_http_failure_keeps_pdf_retryable(pd, https_client, fake
     monkeypatch.setattr(billing, 'admit', original)
     retry = await c.post(f'/api/v1/papers/{pid}/process', headers=h, json={'confirm_price': PRICE})
     assert retry.status_code == 200, retry.text
+
+
+async def test_lost_admission_reply_replays_exact_body_and_key(pd, https_client, fake_parse, monkeypatch):
+    from app.services.paperdaily import api
+    from app.services.paperdaily.client import PaperDailyUnavailable
+    c = https_client
+    headers, user = await _session(c, pd)
+    paper_id = (await _import(c, headers))[0]['paper_id']
+    original = api.create_read_job
+    lost = False
+    requests = []
+
+    async def flaky(token, key_id, body, idem):
+        nonlocal lost
+        result = await original(token, key_id, body, idem)
+        if body['confirmed_price_version'] == VERSION:
+            requests.append((canonical(body), idem))
+            if not lost:
+                lost = True
+                raise PaperDailyUnavailable('lost response after commit')
+        return result
+    monkeypatch.setattr(api, 'create_read_job', flaky)
+    first = await _attach(c, headers, paper_id, make_pdf('lost admission'), PRICE)
+    assert first.status_code == 503
+    assert len(pd.jobs) == 1 and pd.balance['pd-u1'] == 100 - PRICE
+    retry = await c.post(f'/api/v1/papers/{paper_id}/process', headers=headers, json={'confirm_price': PRICE})
+    assert retry.status_code == 200, retry.text
+    assert len(pd.jobs) == 1 and pd.balance['pd-u1'] == 100 - PRICE
+    assert len(requests) == 2 and requests[0] == requests[1]
+
+
+async def test_heartbeat_failure_cancels_work_and_prevents_success(pd, https_client, fake_parse, monkeypatch):
+    from app.services.paperdaily import api
+    from app.services.paperdaily.client import PaperDailyUnavailable
+    c = https_client
+    headers, user = await _session(c, pd)
+    paper_id = (await _import(c, headers))[0]['paper_id']
+    fake_parse['delay'] = 1
+    assert (await _attach(c, headers, paper_id, make_pdf('heartbeat loss'), PRICE)).status_code == 200
+
+    async def unavailable(*args):
+        raise PaperDailyUnavailable('offline')
+    monkeypatch.setattr(api, 'heartbeat', unavailable)
+    await jobs.drain(["parse"])
+    assert store.get(paper_id)['status'] == 'failed'
+    assert not store.get(paper_id).get('translated_content')
+    assert pd.balance['pd-u1'] == 100
+
+
+async def test_unknown_charge_never_executes_unmetered_work(pd, https_client, fake_parse):
+    c = https_client
+    headers, user = await _session(c, pd)
+    paper_id = (await _import(c, headers))[0]['paper_id']
+    assert (await _attach(c, headers, paper_id, make_pdf('unknown'), PRICE)).status_code == 200
+    charge = await billing.charge_of_paper(paper_id)
+    await billing._update(charge.id, status='unknown')
+    called = False
+    async def work():
+        nonlocal called
+        called = True
+    with pytest.raises(billing.BillingBlocked):
+        await billing.run_billed(paper_id, work)
+    assert called is False
+    retry = await c.post(f'/api/v1/papers/{paper_id}/process', headers=headers, json={'confirm_price': PRICE})
+    assert retry.status_code == 409
+    assert len(pd.jobs) == 1
+
+
+async def test_capacity_rejection_waits_without_repeating_hold(pd, https_client, fake_parse, monkeypatch):
+    from app.services.paperdaily import api
+    from app.services.paperdaily.client import PaperDailyError
+    headers, user = await _session(https_client, pd)
+    paper_id = (await _import(https_client, headers))[0]['paper_id']
+    assert (await _attach(https_client, headers, paper_id, make_pdf('capacity retry'), PRICE)).status_code == 200
+    original = api.claim
+    attempts = 0
+    async def busy_once(job_id):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise PaperDailyError(429, 'read_runner_capacity')
+        return await original(job_id)
+    monkeypatch.setattr(api, 'claim', busy_once)
+    monkeypatch.setattr(billing, 'CLAIM_BACKOFF_SECONDS', 0.01)
+    await jobs.drain(['parse'])
+    assert attempts == 2 and len(pd.jobs) == 1
+    assert pd.balance['pd-u1'] == 100 - PRICE
+    assert pd.jobs['rj_1']['status'] == 'succeeded'

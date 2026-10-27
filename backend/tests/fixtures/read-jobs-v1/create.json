@@ -1,0 +1,59 @@
+{
+  "actor": "read",
+  "secret": "TEST-ONLY-read-client-assertion-secret-v1",
+  "key_id": "k-fixture-read-v1",
+  "method": "POST",
+  "path": "/api/v1/me/read-jobs",
+  "body": {
+    "operation": "read.parse",
+    "asset": {
+      "receipt_id": "preflight_fixture_v1",
+      "kind": "blob",
+      "asset_id": "blob_fixture_v1",
+      "paper_id": null,
+      "owner_id": "fixture-user",
+      "grant_id": "grt_fixture_v1",
+      "operation": "read.parse",
+      "content_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "byte_length": 4096,
+      "pages": 2,
+      "expires_at": 1793059800,
+      "signer": "rid",
+      "signature": "4cf1171b9ff99245ac3b09f999bacae8ddabe127f2376bd3b2b876c33aa7249a"
+    },
+    "parameters": {
+      "language": "zh"
+    },
+    "confirmed_price": 30,
+    "confirmed_price_version": "TEST-ONLY-read-per-pdf-v1"
+  },
+  "body_utf8": "{\"asset\":{\"asset_id\":\"blob_fixture_v1\",\"byte_length\":4096,\"content_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"expires_at\":1793059800,\"grant_id\":\"grt_fixture_v1\",\"kind\":\"blob\",\"operation\":\"read.parse\",\"owner_id\":\"fixture-user\",\"pages\":2,\"paper_id\":null,\"receipt_id\":\"preflight_fixture_v1\",\"signature\":\"4cf1171b9ff99245ac3b09f999bacae8ddabe127f2376bd3b2b876c33aa7249a\",\"signer\":\"rid\"},\"confirmed_price\":30,\"confirmed_price_version\":\"TEST-ONLY-read-per-pdf-v1\",\"operation\":\"read.parse\",\"parameters\":{\"language\":\"zh\"}}",
+  "timestamp": "1793059200",
+  "nonce": "fixture_create_nonce_v1",
+  "canonical_utf8": "{\"actor\":\"read\",\"body_sha256\":\"bf6b909672bc64a6ea1518041e04b08e7f9caa39ea8315bd5c30fac6ae2b2b4f\",\"key_id\":\"k-fixture-read-v1\",\"method\":\"POST\",\"nonce\":\"fixture_create_nonce_v1\",\"path\":\"/api/v1/me/read-jobs\",\"timestamp\":\"1793059200\",\"version\":\"read-assertion-v1\"}",
+  "canonical_hex": "7b226163746f72223a2272656164222c22626f64795f736861323536223a2262663662393039363732626336346136656131353138303431653034623038653766396361613339656138333135626435633330666163366165326232623466222c226b65795f6964223a226b2d666978747572652d726561642d7631222c226d6574686f64223a22504f5354222c226e6f6e6365223a22666978747572655f6372656174655f6e6f6e63655f7631222c2270617468223a222f6170692f76312f6d652f726561642d6a6f6273222c2274696d657374616d70223a2231373933303539323030222c2276657273696f6e223a22726561642d617373657274696f6e2d7631227d",
+  "signature": "0c26b8e85a1109117cf8072c7bdd44ed5d644dbb0b2d659d89e88450e5d6c58d",
+  "headers": {
+    "Content-Type": "application/json",
+    "X-Read-Actor": "read",
+    "X-Read-Timestamp": "1793059200",
+    "X-Read-Nonce": "fixture_create_nonce_v1",
+    "X-Read-Signature": "0c26b8e85a1109117cf8072c7bdd44ed5d644dbb0b2d659d89e88450e5d6c58d",
+    "Idempotency-Key": "fixture_content_sha256_v1",
+    "Authorization": "Bearer pd_live_TEST_ONLY_NOT_A_CREDENTIAL"
+  },
+  "response_status": 200,
+  "response": {
+    "job_id": "rj_fixture_v1",
+    "operation": "read.parse",
+    "status": "queued",
+    "stop_requested": false,
+    "price": 30,
+    "price_version": "TEST-ONLY-read-per-pdf-v1",
+    "funding_source": "personal",
+    "accounting": null,
+    "output_sha256": null,
+    "created_at": "2026-10-27T00:00:00+00:00",
+    "updated_at": "2026-10-27T00:00:00+00:00"
+  }
+}
