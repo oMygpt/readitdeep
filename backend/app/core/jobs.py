@@ -198,11 +198,34 @@ Handler = Callable[[dict], Awaitable[None]]
 
 async def _handle_parse(job: dict) -> None:
     from app.api.v1.papers import parse_paper_task
+    from app.services import billing
 
     payload = job["payload"] or {}
     with open(payload["file_path"], "rb") as f:
         content = f.read()
-    await parse_paper_task(job["paper_id"], payload["file_path"], content, payload["filename"], job["user_id"])
+
+    async def work() -> None:
+        await parse_paper_task(job["paper_id"], payload["file_path"], content, payload["filename"], job["user_id"])
+
+    # 主站计费的作业：claim → heartbeat → complete；其余直接执行
+    await billing.run_billed(job["paper_id"], work)
+    await _auto_translate(job["paper_id"], job["user_id"])
+
+
+async def _auto_translate(paper_id: str, user_id: Optional[str]) -> None:
+    """解析成功后按用户偏好自动全文翻译（关联模式默认开启，已含在每篇价格里；独立模式需用户显式开启）"""
+    from app.config import get_settings
+    from app.core.config_manager import ConfigManager
+    from app.core.database import async_session_maker
+
+    paper = store.get(paper_id) or {}
+    if not user_id or paper.get("status") not in ("completed", "analyzed") or paper.get("translated_content"):
+        return
+    async with async_session_maker() as db:
+        stored = await ConfigManager.get_user_config(db, user_id)
+    default = get_settings().rid_mode == "linked"
+    if stored.get("auto_translate", default) is True:
+        submit("translate", paper_id, user_id)
 
 
 async def _handle_analyze(job: dict) -> None:

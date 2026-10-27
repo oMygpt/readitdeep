@@ -48,6 +48,10 @@ async def _charge_if_new_translation(paper_id: str, user: User) -> None:
     """已完成或正在进行的翻译不再计配额；只有真正启动一次新翻译才扣调用者的 AI 配额。"""
     if get_translation_status(paper_id)["status"] in ("completed", "translating"):
         return
+    from app.config import get_settings
+
+    if get_settings().rid_mode == "linked":
+        return  # 关联模式：全文翻译含在每篇 PDF 的价格里（设计 v0.2 §4）
     await charge_ai_quota(user.id)
 
 

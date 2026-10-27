@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Depends, status
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks, Depends, Request, status
 from pydantic import BaseModel
 from sqlalchemy import select
 
@@ -277,15 +277,40 @@ async def parse_paper_task(paper_id: str, file_path: str, file_content: bytes, f
         })
 
 
-@router.post("/upload", response_model=PaperUploadResponse)
+@router.post("/upload")
 async def upload_paper(
+    request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
+    confirm_price: Optional[int] = Form(None),
     current_user: User = Depends(get_current_user),
 ):
     """
     上传论文文件
     """
+    if get_settings().rid_mode == "linked":
+        # 关联模式：只收 PDF，按篇计费（设计 v0.2 §4）；题录随后由解析结果补全
+        from app.api.v1.intake import attach_pdf
+
+        if not (file.filename or "").lower().endswith(".pdf"):
+            raise HTTPException(400, "仅支持 PDF 文件")
+        paper_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc)
+        paper = {"id": paper_id, "filename": file.filename, "status": "pdf_pending", "created_at": now,
+                 "updated_at": now, "user_id": current_user.id}
+        content = await file.read()
+        from app.services import pdf_intake
+
+        try:
+            pdf_intake.inspect_pdf(content)
+        except pdf_intake.IntakeError as e:
+            raise HTTPException(400, str(e))
+        store.set(paper_id, paper)
+        result = await attach_pdf(current_user, getattr(request.state, "pd_sid", None), paper, content,
+                                  file.filename, confirm_price)
+        return {"id": paper_id, "filename": file.filename, "status": result["status"],
+                "message": "上传成功，开始解析", "created_at": now, **result}
+
     # 验证文件类型
     if not file.filename.lower().endswith(('.pdf', '.docx', '.tex')):
         raise HTTPException(400, "仅支持 .pdf, .docx, .tex 文件")

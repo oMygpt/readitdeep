@@ -32,6 +32,7 @@ class ProviderSession(Base):
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), index=True)
     provider: Mapped[str] = mapped_column(String(50), default="paperdaily")
     grant_id: Mapped[str] = mapped_column(String(100), index=True)
+    key_id: Mapped[Optional[str]] = mapped_column(String(100))  # 主站委托 key 的标识（read-jobs 签名用）
     auth_version: Mapped[int] = mapped_column(Integer, default=0)
     key_version: Mapped[str] = mapped_column(String(20))
     key_nonce: Mapped[bytes] = mapped_column(LargeBinary)

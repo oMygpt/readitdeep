@@ -147,6 +147,8 @@ async def get_current_user(
 
         sensitive = request.method not in ("GET", "HEAD", "OPTIONS")
         await pd_sessions.verify(payload.get("sid"), user.id, sensitive=sensitive)
+        request.state.pd_sid = payload.get("sid")  # 需要以用户身份回主站（导入题录、计费）的接口使用
+        pd_sessions.current_sid.set(payload.get("sid"))
 
     return user
 
