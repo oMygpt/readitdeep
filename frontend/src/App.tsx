@@ -28,6 +28,7 @@ import LibraryPage from './pages/LibraryPage';
 import ReaderPage from './pages/ReaderPage';
 import WorkbenchPage from './pages/WorkbenchPage';
 import SettingsPage from './pages/SettingsPage';
+import ResearchPage from './pages/ResearchPage';
 import OpenPage from './pages/OpenPage';
 import LoginPage from './pages/LoginPage';
 import AdminPage from './pages/AdminPage';
@@ -108,6 +109,7 @@ const router = createBrowserRouter(createRoutesFromElements(
       <Route path="tasks/:taskId" element={<ProtectedRoute><TaskDetailsPage /></ProtectedRoute>} />
       <Route path="admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
       <Route path="settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+      <Route path="research" element={<ProtectedRoute><ResearchPage /></ProtectedRoute>} />
       <Route path="open" element={<ProtectedRoute><OpenPage /></ProtectedRoute>} />
 
       {/* 404 重定向 */}

@@ -26,7 +26,7 @@
 | POST `read_job_create`；GET `read_job_status`；POST `read_job_cancel` | `write:reading` / `read:reading` | 按篇计费 |
 
 - 新增 scope 后，用户在下次登录时重新同意（主站设计 §3.5）。RiD 将请求的 scope 设为 `read:paper read:contrib read:history read:reading write:reading`（部署变量 `PAPERDAILY_SCOPES`）。
-- 不需要 `read:resources`：主站没有全文。资源桥接以后再开。
+- 2026-10-27 用户后续批准：可选 `read:resources`，仅读取主站明确允许转移的已登记资源；没有资源仍走题录/PDF 路径。本次有限研究授权为 `read:paper read:resources read:reading write:reading`；上表其余 R6 权益、合集、综述与 jobs 操作不因此开放。配套主站 PR #179 已实现有限研究契约，尚未配置或部署。
 
 ## P2 开放给所有已验证账号
 

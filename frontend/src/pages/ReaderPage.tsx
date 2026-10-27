@@ -3,7 +3,7 @@
  */
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -56,6 +56,9 @@ function ReaderContent() {
     const { user: signedInUser } = useAuth();
     const { paperId } = useParams<{ paperId: string }>();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const evidenceId = searchParams.get("annotation");
+    const evidenceJumped = useRef(false);
     const [isZen, setIsZen] = useState(false);
     const [paperFormat, setPaperFormat] = useState<'standard' | 'acm' | 'lncs'>('standard');
     const [fontSize, setFontSize] = useState<number>(1.2); // Default larger size (approx 19.2px)
@@ -117,6 +120,7 @@ function ReaderContent() {
 
     useEffect(() => {
         const checkpoint = reading.initial?.checkpoint;
+        if (evidenceId) { restored.current = true; return; }
         if (restored.current || !checkpoint || !currentRevision || !mainContentRef.current) return;
         if (checkpoint.representation !== representation) {
             if (checkpoint.representation === 'translation' && paper?.translated_content) {
@@ -157,7 +161,7 @@ function ReaderContent() {
             clearTimeout(timer); observer.disconnect();
             el.removeEventListener('wheel', stop); el.removeEventListener('pointerdown', stop); el.removeEventListener('keydown', stop);
         };
-    }, [reading.initial, currentRevision, representation, paper?.translated_content]);
+    }, [reading.initial, currentRevision, representation, paper?.translated_content, evidenceId]);
 
     useEffect(() => () => { if (scrollTimer.current) clearTimeout(scrollTimer.current); }, []);
 
@@ -231,6 +235,16 @@ function ReaderContent() {
         queryFn: () => annotationsApi.list(paperId!),
         enabled: !!paperId && !!currentUser,
     });
+
+    useEffect(() => {
+        if (!evidenceId || evidenceJumped.current || !currentRevision || !documentRef.current || !annotations.length) return;
+        const item = annotations.find(value => value.id === evidenceId);
+        if (!item) { evidenceJumped.current = true; setNotice('这条证据已不可用，请在证据库重新核对。'); return; }
+        const frame = requestAnimationFrame(() => { evidenceJumped.current = true; jumpToAnnotation(item); });
+        return () => cancelAnimationFrame(frame);
+    // The explicit evidence jump runs once after its content revision is rendered.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [evidenceId, currentRevision, annotations]);
 
     // Check for existing translation on load
     useEffect(() => {
@@ -1436,7 +1450,7 @@ function ReaderContent() {
                                                 <div key={idx}>
                                                     <ReactMarkdown
                                                         remarkPlugins={[remarkMath]}
-                                                        rehypePlugins={[rehypeRaw, rehypeKatex]}
+                                                        rehypePlugins={paper?.resource_imported ? [rehypeKatex] : [rehypeRaw, rehypeKatex]}
                                                         components={{ p: ({ children }) => <>{children}</> }}
                                                     >
                                                         {line}
@@ -1449,7 +1463,7 @@ function ReaderContent() {
                                                 <div key={idx}>
                                                     <ReactMarkdown
                                                         remarkPlugins={[remarkMath]}
-                                                        rehypePlugins={[rehypeRaw, rehypeKatex]}
+                                                        rehypePlugins={paper?.resource_imported ? [rehypeKatex] : [rehypeRaw, rehypeKatex]}
                                                         components={{ p: ({ children }) => <>{children}</> }}
                                                     >
                                                         {line}
@@ -1482,9 +1496,9 @@ function ReaderContent() {
                             >
                                 <ReactMarkdown
                                     remarkPlugins={[remarkGfm, remarkMath]}
-                                    rehypePlugins={[rehypeRaw, rehypeKatex]}
+                                    rehypePlugins={paper?.resource_imported ? [rehypeKatex] : [rehypeRaw, rehypeKatex]}
                                     components={{
-                                        img: (props) => (
+                                        img: (props) => paper?.resource_imported ? <span className="text-sm text-content-muted">[图片未转移：{props.alt || '图'}，请在原始文献核对]</span> : (
                                             <figure className="my-10">
                                                 <img
                                                     {...props}

@@ -1,3 +1,4 @@
+import QuestionPicker from './QuestionPicker';
 import { useState } from 'react';
 import { ArrowUpRight, Bookmark, Check, ChevronDown, FileText, Loader2, MessageSquare, Plus, RotateCcw, Trash2, X } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -79,6 +80,7 @@ export default function ResearchPanel({ paperId, ownerId, paperTitle, annotation
             <button className="research-icon-button" aria-label="关闭研究笔记" onClick={onClose}><X className="w-4 h-4" /></button>
         </div>
         <div className="px-5 pb-4">
+            <QuestionPicker value={reading.workspace.question || null} disabled={!reading.initial} onChange={question => reading.update({ question })} />
             <label htmlFor="reading-focus" className="text-xs font-semibold text-content-muted">这次想弄清什么？</label>
             <textarea id="reading-focus" className="research-focus mt-2" rows={3} maxLength={2000}
                 placeholder="带着一个问题读，也可以先读再补。" value={reading.workspace.focus}

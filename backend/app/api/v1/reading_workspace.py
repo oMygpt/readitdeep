@@ -2,7 +2,7 @@
 
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
@@ -32,6 +32,7 @@ class Checkpoint(BaseModel):
 class WorkspaceWrite(BaseModel):
     model_config = ConfigDict(extra="forbid")
     version: int = Field(ge=0)
+    question_id: int | None = Field(default=None, ge=1)
     focus: str = Field(default="", max_length=2000)
     next_action: str = Field(default="", max_length=4000)
     checkpoint: Optional[Checkpoint] = None
@@ -39,6 +40,7 @@ class WorkspaceWrite(BaseModel):
 
 def serialize(row: Optional[ReadingWorkspace]) -> dict:
     return {
+        "question": row.question if row else None,
         "version": row.version if row else 0,
         "focus": row.focus if row else "",
         "next_action": row.next_action if row else "",
@@ -63,6 +65,7 @@ async def get_workspace(
 async def put_workspace(
     paper_id: str,
     body: WorkspaceWrite,
+    request: Request,
     response: Response,
     paper: dict = Depends(require_paper_access),
     user: User = Depends(get_current_user),
@@ -84,7 +87,17 @@ async def put_workspace(
             or body.checkpoint.anchor.representation != revision.representation
         ):
             raise HTTPException(422, "阅读锚点与内容版本不一致")
-    values = body.model_dump(exclude={"version"})
+    from app.api.v1.research import question_snapshot, live_owner
+    from app.services.paperdaily import research_client as pd
+    current = await db.get(ReadingWorkspace, (user.id, paper_id))
+    question = current.question if current else None
+    if "question_id" in body.model_fields_set and body.question_id != (question or {}).get("id"):
+        question = await question_snapshot(await pd.delegation(request, user, "read:reading"), body.question_id) if body.question_id else None
+        if body.question_id:
+            await pd.delegation(request, user, "read:reading")
+    await live_owner(db, user)
+    values = body.model_dump(exclude={"version", "question_id"})
+    values["question"] = question
     values.update(version=body.version + 1, updated_at=utcnow())
     if body.version == 0:
         db.add(ReadingWorkspace(user_id=user.id, paper_id=paper_id, **values))

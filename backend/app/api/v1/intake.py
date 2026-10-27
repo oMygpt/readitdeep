@@ -86,31 +86,32 @@ def _add_tag(paper_id: str, tag: Optional[str]) -> None:
 async def import_papers(user: User, sid: Optional[str], paper_ids: list[str], tag: Optional[str] = None) -> list[dict]:
     from app.services.paperdaily import api
 
-    d = await billing.delegation(sid, user)
+    from app.core.database import async_session_maker
+    from app.services.paperdaily import sessions
+    from app.services.paperdaily.documents import store_document
+
+    async def recheck(scope: str) -> str:
+        session = await sessions.verify(sid or sessions.current_sid.get(), user.id, sensitive=True)
+        if scope not in (session.scope or "").split():
+            raise HTTPException(403, "PaperDaily 授权不包含此操作，请连接研究权限")
+        return sessions._token_of(session)
+
+    token = await recheck("read:paper")
     results = []
     for pd_id in dict.fromkeys(p.strip() for p in paper_ids if p and p.strip()):
-        existing = _find_imported(user.id, pd_id[:200])
-        if existing:
-            _add_tag(existing["id"], tag)
-            results.append({"source_id": pd_id, "paper_id": existing["id"], "status": existing.get("status"), "created": False})
-            continue
         try:
-            detail = await api.get_paper(d.token, pd_id)
+            detail = await api.get_paper(token, pd_id)
         except (PaperDailyUnavailable, PaperDailyError) as e:
             if isinstance(e, PaperDailyUnavailable) or (isinstance(e, PaperDailyError) and e.status in (401, 403)):
                 raise _pd_error(e)
             results.append({"source_id": pd_id, "paper_id": None, "status": "error", "error": _pd_error(e).detail})
             continue
-        paper_id = str(uuid.uuid4())
-        fields = pdf_intake.metadata_fields(detail)
-        now = utcnow()
-        store.set(paper_id, {
-            "id": paper_id, "user_id": user.id, "filename": (fields["title"] or pd_id)[:200], "status": "metadata",
-            "source_provider": PROVIDER, "source_id": pd_id[:200], "created_at": now, "updated_at": now,
-            "tags": [tag] if tag else None, **{k: v for k, v in fields.items() if v is not None},
-        })
-        results.append({"source_id": pd_id, "paper_id": paper_id, "status": "metadata", "created": True,
-                         "oa_available": bool(pdf_intake.oa_candidates(fields))})
+        async with async_session_maker() as db:
+            imported = await store_document(detail, user, db, recheck)
+        _add_tag(imported["paper_id"], tag)
+        paper = store.get(imported["paper_id"]) or {}
+        results.append({"source_id": detail["id"], "paper_id": imported["paper_id"], "status": paper.get("status"),
+                        "created": not imported["duplicate"], "oa_available": bool(pdf_intake.oa_candidates(paper))})
     return results
 
 
@@ -175,18 +176,35 @@ async def attach_pdf(user: User, sid: Optional[str], paper: dict, content: bytes
         meta = pdf_intake.inspect_pdf(content)
     except pdf_intake.IntakeError as e:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
+    from app.core.database import async_session_maker
+    from app.models.paper import Paper
+    from app.services.paperdaily.documents import live_owner
+    from app.services.paperdaily import sessions
+    from sqlalchemy import select
+
+    if billing.is_linked():
+        await sessions.verify(sid or sessions.current_sid.get(), user.id, sensitive=True)
     paper_id = paper["id"]
-    path = pdf_intake.save_pdf(user.id, paper_id, filename, content)
-    old = paper.get("file_path")
+    # The same row lock arbitrates registered Markdown and uploaded PDF content.
+    async with async_session_maker() as db:
+        await live_owner(db, user)
+        current = await db.scalar(select(Paper).where(Paper.id == paper_id, Paper.user_id == user.id).with_for_update())
+        if current is None:
+            raise HTTPException(404, "题录不存在")
+        if current.markdown_content or current.status not in ("metadata", "pdf_pending", "failed"):
+            raise HTTPException(409, "此论文已有正文或正在处理，请重新载入")
+        path = pdf_intake.save_pdf(user.id, paper_id, filename, content)
+        old = current.file_path
+        current.file_path, current.filename = path, filename[:500]
+        current.extra = {**(current.extra or {}), "pdf": meta, "billing_block": None}
+        current.status, current.error_message = "uploading", None
+        await db.commit()
     if old and old != path:
         try:
             import os
-
             os.remove(old)
         except OSError:
             pass
-    store.update(paper_id, {"file_path": path, "filename": filename[:500], "pdf": meta, "status": "pdf_pending",
-                            "billing_block": None, "error_message": None})
     return await process(user, sid, paper_id, confirm_price)
 
 
@@ -200,6 +218,10 @@ async def process(user: User, sid: Optional[str], paper_id: str, confirm_price: 
     except billing.BillingBlocked as e:
         store.update(paper_id, {"status": "pdf_pending", "billing_block": e.reason, "error_message": e.detail["message"]})
         e.detail["paper_id"] = paper_id  # PDF 已保存，前端可据此提示并稍后调用 /process
+        raise
+    except HTTPException:
+        # Admission may fail before a job exists; keep the saved PDF retryable.
+        store.update(paper_id, {"status": "pdf_pending"})
         raise
     store.update(paper_id, {"status": "uploading", "billing_block": None, "error_message": None})
     from app.core import jobs

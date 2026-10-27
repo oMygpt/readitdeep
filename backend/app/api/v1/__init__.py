@@ -62,3 +62,6 @@ router.include_router(reading_workspace.router, tags=["Reading Workspace"])
 from app.api.v1 import preferences
 
 router.include_router(preferences.router, tags=["Preferences"])
+
+from app.api.v1 import research
+router.include_router(research.router, tags=["Research"])

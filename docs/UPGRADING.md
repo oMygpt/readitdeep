@@ -78,3 +78,14 @@
 5. **用户默认不能自定义服务地址**：设置页中的 LLM / MinerU 服务地址只能由管理员在系统配置里设定，用户仍可填写自己的 API Key。需要恢复旧行为时设 `ALLOW_USER_ENDPOINTS=true`，此时仍会拒绝内网与保留地址。之前用户保存的地址在未开放时不生效。
 6. **没有所有者的旧论文只有管理员可见**（旧版本把它们当作公开）。
 7. **AI 配额扣在调用者身上**：之前按论文所有者扣，团队成员使用 AI 会消耗所有者的配额。
+
+
+## Research bridge（2026-10-27，未部署）
+
+迁移保留 R6 `0005_read_charges`，随后执行 `0006_research_bridge`。新 `/research` 私有比较与发布回执、Reader 正式问题快照使用这批表；不要覆盖旧 migration 或清空阅读数据。
+
+`/open` 保留多篇/合集/综述入口，新增逐篇显式导入主站可转移 Markdown 的操作。它复用 canonical 题录 upsert，不启动 PDF parse/read-job。没有资源则仍通过原 `PaperIntakeActions` 为同一题录补传 PDF，价格确认、hold/runner 与原始 gates 保留。
+
+PaperDaily 配套为 [PR #179](https://github.com/alonegg/new_paperdaily/pull/179)，候选 v2.20.0：其 migration 218 须先于 selected-passages 写入。新研究 scope 必须经真实 client policy 配置及用户明确同意；空 scope 登录不自动增权。资源仍受许可、e2/e3、容量和授权开关限制。本轮不配置或启用生产的 billing/runner，也不扩大 R6 其他 API 权限。
+
+完整验收及边界见 [研究桥接实施记录](../plan/2026-10-27-research-bridge-implementation.md)。

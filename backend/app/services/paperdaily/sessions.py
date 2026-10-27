@@ -60,7 +60,7 @@ def safe_return_to(value: Optional[str]) -> str:
 # ---------------- 授权跳转 ----------------
 
 
-async def begin_login(return_to: Optional[str]) -> tuple[str, str]:
+async def begin_login(return_to: Optional[str], *, research: bool = False) -> tuple[str, str]:
     """返回 (主站授权 URL, 浏览器 cookie 值)"""
     state = secrets.token_urlsafe(32)
     browser_nonce = secrets.token_urlsafe(32)
@@ -71,7 +71,8 @@ async def begin_login(return_to: Optional[str]) -> tuple[str, str]:
         db.add(ConnectState(state=state, browser_nonce=browser_nonce, code_verifier=verifier,
                             return_to=safe_return_to(return_to), created_at=utcnow()))
         await db.commit()
-    return client.authorize_url(state, challenge), browser_nonce
+    from app.services.paperdaily.research_client import SCOPES
+    return client.authorize_url(state, challenge, SCOPES if research else None), browser_nonce
 
 
 async def consume_state(state: str, browser_nonce: Optional[str]) -> ConnectState:

@@ -335,6 +335,7 @@ export default function LibraryPage() {
                     </div>
                 </div>
 
+                <div className="px-6 mb-4"><Link to="/research" className="block research-card p-4"><span className="font-semibold text-sm">研究证据工作台 →</span><span className="block text-xs text-content-muted mt-1">围绕问题，跨论文比较与积累</span></Link><Link to="/open" className="research-text-button mt-3">从 PaperDaily 导入论文</Link></div>
                 {/* Workbench Link */}
                 <div className="px-6 mb-4">
                     <Link

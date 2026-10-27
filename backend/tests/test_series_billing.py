@@ -79,6 +79,7 @@ class FakePD(FakePaperDaily):
             r = super().handler(request)
             if r.status_code == 200:
                 body = json.loads(r.content)
+                body["scope"] = "read:paper"
                 body["key_id"] = "k-" + body["access_token"][-6:]
                 self.tokens[body["access_token"]]["key_id"] = body["key_id"]
                 return httpx.Response(200, json=body)
@@ -163,7 +164,7 @@ def pd(monkeypatch):
     s = get_settings()
     for k, v in {
         "rid_mode": "linked", "public_base_url": "https://read.test", "paperdaily_base_url": "https://pd.test",
-        "paperdaily_web_url": "https://pd.test", "paperdaily_client_id": "read", "paperdaily_client_secret": "client-secret",
+        "paperdaily_web_url": "https://pd.test", "paperdaily_scopes": "read:paper", "paperdaily_client_id": "read", "paperdaily_client_secret": "client-secret",
         "paperdaily_token_keys": f"v2:{KEY_V2},v1:{KEY_V1}", "read_billing": "paperdaily",
         "paperdaily_runner_secret": RUNNER_SECRET, "paperdaily_assertion_secret": ASSERTION_SECRET,
         "read_free_paper_limit": 2,
@@ -398,3 +399,34 @@ async def test_chat_limit_by_tier(pd, https_client, monkeypatch):
     with pytest.raises(Exception) as e:
         await charge_ai_quota(uid)
     assert e.value.status_code == 403
+
+
+async def test_research_metadata_pdf_attachment_keeps_question_workspace(pd, https_client, fake_parse):
+    c = https_client
+    h, uid = await _session(c, pd)
+    pid = (await _import(c, h))[0]['paper_id']
+    workspace = f'/api/v1/papers/{pid}/reading-workspace'
+    assert (await c.put(workspace, headers=h, json={'version':0,'focus':'Preserve my research focus'})).status_code == 200
+    attached = await _attach(c, h, pid, make_pdf('attached in place'), PRICE)
+    assert attached.status_code == 200, attached.text
+    assert attached.json()['paper_id'] == pid
+    assert (await c.get(workspace, headers=h)).json()['focus'] == 'Preserve my research focus'
+    assert store.get(pid)['source_id'] == 'W1'
+
+
+async def test_admission_http_failure_keeps_pdf_retryable(pd, https_client, fake_parse, monkeypatch):
+    from fastapi import HTTPException
+    c = https_client
+    h, uid = await _session(c, pd)
+    pid = (await _import(c, h))[0]['paper_id']
+    original = billing.admit
+    async def unavailable(*args, **kwargs):
+        raise HTTPException(503, 'entitlements temporarily unavailable')
+    monkeypatch.setattr(billing, 'admit', unavailable)
+    result = await _attach(c, h, pid, make_pdf('retry admission'), PRICE)
+    assert result.status_code == 503
+    assert store.get(pid)['status'] == 'pdf_pending' and store.get(pid)['file_path']
+    assert pd.jobs == {}
+    monkeypatch.setattr(billing, 'admit', original)
+    retry = await c.post(f'/api/v1/papers/{pid}/process', headers=h, json={'confirm_price': PRICE})
+    assert retry.status_code == 200, retry.text
