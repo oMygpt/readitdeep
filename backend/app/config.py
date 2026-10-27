@@ -47,7 +47,24 @@ class Settings(BaseSettings):
     paperdaily_scopes: str = ""  # 主站首发 read client 不接受任何 scope，保持为空
     # 关联模式下的本地 JWT 有效期（分钟），设计上限 15
     linked_jwt_minutes: int = 15
-    
+
+    # ---------- 系列站（设计 2026-10-27 v0.2）----------
+    # 管理员可为各任务选择的模型（逗号分隔）。linked 模式下系统配置里的模型名必须在此列表内
+    allowed_models: str = ""
+    # 「获取开放获取 PDF」只从这些域名（含子域）下载
+    oa_pdf_hosts: str = "arxiv.org,export.arxiv.org"
+    oa_pdf_max_bytes: int = 50 * 1024 * 1024
+    # 按篇计费：off（不计费，独立模式或主站计费开通前）| paperdaily（主站 read-jobs）
+    read_billing: Literal["off", "paperdaily"] = "off"
+    read_free_paper_limit: int = 5  # 注册（非 Pro/机构）用户每周期可处理的 PDF 篇数
+    read_free_paper_period: Literal["month", "lifetime"] = "month"
+    read_chat_daily_limit_free: int = 50  # 问答、划词翻译等交互 AI 的每日次数
+    read_chat_daily_limit_paid: int = 300
+    # 主站 read-jobs 受信 runner 身份与 client assertion 密钥（只放保险库）
+    paperdaily_runner_id: str = "rid"
+    paperdaily_runner_secret: str = ""
+    paperdaily_assertion_secret: str = ""
+
     # 数据库 (SQLite 本地开发 / PostgreSQL 生产)
     database_url: str = "sqlite"  # 使用 sqlite 自动创建本地数据库
     supabase_url: str = ""

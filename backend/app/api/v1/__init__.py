@@ -52,3 +52,7 @@ router.include_router(workbench.paper_workbench_router, prefix="/papers", tags=[
 from app.api.v1 import reading_workspace
 
 router.include_router(reading_workspace.router, tags=["Reading Workspace"])
+
+from app.api.v1 import preferences
+
+router.include_router(preferences.router, tags=["Preferences"])

@@ -27,20 +27,53 @@ async def get_translation_llm(user_id: str | None):
 
     return await get_chat_model("translate", user_id, streaming=True, timeout=180, usage_label="translation")
 
-TRANSLATION_PROMPT = """请将以下学术论文内容翻译成中文。
+TRANSLATION_PROMPT = """请将以下学术论文内容翻译成{language}。
 
 ## 翻译要求
 1. **保持格式**: 保留所有 Markdown 格式（标题、列表、代码块、表格等）
 2. **术语准确**: 专业术语翻译准确，必要时保留英文原词
-3. **学术风格**: 使用学术论文的正式语体
+3. **学术风格**: {style}
 4. **公式保留**: LaTeX 公式保持原样，不翻译
 5. **引用保留**: 参考文献引用格式保持原样
-
+{glossary}
 ## 原文内容
 {content}
 
 ## 翻译结果
 """
+
+STYLE_TEXT = {
+    "fluent": "使用学术论文的正式语体，行文通顺自然",
+    "literal": "使用学术论文的正式语体，尽量逐句直译、不增删信息",
+}
+
+
+def build_translation_prompt(content: str, prefs: dict | None = None) -> str:
+    """按用户偏好（目标语言、风格、术语表）生成翻译提示词"""
+    from app.core.config_policy import TARGET_LANGS, USER_PREFERENCES
+
+    prefs = {**USER_PREFERENCES, **(prefs or {})}
+    language = TARGET_LANGS.get(prefs["translate_target_lang"], "中文")
+    glossary = ""
+    terms = [t for t in prefs.get("glossary") or [] if t.get("source") and t.get("source") in content]
+    if terms:
+        lines = "\n".join(f"- {t['source']} → {t['target']}" for t in terms)
+        glossary = f"6. **术语表**: 以下术语必须按指定译法翻译：\n{lines}\n"
+    return TRANSLATION_PROMPT.format(
+        language=language, style=STYLE_TEXT.get(prefs["translate_style"], STYLE_TEXT["fluent"]),
+        glossary=glossary, content=content,
+    )
+
+
+async def translation_preferences(user_id: str | None) -> dict:
+    if not user_id:
+        return {}
+    from app.core.config_manager import ConfigManager
+    from app.core.config_policy import preferences_of
+    from app.core.database import async_session_maker
+
+    async with async_session_maker() as db:
+        return preferences_of(await ConfigManager.get_user_config(db, user_id))
 
 
 async def start_translation_task(paper_id: str, user_id: str | None = None) -> Dict[str, Any]:
@@ -145,12 +178,14 @@ async def _translate_paper_background(paper_id: str, user_id: str | None = None)
             "translation_chunks": existing_chunks,
         })
         
-        llm = await get_translation_llm(user_id or (store.get(paper_id) or {}).get("user_id"))
+        owner = user_id or (store.get(paper_id) or {}).get("user_id")
+        llm = await get_translation_llm(owner)
+        prefs = await translation_preferences(owner)
         
         # 从 resume_index 开始翻译
         for i in range(resume_index, total_chunks):
             chunk = chunks[i]
-            prompt = TRANSLATION_PROMPT.format(content=chunk)
+            prompt = build_translation_prompt(chunk, prefs)
             chunk_result = []
             
             try:

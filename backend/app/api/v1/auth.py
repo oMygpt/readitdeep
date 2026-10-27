@@ -541,7 +541,11 @@ async def update_user_config_endpoint(
     """更新用户配置覆盖"""
     from app.core.config_manager import ConfigManager
     
+    from app.core.config_policy import is_linked
+
     updates = data.model_dump(exclude_none=True)
+    if is_linked() and updates:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "模型与服务由站点统一配置（校内模型），个人只能设置偏好")
     _check_user_urls({k: v for k, v in updates.items() if is_url_config_key(k)})
     await ConfigManager.set_user_config(db, user.id, updates)
     
@@ -560,7 +564,10 @@ async def test_api_key_endpoint(
     api_type 支持: 'llm', 'mineru', 'translation'
     """
     import httpx
+    from app.core.config_policy import is_linked
 
+    if is_linked():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "模型与服务由站点统一配置（校内模型），无需测试个人 Key")
     if data.base_url:
         _check_user_urls({"base_url": data.base_url})
 

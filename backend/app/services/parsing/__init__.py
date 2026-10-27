@@ -36,6 +36,14 @@ class ParseResult:
 
 
 def provider_order(config: dict) -> list[str]:
+    order = _configured_order(config)
+    # 用户偏好「快速解析」：跳过视觉模型逐页转写（少用 GPU；仍按篇计费，见设计 v0.2 §4）
+    if config.get("parse_quality") == "fast" and any(p != "vlm" for p in order):
+        order = [p for p in order if p != "vlm"]
+    return order
+
+
+def _configured_order(config: dict) -> list[str]:
     explicit = [p.strip() for p in re.split(r"[,\s]+", config.get("parse_providers") or "") if p.strip()]
     if explicit:
         return explicit
