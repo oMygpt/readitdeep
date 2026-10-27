@@ -16,15 +16,16 @@ import hashlib
 import logging
 import time
 import uuid
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import AsyncIterator, Optional
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
 from app.config import get_settings
-from app.core.database import async_session_maker
+from app.core.database import async_session_maker, engine
 from app.core.timeutil import utcnow
 from app.models.provider import ProviderSession
 from app.models.read_charge import COUNTED, ReadCharge
@@ -35,6 +36,7 @@ logger = logging.getLogger(__name__)
 BEIJING = timezone(timedelta(hours=8))
 TIER_CACHE_SECONDS = 60
 PREFLIGHT_SECONDS = 600  # 主站要求 ≤ 900
+CLAIM_BACKOFF_SECONDS = 5
 HEARTBEAT_SECONDS = 30   # 主站租约 60 秒
 
 PAID_TIERS = {"pro", "institution", "admin"}
@@ -61,7 +63,7 @@ def period_key(now: Optional[datetime] = None) -> str:
 # ---------------- 主站身份 ----------------
 
 
-@dataclass
+@dataclass(frozen=True)
 class Delegation:
     token: str
     key_id: str
@@ -192,11 +194,37 @@ async def _save(user_id: str, sha: str, paper_id: str, **values) -> ReadCharge:
         return row
 
 
-async def admit(user: User, sid: Optional[str], paper_id: str, pdf: dict, confirm_price: Optional[int] = None) -> tuple[ReadCharge, bool]:
+_admission_locks: dict[str, asyncio.Lock] = {}
+
+
+@asynccontextmanager
+async def admission_lock(user_id: str) -> AsyncIterator[None]:
+    """Serialize per-user quota and durable intent, across workers on PostgreSQL."""
+    if engine.dialect.name == "postgresql":
+        lock_id = int.from_bytes(hashlib.sha256(("rid-admission:" + user_id).encode()).digest()[:8], signed=True)
+        async with engine.begin() as conn:
+            await conn.execute(text("SELECT pg_advisory_xact_lock(:id)"), {"id": lock_id})
+            yield
+    else:
+        async with _admission_locks.setdefault(user_id, asyncio.Lock()):
+            yield
+
+
+async def admit(user: User, sid: Optional[str], paper_id: str, pdf: dict,
+                confirm_price: Optional[int] = None) -> tuple[ReadCharge, bool]:
+    async with admission_lock(user.id):
+        return await _admit_locked(user, sid, paper_id, pdf, confirm_price)
+
+
+async def _admit_locked(user: User, sid: Optional[str], paper_id: str, pdf: dict, confirm_price: Optional[int] = None) -> tuple[ReadCharge, bool]:
     """为一份 PDF 取得处理资格。返回 (计费记录, 是否本次新扣费)。
     同一用户同一内容已计过费 → 直接复用，不再扣；被拦下时抛 BillingBlocked。"""
     sha = pdf["sha256"]
     existing = await _charge(user.id, sha)
+    if existing is not None and existing.status == "admitting":
+        return await _admit_paperdaily(user, sid, paper_id, pdf, existing.period_key, confirm_price), True
+    if existing is not None and existing.status in {"held", "running", "unknown"}:
+        raise BillingBlocked(409, "billing_pending", "这份PDF的原作业尚未确认结束，请核对原作业后重试")
     if existing is not None and existing.status in COUNTED:
         if existing.paper_id != paper_id:
             logger.info("PDF %s already charged for user %s (paper %s); reusing", sha[:12], user.id, existing.paper_id)
@@ -243,43 +271,57 @@ async def _admit_paperdaily(user: User, sid: Optional[str], paper_id: str, pdf: 
                 "confirmed_price": int(price) if isinstance(price, int) and price >= 0 else 0,
                 "confirmed_price_version": str(version or "unknown")}
 
-    price = confirm_price if confirm_price is not None else _price_cache["price"]
-    try:
+    existing = await _charge(user.id, pdf["sha256"])
+    replay = bool(existing and existing.status == "admitting" and existing.admission)
+    envelope = existing.admission if replay else {
+        "body": job_body(confirm_price if confirm_price is not None else _price_cache["price"], _price_cache["price_version"]),
+        "idempotency_key": uuid.uuid4().hex,
+    }
+    for attempt in range(2):
+        await _save(user.id, pdf["sha256"], paper_id, status="admitting", funding="paperdaily",
+                    period_key=period, pages=int(pdf["pages"]), price=envelope["body"]["confirmed_price"],
+                    admission=envelope)
         try:
-            result = await api.create_read_job(d.token, d.key_id, job_body(price, _price_cache["price_version"]), uuid.uuid4().hex)
-        except PaperDailyError as e:
-            detail = getattr(e, "detail", None)
-            # 用户确认的金额与主站报价一致、只是本站还不知道价目版本：按主站版本重试一次
-            if (e.status == 409 and isinstance(detail, dict) and detail.get("code") == "read_quote_confirmation_required"
-                    and confirm_price is not None and detail.get("price") == confirm_price):
+            result = await api.create_read_job(d.token, d.key_id, envelope["body"], envelope["idempotency_key"])
+            break
+        except PaperDailyUnavailable as exc:
+            # Main may already have committed a hold: preserve the exact body/key.
+            raise BillingBlocked(503, "billing_unconfirmed", "原计费请求尚未确认，请重试核对原请求；不会创建第二份预扣") from exc
+        except PaperDailyError as exc:
+            detail = getattr(exc, "detail", None)
+            if exc.status == 409 and isinstance(detail, dict) and detail.get("code") == "read_quote_confirmation_required":
                 _price_cache.update(price=detail.get("price"), price_version=detail.get("price_version"))
-                result = await api.create_read_job(d.token, d.key_id, job_body(confirm_price, detail.get("price_version")),
-                                                   uuid.uuid4().hex)
-            else:
-                raise
-    except PaperDailyUnavailable as e:
-        raise BillingBlocked(status.HTTP_503_SERVICE_UNAVAILABLE, "billing_unavailable", "暂时连不上 PaperDaily 计费，请稍后重试") from e
-    except PaperDailyError as e:
-        detail = getattr(e, "detail", None)
-        if e.status == 409 and isinstance(detail, dict) and detail.get("code") == "read_quote_confirmation_required":
-            _price_cache.update(price=detail.get("price"), price_version=detail.get("price_version"))
-            raise BillingBlocked(status.HTTP_409_CONFLICT, "price_confirmation_required",
-                                 f"本篇将消耗 {detail.get('price')} 积分，请确认", price=detail.get("price"),
-                                 price_version=detail.get("price_version"))
-        if e.status == 402:
-            raise BillingBlocked(status.HTTP_402_PAYMENT_REQUIRED, "insufficient_credits",
-                                 "今日积分不足，积分每天补发；也可以先阅读已解析的论文")
-        if e.status in (401, 403):
-            raise BillingBlocked(status.HTTP_403_FORBIDDEN, "not_entitled",
-                                 "当前 PaperDaily 账号暂不能使用精读（需验证邮箱或重新授权）", code=e.error)
-        if e.status == 413:
-            raise BillingBlocked(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "too_large", "PDF 页数或大小超过上限")
-        logger.error("read-job admission rejected: %s %s", e.status, e.error)
-        raise BillingBlocked(status.HTTP_503_SERVICE_UNAVAILABLE, "billing_unavailable", "精读计费暂不可用，请稍后重试") from e
+                # This specific response guarantees admission rolled back, so a new quote is safe.
+                await _save(user.id, pdf["sha256"], paper_id, status="failed", funding="paperdaily",
+                            period_key=period, pages=int(pdf["pages"]), admission=None)
+                if attempt == 0 and confirm_price is not None and detail.get("price") == confirm_price:
+                    envelope = {"body": job_body(confirm_price, detail["price_version"]), "idempotency_key": uuid.uuid4().hex}
+                    replay = False
+                    continue
+                raise BillingBlocked(409, "price_confirmation_required", f"本篇将消耗 {detail.get('price')} 积分，请确认",
+                                     price=detail.get("price"), price_version=detail.get("price_version")) from exc
+            if replay:
+                raise BillingBlocked(503, "billing_unconfirmed", "暂时无法核对原计费请求，请保留原请求等待对账") from exc
+            await _save(user.id, pdf["sha256"], paper_id, status="failed", funding="paperdaily",
+                        period_key=period, pages=int(pdf["pages"]), admission=None)
+            if exc.status == 402:
+                raise BillingBlocked(402, "insufficient_credits", "今日积分不足，积分每天补发；也可以先阅读已解析的论文") from exc
+            if exc.status in (401, 403):
+                raise BillingBlocked(403, "not_entitled", "当前 PaperDaily 账号暂不能使用精读（需验证邮箱或重新授权）", provider_code=exc.error) from exc
+            if exc.status == 413:
+                raise BillingBlocked(413, "too_large", "PDF 页数或大小超过上限") from exc
+            raise BillingBlocked(503, "billing_unavailable", "精读计费暂不可用，请稍后重试") from exc
+    else:
+        raise BillingBlocked(503, "billing_unconfirmed", "原计费请求尚未确认")
+    if result.get("status") != "queued":
+        final = {"succeeded": "settled", "failed": "failed", "cancelled": "cancelled"}.get(result.get("status"), "unknown")
+        await _save(user.id, pdf["sha256"], paper_id, status=final, funding="paperdaily", period_key=period,
+                    pages=int(pdf["pages"]), pd_job_id=result["job_id"], admission=None)
+        raise BillingBlocked(409, "billing_pending", "原作业已有执行状态，请核对原结果")
     _price_cache.update(price=result.get("price"), price_version=result.get("price_version"))
     return await _save(user.id, pdf["sha256"], paper_id, status="held", funding="paperdaily", period_key=period,
                        pages=int(pdf["pages"]), price=int(result.get("price") or 0),
-                       price_version=result.get("price_version"), pd_job_id=result["job_id"])
+                       price_version=result.get("price_version"), pd_job_id=result["job_id"], admission=envelope)
 
 
 # ---------------- 受信 runner：执行期间与主站同步 ----------------
@@ -288,8 +330,8 @@ async def _admit_paperdaily(user: User, sid: Optional[str], paper_id: str, pdf: 
 async def charge_of_paper(paper_id: str) -> Optional[ReadCharge]:
     async with async_session_maker() as db:
         return (await db.execute(select(ReadCharge).where(
-            ReadCharge.paper_id == paper_id, ReadCharge.status.in_(("held", "running")),
-            ReadCharge.funding == "paperdaily"))).scalars().first()
+            ReadCharge.paper_id == paper_id,
+            ReadCharge.funding == "paperdaily").order_by(ReadCharge.updated_at.desc()))).scalars().first()
 
 
 async def _update(charge_id: str, **values) -> None:
@@ -311,15 +353,28 @@ async def run_billed(paper_id: str, work) -> None:
     if charge is None:
         await work()
         return
+    if charge.status == "settled":
+        await work()
+        return
+    if charge.status != "held":
+        raise BillingBlocked(409, "billing_pending", "原计费作业尚未确认结束，不能重复执行")
     try:
-        lease = await api.claim(charge.pd_job_id)
+        deadline = ((charge.admission or {}).get("body", {}).get("asset", {}).get("expires_at") or int(time.time()) + PREFLIGHT_SECONDS)
+        while True:
+            try:
+                lease = await api.claim(charge.pd_job_id)
+                break
+            except PaperDailyError as exc:
+                if exc.status != 429 or time.time() >= deadline:
+                    raise
+                await asyncio.sleep(min(CLAIM_BACKOFF_SECONDS, max(0.01, deadline - time.time())))
     except (PaperDailyUnavailable, PaperDailyError) as e:
         # 预检过期、授权撤销或主站拒绝：不执行（主站对账会冲正未开始的作业）
-        await _update(charge.id, status="failed", error=f"claim: {e}"[:500])
+        await _update(charge.id, status="unknown", error=f"claim: {type(e).__name__}")
         from app.core.store import store
 
         store.update(paper_id, {"status": "pdf_pending", "billing_block": "claim_failed",
-                                "error_message": "计费作业未能开始（可能等待过久或授权已变），请重新处理；未执行不扣分"})
+                                "error_message": "原计费作业执行状态待核对，请等待对账后再处理"})
         return
     fence = int(lease["fence"])
     await _update(charge.id, status="running", pd_fence=fence)
@@ -335,8 +390,10 @@ async def run_billed(paper_id: str, work) -> None:
             if beat.get("stop"):
                 stopped_by_pd = True
                 task.cancel()
-        except (PaperDailyUnavailable, PaperDailyError) as e:
-            logger.warning("heartbeat failed for %s: %s", charge.pd_job_id, e)
+        except (PaperDailyUnavailable, PaperDailyError):
+            logger.warning("heartbeat unavailable for job %s", charge.pd_job_id)
+            stopped_by_pd = True
+            task.cancel()
     try:
         await task
     except asyncio.CancelledError:
@@ -383,7 +440,7 @@ async def submit_completion(charge_id: str) -> bool:
         await _update(charge_id, status="unknown", error=f"complete: {result.get('disposition')}"[:500])
         return False
     final = {"succeeded": "settled", "failed": "failed", "cancelled": "cancelled"}.get(job_status, "unknown")
-    await _update(charge_id, status=final, completion=None)
+    await _update(charge_id, status=final, completion=None, admission=None)
     return True
 
 
@@ -394,6 +451,24 @@ async def reconcile_pending() -> int:
     done = 0
     for charge_id in ids:
         if await submit_completion(charge_id):
+            done += 1
+    # An authoritative terminal status may resolve a claim/lease uncertainty.
+    from app.services.paperdaily import api, sessions
+    from app.services.paperdaily.client import PaperDailyError, PaperDailyUnavailable
+    async with async_session_maker() as db:
+        pending = (await db.execute(select(ReadCharge).where(ReadCharge.status == "unknown", ReadCharge.pd_job_id.is_not(None)))).scalars().all()
+    for row in pending:
+        async with async_session_maker() as db:
+            session = (await db.execute(select(ProviderSession).where(ProviderSession.user_id == row.user_id, ProviderSession.revoked_at.is_(None)).order_by(ProviderSession.created_at.desc()))).scalars().first()
+        if session is None:
+            continue
+        try:
+            result = await api.read_job_status(sessions._token_of(session), row.pd_job_id)
+        except (PaperDailyError, PaperDailyUnavailable):
+            continue
+        final = {"succeeded": "settled", "failed": "failed", "cancelled": "cancelled"}.get(result.get("status"))
+        if final:
+            await _update(row.id, status=final, completion=None, admission=None)
             done += 1
     return done
 

@@ -113,7 +113,7 @@ async def collections(token: str) -> list:
 
 
 async def library(token: str, params: Optional[dict] = None) -> dict:
-    return await _request("GET", f"{V1}/me/library", token=token, params=params or {})
+    return await _request("GET", f"{V1}/me/library/items", token=token, params=params or {})
 
 
 async def query_history(token: str, history_id: int) -> dict:
@@ -126,6 +126,10 @@ async def create_read_job(token: str, key_id: str, job: dict, idempotency_key: s
     headers = assertion_headers("read", s.paperdaily_assertion_secret, "POST", path, body_bytes(job), key_id or "-")
     headers["Idempotency-Key"] = idempotency_key
     return await _request("POST", path, token=token, body=job, headers=headers)
+
+
+async def read_job_status(token: str, job_id: str) -> dict:
+    return await _request("GET", f"{V1}/me/read-jobs/{quote(job_id, safe='')}", token=token)
 
 
 async def cancel_read_job(token: str, job_id: str) -> dict:

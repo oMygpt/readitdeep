@@ -1,0 +1,21 @@
+{
+  "secret": "TEST-ONLY-rid-runner-signing-secret-v1",
+  "asset": {
+    "receipt_id": "preflight_fixture_v1",
+    "kind": "blob",
+    "asset_id": "blob_fixture_v1",
+    "paper_id": null,
+    "owner_id": "fixture-user",
+    "grant_id": "grt_fixture_v1",
+    "operation": "read.parse",
+    "content_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "byte_length": 4096,
+    "pages": 2,
+    "expires_at": 1793059800,
+    "signer": "rid",
+    "signature": "4cf1171b9ff99245ac3b09f999bacae8ddabe127f2376bd3b2b876c33aa7249a"
+  },
+  "canonical_utf8": "{\"asset_id\":\"blob_fixture_v1\",\"byte_length\":4096,\"content_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"expires_at\":1793059800,\"grant_id\":\"grt_fixture_v1\",\"kind\":\"blob\",\"operation\":\"read.parse\",\"owner_id\":\"fixture-user\",\"pages\":2,\"paper_id\":null,\"receipt_id\":\"preflight_fixture_v1\",\"signer\":\"rid\",\"version\":\"read-preflight-v1\"}",
+  "canonical_hex": "7b2261737365745f6964223a22626c6f625f666978747572655f7631222c22627974655f6c656e677468223a343039362c22636f6e74656e745f736861323536223a2261616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161222c22657870697265735f6174223a313739333035393830302c226772616e745f6964223a226772745f666978747572655f7631222c226b696e64223a22626c6f62222c226f7065726174696f6e223a22726561642e7061727365222c226f776e65725f6964223a22666978747572652d75736572222c227061676573223a322c2270617065725f6964223a6e756c6c2c22726563656970745f6964223a22707265666c696768745f666978747572655f7631222c227369676e6572223a22726964222c2276657273696f6e223a22726561642d707265666c696768742d7631227d",
+  "signature": "4cf1171b9ff99245ac3b09f999bacae8ddabe127f2376bd3b2b876c33aa7249a"
+}

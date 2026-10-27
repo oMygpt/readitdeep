@@ -139,7 +139,7 @@ async def import_collection(body: ImportCollectionRequest, request: Request, use
     d = await billing.delegation(_sid(request), user)
     try:
         cols = await api.collections(d.token)
-        listing = await api.library(d.token, {"collection": body.collection_id, "limit": MAX_IMPORT})
+        listing = await api.library(d.token, {"collection_id": body.collection_id, "limit": MAX_IMPORT})
     except (PaperDailyUnavailable, PaperDailyError) as e:
         raise _pd_error(e)
     name = next((c.get("name") for c in cols or [] if str(c.get("id")) == body.collection_id), None) or "PaperDaily 合集"

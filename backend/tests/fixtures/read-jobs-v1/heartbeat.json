@@ -1,0 +1,29 @@
+{
+  "actor": "rid",
+  "secret": "TEST-ONLY-rid-runner-signing-secret-v1",
+  "key_id": "-",
+  "method": "POST",
+  "path": "/api/internal/read-jobs/rj_fixture_v1/heartbeat",
+  "body": {
+    "fence": 1
+  },
+  "body_utf8": "{\"fence\":1}",
+  "timestamp": "1793059200",
+  "nonce": "fixture_heartbeat_nonce_v1",
+  "canonical_utf8": "{\"actor\":\"rid\",\"body_sha256\":\"6c8e7d114bf37611c9261e179e629cbae6a52454e6f3578152de39ea4fe267a6\",\"key_id\":\"-\",\"method\":\"POST\",\"nonce\":\"fixture_heartbeat_nonce_v1\",\"path\":\"/api/internal/read-jobs/rj_fixture_v1/heartbeat\",\"timestamp\":\"1793059200\",\"version\":\"read-assertion-v1\"}",
+  "canonical_hex": "7b226163746f72223a22726964222c22626f64795f736861323536223a2236633865376431313462663337363131633932363165313739653632396362616536613532343534653666333537383135326465333965613466653236376136222c226b65795f6964223a222d222c226d6574686f64223a22504f5354222c226e6f6e6365223a22666978747572655f6865617274626561745f6e6f6e63655f7631222c2270617468223a222f6170692f696e7465726e616c2f726561642d6a6f62732f726a5f666978747572655f76312f686561727462656174222c2274696d657374616d70223a2231373933303539323030222c2276657273696f6e223a22726561642d617373657274696f6e2d7631227d",
+  "signature": "0422ddb1ae4a82be05baa5659d7910110a5d1e00294e69dbb6f335f785be1f82",
+  "headers": {
+    "Content-Type": "application/json",
+    "X-Read-Actor": "rid",
+    "X-Read-Timestamp": "1793059200",
+    "X-Read-Nonce": "fixture_heartbeat_nonce_v1",
+    "X-Read-Signature": "0422ddb1ae4a82be05baa5659d7910110a5d1e00294e69dbb6f335f785be1f82"
+  },
+  "response_status": 200,
+  "response": {
+    "job_id": "rj_fixture_v1",
+    "stop": false,
+    "lease_until": "2026-10-27T00:01:30+00:00"
+  }
+}
