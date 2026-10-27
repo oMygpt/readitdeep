@@ -1,183 +1,165 @@
-# RiD 作为 PaperDaily 系列站：来源、额度与配置 — 设计（草案 v0.1）
+# RiD 作为 PaperDaily 系列站：来源、额度与配置 — 设计 v0.2
 
-日期：2026-10-27　状态：**待用户确认**（§7 决定项）　关联：主站设计 v2.2 §2.2/§4/§5，本仓库 `2026-10-25-refactor-design.md` §2.7
+日期：2026-10-27　状态：**v0.2 已按用户第二轮决定修订**；§8 两项小决定在执行中按默认值推进，可随时改。
+关联：主站设计 v2.2 §2.2/§4/§5，本仓库 `2026-10-25-refactor-design.md` §2.7，主站 issue（P 项）、ask issue（A 项）。
 
-## 0. 用户输入（2026-10-27）
+## 0. 用户决定
 
+**第一轮（2026-10-27）**
 1. 主站基本没有全文，只有论文的详细元数据。用户在主站或 ask 检索、保存论文、合集、综述后，进入 RiD 精读、分析，并与组内成员共享。
-2. 主站 Pro 和机构用户可以用每天 300 积分做解析和翻译；注册用户也能用，但限 5 篇。
-3. 开源版的解析和翻译设置是「管理员配置 + 个人配置」都能用。成为 PaperDaily 系列站后，要重新设计最佳配置方式。
+2. 主站 Pro 和机构用户能用每天 300 积分做解析和翻译；注册用户也能用，但限 5 篇。
+3. 开源版的解析和翻译是「管理员配置 + 个人配置」都能用。成为 PaperDaily 系列站后，要重新设计最佳配置方式。
+
+**第二轮（同日）**
+4. **篇数在 RiD 计算**，积分在使用后同步给主站。
+5. **论文数据和 PDF 分开**。用户可以先把题录从 ask 或主站带过来，不花积分；**真正上传 PDF 时才消耗积分**。
+6. **积分按 PDF 篇数计算**：每篇固定价格，不按页计，也不按操作计。
+7. 部署层面，解析、翻译、OCR 都用校内模型。VLM 负责 pdf2md 的 OCR。
+8. 主站和 ask 需要改的部分，由我写文档、提 issue，各自的 agent 开 PR，完成后与我对齐。ask 的改动是在搜索结果的论文卡片上、以及导出综述论文的地方，加「到 RiD 深度阅读」按钮。
 
 ## 1. 结论摘要
 
-| 问题 | 建议 |
+| 问题 | 方案 |
 |---|---|
-| 全文从哪来 | 从主站导入题录（单篇、合集、综述引文），RiD 自己取全文：① 开放获取 PDF（arXiv、主站元数据里的 OA 链接，域名白名单）；② 用户上传。不依赖主站的资源桥（主站可以提供时再接，接口已留）。 |
-| 额度从哪扣 | 只有一份账本，即主站的每日积分（注册 100、Pro/机构 300），RiD 不另发额度。每次解析或翻译前，RiD 向主站 `read-jobs` 报价并预扣，完成后结算。 |
-| 「5 篇」怎么算 | 由主站权益下发上限（注册用户 `read.papers`=5，Pro/机构不限），RiD 计数。「篇」按 PDF 内容哈希去重：同一篇论文的解析、全文翻译、重试和组内共享阅读都只算 1 篇。周期待定（§7 D1）。 |
-| 配置怎么分 | 分三层：**部署层**（模型地址和 key，只放保险库）→ **站点运营层**（管理员在界面里为每个任务选模型、设开关和上限，不填 key）→ **用户层**（只有偏好：目标语言、术语表、解析质量、是否自动翻译）。首发不开放用户自带 key（§7 D3）。开源独立模式保持原样。 |
-| 组内共享 | 共享的是解析和翻译**产物**，组员阅读不再计费、不占篇数；组员自己发起的新 AI 操作扣自己的积分。 |
+| 题录与全文 | 题录随时免费导入（单篇、批量、主站收藏/合集、综述引文）。全文要由用户上传 PDF，或在用户点击后从开放获取来源抓取；这一步才计费 |
+| 计费单位 | **每个用户每个 PDF（按内容 SHA-256）计费一次**，价格为 `P` 分（候选 30 分），覆盖这篇的 OCR/解析、全文翻译和自动分析。同一篇重新解析、换语言翻译、问答都不再扣分 |
+| 篇数 | RiD 用 `read_charges` 表计数，每个用户每个 PDF 内容记一行，同一篇只算 1 篇。注册用户上限 5 篇（周期见 §8，默认每自然月）；Pro、机构、管理员不限，只受积分约束 |
+| 同步主站 | 用主站已有的 `read-jobs`：上传时预扣（hold），RiD 作为受信 runner 解析完成后提交 `complete`，主站结算；失败或取消时全额冲正。主站不收 PDF |
+| 模型 | 部署层固定用校内 API：VLM（Qwen3-VL-32B）做逐页 OCR/pdf2md；主 LLM（Qwen3.6-35B-A3B）做翻译和分析；GROBID 兜底。外部云默认关闭 |
+| 配置分层 | 部署层（保险库，只有运维能改）→ 站点运营层（管理员只选模型和开关，不填 key）→ 用户层（只有偏好）。linked 模式不开放自带 key；开源独立模式保持原样 |
+| 组内共享 | 组员阅读共享论文不扣分、不占篇数；组员要把同一份 PDF 收进自己的库并处理时，按自己的一篇计 |
 
-## 2. 闭环与对象
+## 2. 闭环
 
 ```
-主站 / ask：检索 → 保存论文 / 建合集 / 生成综述
-        │  深链 /open?paper=… | ?collection=… | ?review=…
+ask 搜索卡片 / ask 导出综述论文 / 主站论文页 / 主站收藏与合集 / 综述历史
+        │  https://read.paperdaily.org/open?paper=…（可重复）| ?collection=… | ?review=…
         ▼
-RiD：导入题录（metadata_imported）
-     → 取得全文（file_available：OA 抓取或用户上传）
-     → 解析（parsing，记账作业）→ ready
-     → 精读、批注、问答、翻译（记账作业）、工作台
-     → 共享给小组（产物共享，不重复计费）
-     → 可选：阅读记忆回传主站（reading_sessions，不回传全文或译文）
+RiD：导入题录 → status=metadata（免费，可批量，幂等）
+     ├─ 用户上传 PDF ┐
+     └─ 用户点「获取开放获取 PDF」（白名单域名） ┘→ 计费确认（P 分；注册用户显示已用 n/5 篇）
+        → 主站 read-job hold → 解析（VLM OCR → GROBID 兜底）→ 自动翻译（偏好）→ 分析
+        → complete → 主站结算 → ready
+     → 精读、批注、问答、工作台 → 共享给小组（阅读免费）
+     → 可选：阅读记忆回传主站（不回传全文或译文）
 ```
 
-| 主站对象 | RiD 落点 | 主站操作（read client 需新增授权） |
+## 3. 题录与 PDF 分离（RiD 数据模型）
+
+- 论文新增状态 `metadata`：只有题录（标题、作者、摘要、DOI、arXiv id、主站 paper_id、来源链接），没有文件。
+  - 列表和详情页清楚显示「仅题录」，并提供两个按钮：「上传 PDF」「获取开放获取 PDF」（后者只在有可用链接时出现）。
+- 字段 `source_provider='paperdaily'`、`source_id=<主站 paper_id>` 已经存在（迁移 0001）。导入按 `(user_id, source_provider, source_id)` 幂等。
+- 给已有论文补 PDF：`POST /api/v1/papers/{id}/pdf`（multipart）。新上传、不带题录的 PDF 沿用 `POST /papers/upload`，两者走同一条计费 + 解析路径。
+- 开放获取抓取：`POST /api/v1/papers/{id}/fetch-pdf`。
+  - 只在服务端抓取，域名白名单（部署层 `OA_PDF_HOSTS`，默认 `arxiv.org,export.arxiv.org`）。
+  - 复用 `url_guard`：禁内网地址，限制 3 次重定向；限制 ≤50 MB，必须是 PDF（看 magic bytes）。
+  - arXiv 的 abs 链接改写为 pdf 链接。
+- PDF 内容哈希、页数、字节数在保存时计算，存进论文的 `extra.pdf`，作为计费和缓存身份。
+
+## 4. 计费
+
+### 4.1 规则
+
+- **计费事件**：某用户第一次为某个内容哈希启动处理（上传或抓取后进入解析）。
+  - 以下情况不计：同一用户重复上传同一文件、重新分析、重新翻译。
+  - 同一份 PDF 被同一用户挂到另一条题录上，也不再计（按用户 + 哈希去重）。
+- **价格**：主站 `credits.rules.read_jobs.prices["read.parse"] = {base_credits: P, per_page_credits: 0, …}`。RiD 不写死价格，以主站报价为准，并缓存最近一次的价格和版本供界面显示。
+- **篇数上限**：
+  - 注册用户每周期 5 篇，周期由部署配置 `READ_FREE_PAPER_LIMIT=5`、`READ_FREE_PAPER_PERIOD=month|lifetime` 决定。
+  - Pro、机构、管理员不限篇数。档位按主站 `/me/entitlements` 判定（主站 issue P5 提供稳定的 `plan_tier`；在此之前退而读 `limits["credits.daily_grant"].source` 的前缀 `plan:`、`institution:`）。
+  - 失败或冲正的作业不占篇数。
+- **其余 AI**（问答、划词翻译、解释、工作台提炼）不扣积分，由 RiD 按用户限速：部署配置 `READ_CHAT_DAILY_LIMIT`，默认注册 50 次/天、付费 300 次/天。
+
+### 4.2 与主站同步（read-jobs，已在主站实现）
+
+| 步骤 | RiD | 主站 |
 |---|---|---|
-| 单篇论文 | Paper（题录态） | `get_paper`（`read:paper`） |
-| 收藏 | 「我的 PaperDaily 收藏」列表，按需导入 | `list_my_saves`（`read:contrib`） |
-| 合集 | RiD 文件夹/工作台，成员幂等导入 | 合集列表和详情（`read:contrib`；主站需补只读 Bearer 路由） |
-| 综述（ask 历史） | 工作台条目：问题、答案和引用作为笔记，引文批量导入 | `self_query_history[_detail]`（`read:history`） |
+| 1 预检 | 算出 sha256、页数、字节数，用 runner 密钥对 `read-preflight-v1` 回执做 HMAC 签名（signer=`rid`，15 分钟有效） | — |
+| 2 建作业 | 用户在场时，用其委托 key（Bearer）加 client assertion（`X-Read-Actor: read`，HMAC 覆盖 method/path/body 摘要/时间戳/nonce），带 `Idempotency-Key=sha256(user\|content)` 调 `POST /api/v1/me/read-jobs` | 核验权益与价目，预扣积分（hold），返回 `job_id` |
+| 2a 报价变化 | 409 `read_quote_confirmation_required` → 论文标记为 `awaiting_confirmation` 并显示新价，用户确认后重试 | — |
+| 2b 余额不足 | 402 → 论文停在 `metadata` 态，显示「今日积分不足，明天补发」 | — |
+| 3 执行 | 后台 worker 调 `claim` 拿到 fence，每 30 秒 `heartbeat`，收到 `stop: true` 就中止 | 并发闸门、租约 |
+| 4 结算 | 解析成功 → `complete{status: succeeded, output_sha256, …}`；失败 → `failed` | 成功则结算，失败则全额冲正 |
+| 5 对账 | `read_charges` 记录 `pd_job_id`、状态、价格版本；启动时和每 5 分钟补交未完成的 complete | unknown 超过 15 分钟报警 |
 
-导入按 `(owner, provider='paperdaily', remote_item_id)` 幂等。题录态不能说成「可读」，三种状态分开展示（主站设计 §4.2）。
+- 「使用后同步」的实现方式：上传时只是**预扣**，解析成功后才**结算**为消耗；失败退还。之所以先预扣，是因为主站规则不允许事后出现负余额（主站 §5.3）。
+- 自动翻译与分析算在同一篇的价格里，不另建作业。
+- 部署开关 `READ_BILLING`：
+  - `paperdaily`：linked 模式的正式值；主站门槛未开时返回 503「精读计费尚未开通」。
+  - `off`：不计费。用于独立模式，以及主站计费开通前的白名单内测。目前只有站长一人，且主站对管理员本来就零扣费。
+- 独立模式：沿用 RiD 自带 `PLAN_LIMITS`，不接主站。
 
-## 3. 全文获取（主站没有全文时）
-
-按顺序尝试，任何一步失败都停在题录态，并提示用户上传：
-
-1. **主站资源桥**（`read:resources`）：主站有可导出资源时使用。目前基本没有，只保留接口。
-2. **开放获取抓取**：RiD 服务端只从白名单域名下载，白名单首批为 `arxiv.org` 和 `export.arxiv.org`，主站元数据里的 OA PDF 链接按域名逐个加入。
-   - 走现有 `url_guard`：禁内网地址，限制重定向次数，限制 ≤50 MB，只接受 `application/pdf`。
-   - 记录来源 URL 和许可字段。
-3. **用户上传**：上传时提示「仅上传你有权使用的文件」。
-
-计费和缓存身份都以 PDF 内容哈希为准（主站设计 §5.2）：
-- 同一个 OA PDF（来源与内容哈希都一致）的解析产物可以跨用户复用。复用命中**不调用模型、不扣积分**，但对免费用户仍计 1 篇。
-- 私有上传只在本人和其共享小组内复用。
-
-## 4. 额度与计费
-
-### 4.1 账本
-
-- 积分只有主站这一份：注册 100、Pro/机构 300，每日发放、不累积。规则不可购买、充值、转让（D17）。
-- RiD 自带的 `PLAN_LIMITS` / 邀请码订阅在 linked 模式下停用，界面改为显示主站余额（`/me/credits/balance`）和权益（`/me/entitlements`）。
-- 每次重 AI 操作：
-  1. RiD 生成预检回执（页数、字节、内容哈希）。
-  2. 向主站 `POST /me/read-jobs` 拿报价，用户确认后预扣。
-  3. RiD 作为受信 runner 执行：先 `claim`，过程中 `heartbeat`，最后 `complete`。
-  4. 主站结算。失败全额冲正。
-- RiD 不自己算价格，只展示主站返回的报价和价目版本。
-
-### 4.2 操作与候选价目（待 E4 实测后定，不是承诺）
-
-生产实测：一篇 15 页论文的 VLM 逐页转写，共 15 次调用，提示 3.3 万 token、输出 1.16 万 token，平均每页约 3k token。以 Pro 每天 300 分大约够精读 3–4 篇（解析 + 全文翻译）为目标，候选价目如下：
-
-| 操作 | 计价 | 15 页论文 | 计入「篇」 |
-|---|---|---|---|
-| `read.parse`（VLM 高质量解析） | 2 分/页，封顶 60 | 30 | 是 |
-| `read.parse`（快速解析：GROBID 文本，无 VLM） | 0（平台承担） | 0 | 是 |
-| `read.translate`（全文翻译） | 3 分/页，封顶 90 | 45 | 是（同一篇不重复计） |
-| `read.chat`（问答、划词或段落翻译、解释） | 1 分/次 | — | 否 |
-| `read.extract`（方法/数据提炼、工作台分析） | 5 分/次 | — | 否 |
-
-按候选价目，15 页论文做解析 + 全文翻译共 75 分：
-- Pro/机构 300 分，约 4 篇/天，或少几篇换更多问答。
-- 注册用户 100 分，约 1 篇/天，同时受 5 篇上限约束。
-
-价目由主站 `credits.rules.read_jobs`（base + per_page，含 `price_version`）配置。RiD 读取报价，不写死数字。
-
-### 4.3 「篇」的计数规则
-
-- 计数对象：用户在本周期内**首次**对某个内容哈希发起 `read.parse` 或 `read.translate`，含缓存命中。
-- 以下情况不再计：
-  - 同一篇的重试、换语言再翻译、问答、提炼；
-  - 小组共享阅读；
-  - 已经计过的论文。
-- 只有作业成功或进入 unknown 才占用；失败冲正后释放。
-- 上限达到后：
-  - 还可以导入题录、阅读已解析的论文、批注、使用组内共享产物；
-  - 不能新解析或翻译，提示「注册用户每 X 可精读 5 篇，Pro/机构不限」。
-- 上限值由主站权益给出：`limits["read.papers"] = {value: 5, period: …}`，Pro/机构为 `null`（不限，只受积分约束）。
-- 计数在 RiD 做（`read_paper_counts(user, period, content_sha256)`，与主站作业 ID 关联，便于对账），原因：
-  - RiD 是唯一消费方，且是第一方受信服务端；
-  - 主站只需下发上限，改动最小。
-
-### 4.4 组内共享
-
-- RiD 小组在 linked 模式下用**邀请链接**加入（主站不给邮箱，空 scope）。成员都是 PaperDaily 用户。
-- 共享论文时，组员可以看到原文、解析、译文、公开批注，不另计费、不占篇数。
-- 组员发起的问答、提炼、换语言翻译，扣组员自己的积分。
-- 机构共享资金池（主站 §2.5「首发不分池」）暂不做，以后由主站 `funding_source` 扩展。
-
-## 5. 配置分层（替代开源版「管理员 + 个人」双配置）
-
-### 5.1 现状问题
-
-开源版 `system_configs` 把模型地址和 API key 存在数据库里，管理员可以在网页修改；`user_configs` 允许个人覆盖 LLM 或 MinerU key。作为系列站有四个问题：
-
-1. key 在数据库和网页里流转，与「密钥只放保险库」的运维规则冲突。
-2. 用户自带端点会带来 SSRF，以及私有 PDF 被送到第三方的风险。
-3. 用户走自己的 key 时，平台计费和篇数上限就失去意义，也无法统一保证质量。
-4. 管理员网页配置与 vault/env 并存，出了问题难判断以哪边为准。
-
-### 5.2 三层模型（linked 模式）
+## 5. 配置分层
 
 | 层 | 谁改 | 存在哪 | 内容 |
 |---|---|---|---|
-| **部署层** | 运维（`just readitdeep-env-render`） | 保险库 → `.env` | 模型端点注册表：名称 → base_url、key、渠道（interactive/batch/vlm）、并发、超时；解析器链；GROBID 地址；MinerU 云（默认关）；OA 白名单 |
-| **站点运营层** | RiD 管理员（主站管理员 subject） | `system_configs`，只存非密钥字段 | 每个任务（parse_vlm / translate / chat / extract / workbench）从注册表**选择**模型；功能开关；单作业上限（页数、字节、秒）；默认解析质量；提示词版本 |
-| **用户层** | 用户本人 | `user_configs`，只存偏好 | 翻译目标语言（默认中文）；译文风格（直译/意译）；个人术语表（≤200 条）；解析质量（高质量 VLM / 快速）；导入后是否自动解析、自动翻译（自动操作同样走报价，需要用户一次性授权「≤N 分自动确认」） |
+| **部署层** | 运维（`just readitdeep-env-render`） | 保险库 → `.env` | 校内模型端点和 key：`LLM_*`、`VLM_*`、`TRANSLATION_*`、`EMBEDDING_*`、`GROBID_URL`；`PARSE_PROVIDERS=vlm,grobid`；`ALLOWED_MODELS`；`OA_PDF_HOSTS`；`READ_BILLING`；`READ_FREE_PAPER_*`；`READ_CHAT_DAILY_LIMIT`；MinerU 云为空（即关闭） |
+| **站点运营层** | RiD 管理员 | `system_configs`，只存非密钥字段 | 每个任务（翻译、问答、分析、各类 smart_*）从 `ALLOWED_MODELS` 里选模型；解析器顺序只能在部署层已配置的解析器中调整；单篇页数上限；功能开关 |
+| **用户层** | 用户本人 | `user_configs`，键名白名单 | `translate_target_lang`（默认 zh）、`translate_style`（literal/fluent）、`glossary`（≤200 条）、`parse_quality`（vlm/fast）、`auto_translate`（默认开） |
 
-规则：
-- linked 模式下，网页不显示也不接受任何 `*_api_key`、`*_base_url` 字段。服务端拒绝写入（复用现有 SSRF 守卫和「`*_url` 仅管理员」逻辑，收紧为「仅部署层」）。管理员页显示「由部署配置，只读」以及模型的健康状态。
-- 主站价目与本站模型选择绑定：主站报价含 `model` 和 `prompt_version`。管理员切换模型时，必须与主站价目版本一致，否则相关作业返回 503「价目未更新」，防止用贵模型收便宜价。
-- 校内 API 优先，这是部署层默认值。外部云（MinerU 云、外部 LLM）要同时满足部署层允许、管理员开启、用户对该次上传明确同意，才会发送私有 PDF（主站 §5.3）。
+规则（只在 linked 模式下生效）：
+- `ConfigManager` 忽略数据库里所有 `*_api_key`、`*_base_url`、`*_api_url`、`*_url` 的值（系统级和用户级都忽略），只用部署层。
+- 用户配置只认白名单里的偏好键；系统配置里的模型名必须在 `ALLOWED_MODELS` 内，否则忽略并告警。
+- 写接口同样拒绝：`PUT /auth/config` 与管理员配置接口收到上述键时返回 400「由部署配置」。前端隐藏 key 和地址输入框，改为只读展示「由部署配置：校内模型 xxx」。
+- 价目一致性：管理员换模型不影响主站的「每篇 P 分」价目，因为价格只与篇数有关，不与模型绑定。容量变化由运维评审。
 
-### 5.3 独立模式（开源版）
+## 6. 组内共享
 
-保留现有「管理员共享 + 用户自定义」配置，`llm_mode=user_defined` 等行为不变，不接主站账本，继续使用 RiD 自带 `PLAN_LIMITS`。用 `RID_MODE` 区分两种模式，代码路径共用：解析器、LLM 层、作业队列都一样，只有「谁付费、谁配置」两处不同。
+- 小组现在用邀请码加入（`POST /teams/join/{code}`），linked 模式直接可用，不依赖邮箱。
+- 主站 token 不下发显示名，组员目前都显示为「PaperDaily 用户」。主站 issue P8 请求下发显示名；在此之前允许用户在 RiD 设置自己的昵称。
+- 共享论文时，组员阅读原文、解析、译文、公开批注都不扣分、不占篇数。
 
-### 5.4 自带 key（BYOK），二期可选
+## 7. 主站与 ask 的配合（另见各自 issue）
 
-首发不开放。若以后开放：
-- 只允许预置的服务商列表（固定 base_url，用户只填 key 和选模型）；
-- key 用现有 AES-GCM 加密存储；
-- 只用于问答和翻译，解析仍走平台；
-- 使用自带 key 的操作不扣积分、不占篇数，但受 RiD 速率限制；
-- 首次使用时明确告知「全文会发送给你选择的服务商」。
+**主站（P 项）**：
+- P1：read client 授权上限加入以下操作（含新 scope，需用户重新同意）：
+  - 权益、余额；
+  - `get_paper`；
+  - 收藏、个人库、合集列表与按合集筛选；
+  - 综述历史与详情；
+  - read-jobs 的创建、状态、取消。
+- P2：read client 支持 `allow_verified_accounts`，即开放给所有已验证账号，不再只是白名单。
+- P3：开启 read-jobs，按篇定价：只用 `read.parse`，`base_credits=P`，`per_page=0`；配置 runner `rid` 与 client assertion 的密钥、四个门槛、正数上限、资源预算。
+- P4：确认「hold → complete 结算」满足「使用后同步」。
+- P5：权益返回稳定的 `plan_tier`。
+- P6：主站论文页、收藏页、合集页、综述历史加「到 Read it DEEP 深度阅读」按钮。
+- P7：部署 read 推送 worker。
+- P8：可选，下发显示名。
 
-## 6. 主站需要配合的改动（交 Codex，按主站流程走 PR）
+**ask（A 项）**：
+- A1：搜索结果论文卡片加「RiD 深读」按钮。
+- A2：导出菜单（当前列表）和深度综述引文处加「到 RiD 深度阅读（N 篇）」。
+- A3：链接格式见下面的深链契约。
 
-| # | 改动 | 说明 |
+### 深链契约 v1（RiD 实现，主站和 ask 只拼链接）
+
+```
+https://read.paperdaily.org/open?paper=<主站 paper_id>[&paper=<id2>…最多 50]&from=ask|daily|library|review[&title=<批次名，≤100 字>]
+https://read.paperdaily.org/open?collection=<主站合集 id>&from=library
+https://read.paperdaily.org/open?review=<主站 query_history id>&from=ask|daily
+```
+
+- paper_id 原样做 URL 编码，可以含 `/` 或 `:`。
+- 一篇时导入后直接打开这篇论文；多篇时建一个以 `title` 命名的 RiD 文件夹，并打开列表。
+- 未登录先走 PaperDaily 登录，回来后继续导入。
+- 链接里不得携带任何 token；RiD 一律用服务端委托 key 回主站取题录，不信任链接里的标题或元数据（`title` 只用作文件夹名）。
+
+## 8. 小决定（按默认值推进，可改）
+
+| # | 问题 | 默认 |
 |---|---|---|
-| P1 | `effective()` 增加 `limits["read.papers"]` | 注册（已验证）：`{value:5, period:<D1>}`；Pro/机构：`null`；未验证：0 |
-| P2 | read client 操作白名单扩展 | `self_entitlements`、`self_credit_balance`、`list_my_saves`、合集列表/详情（若无 Bearer 只读路由则新增）、`self_query_history[_detail]`、`get_paper`、`read-jobs` 三个操作。按 §3.5 重新明示授权（新 scope 需要用户再同意） |
-| P3 | 打开 E4 门槛 | `research_suite.read_ai_enabled`；`read_bridge.jobs_enabled` 的四个 gate 与正数上限；`synthesis.budget.source_units_daily.read`；`credits.rules.read_jobs` 首版价目 |
-| P4 | runner 身份 | `runners.<signer>` 与 `PD_READ_*` 签名密钥（RiD 侧放保险库 `readitdeep.paperdaily.runner_secret`） |
-| P5 | 平台承担的快速解析 | 目前 `funding_source=platform` 只允许 `kind=resource` 且价格 0。需要放宽到「`read.parse` 快速档 + blob + 价格 0」，或者快速档不走 read-jobs（由 RiD 本地限速）。**建议后者**：快速解析是纯 CPU 的 GROBID，不调用模型，不需要主站记账，只在 RiD 计篇数 |
-| P6 | 主站和 ask 的深链 | 论文页、合集页、综述页加「在 Read it DEEP 精读」按钮，链接到 `/open?...` |
-| P7 | 元数据 OA 链接 | `get_paper` 若有 OA PDF 链接或 arXiv id 就返回，供 RiD 抓取（不代表主站授权，只是来源指引） |
+| D1 | 注册用户 5 篇的周期 | 每自然月（北京时间），部署配置可改为 `lifetime` |
+| D5 | 每篇价格 P | 候选 30 分：Pro 和机构每天约 10 篇；注册用户每天 100 分，同时受 5 篇上限约束。主站上线前由你签字定版 |
 
-## 7. 待用户确认的决定
+（v0.1 的 D2 已由「按篇计费、上传才扣」取代：注册用户同样按篇扣分。D3「首发不开放自带 key」和 D4「GROBID 快速解析」并入 §4、§5：快速档同样按篇计，`parse_quality=fast` 只表示少用 GPU。）
 
-| # | 问题 | 建议 |
-|---|---|---|
-| D1 | 注册用户「5 篇」的周期 | **每自然月 5 篇**（北京时间，月初重置）。备选：终身 5 篇（更像试用）、每天 5 篇（受 100 分约束，实际约 1 篇/天，等于不限） |
-| D2 | 注册用户精读是否同时扣积分 | **扣**：与 Pro 同一价目，从每日 100 分里扣，5 篇是额外上限。备选：这 5 篇免积分（平台承担，需要主站放宽 platform funding） |
-| D3 | 首发是否允许用户自带 key | **不允许**，二期再按 §5.4 开放 |
-| D4 | 快速解析（GROBID）是否免费 | **免费但计篇**，作为「高质量解析积分不足」时的降级 |
-| D5 | 候选价目 | 先用 §4.2 作为 E4 实测起点，实测后由你签字定版 |
-
-## 8. 计划（确认后执行）
+## 9. 计划
 
 | 阶段 | 内容 | 依赖 |
 |---|---|---|
-| S1 | 配置分层：linked 模式下 key/url 只读；部署层模型注册表；管理员任务→模型选择；用户偏好页（语言、术语表、质量、自动化） | 无，可先做 |
-| S2 | 导入：`/open` 深链（paper/collection/review），PD 收藏、合集、综述浏览器，幂等导入，三态展示 | P2、P7 |
-| S3 | 全文获取：OA 白名单抓取 + 上传引导；内容哈希缓存（公共 OA 与私有分离） | 无 |
-| S4 | 记账：预检回执签名，报价确认 UI，read-jobs 创建，runner claim/heartbeat/complete，失败冲正，余额显示；停用本地 PLAN_LIMITS | P3、P4 |
-| S5 | 篇数上限：`read_paper_counts`，权益读取，达限提示 | P1 |
-| S6 | 小组：linked 模式邀请链接加入；共享产物免计费 | 无 |
-| S7 | 验收：真实账号（注册 / Pro）各走一遍：导入 → 抓取 → 报价 → 解析 → 翻译 → 达限 → 共享阅读；对账主站 ledger | 全部 |
-
-S1、S3、S6 不依赖主站，可以先做；S2、S4、S5 等 Codex 完成 P1–P4、P7。
+| S1 配置分层 | ConfigManager 的 linked 规则；写接口拒绝；`ALLOWED_MODELS`；用户偏好键与翻译提示词接入（目标语言、风格、术语表）；前端只读展示 | 无 |
+| S2 题录与 PDF 分离 | `metadata` 状态；主站题录导入服务（委托 key 调 `get_paper`）；`/papers/{id}/pdf`、`/papers/{id}/fetch-pdf`；PDF 哈希、页数 | 导入依赖 P1 的 `get_paper`；其余无依赖 |
+| S3 计费 | `read_charges`（迁移 0004）；篇数与周期；`READ_BILLING`；主站 read-jobs 客户端（assertion、preflight、create、claim、heartbeat、complete、对账）；402/409 状态；问答限速；停用 linked 下的本地 `PLAN_LIMITS` | P3、P5 联调；代码与模拟主站测试先行 |
+| S4 深链与主站库 | `/open` 页面（paper/collection/review）；「从 PaperDaily 导入」面板（收藏、合集、综述）；批量文件夹 | P1 |
+| S5 前端计费体验 | 上传前显示「本篇 P 分 · 今日剩余 X · 本月 n/5 篇」；`metadata` 卡片；`awaiting_confirmation`；余额不足提示；昵称设置 | S3 |
+| S6 验收 | 注册与 Pro 测试账号各走一遍：ask 卡片 → `/open` → 题录 → 上传 → hold → 解析 + 翻译 → 结算 → 第 6 篇被拒 → 组员阅读不扣分；与主站 ledger 对账 | 全部 |
