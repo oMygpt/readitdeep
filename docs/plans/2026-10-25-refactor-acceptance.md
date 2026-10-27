@@ -82,3 +82,5 @@ R1 本地测试：`uv run pytest -q` → 53 passed。
 | 组内共享 | 组员阅读不扣分、不占篇 | 待测 |
 
 R6 测试：后端 SQLite 140 passed + 1 skipped、PostgreSQL 141 passed；前端 vitest 15 passed、`tsc -b` 通过、Vite 构建通过。
+
+2026-10-27 生产部署 R6（`deploy/r6-20261027` = 395661c，即 #14 + 构建镜像参数，未含 #15）：迁移到 0005；`RID_MODE=linked`、`READ_BILLING=off`、`PAPERDAILY_SCOPES` 为空、`PARSE_PROVIDERS=vlm,grobid`、`ALLOWED_MODELS` 为两个校内模型；公网 `/`、`/open` 200，`/billing/status` 与 `/preferences` 未登录 401。部署主机到 GitHub/PyPI/Debian 官方源不稳定，构建改用 USTC（apt）与 TUNA（PyPI）镜像，代码经本地 git bundle 传送（`RID_SRC=… just readitdeep-deploy`）。
