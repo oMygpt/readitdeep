@@ -11,3 +11,5 @@ from .share_link import ShareLink, DEFAULT_EXPIRY_DAYS
 from .workbench_item import WorkbenchItem, DataMigration
 from .job import Job, TokenUsage
 from .provider import ConnectState, ProviderSession, ProviderEvent, AccountTombstone
+
+from .reading_workspace import ReadingRevision, ReadingWorkspace

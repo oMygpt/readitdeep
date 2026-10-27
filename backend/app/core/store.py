@@ -231,7 +231,12 @@ class PaperStore:
         return True
 
     def delete(self, key: str) -> None:
+        from app.models.reading_workspace import ReadingRevision, ReadingWorkspace
+
         with self.engine.begin() as conn:
+            # SQLite installations may not enforce FK cascades.
+            conn.execute(delete(ReadingWorkspace).where(ReadingWorkspace.paper_id == key))
+            conn.execute(delete(ReadingRevision).where(ReadingRevision.paper_id == key))
             conn.execute(delete(Paper.__table__).where(Paper.id == key))
 
 

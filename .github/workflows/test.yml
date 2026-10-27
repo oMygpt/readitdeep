@@ -3,9 +3,9 @@ name: Backend tests
 on:
   push:
     branches: [main]
-    paths: ['backend/**', '.github/workflows/test.yml']
+    paths: ['backend/**', 'frontend/**', '.github/workflows/test.yml']
   pull_request:
-    paths: ['backend/**', '.github/workflows/test.yml']
+    paths: ['backend/**', 'frontend/**', '.github/workflows/test.yml']
 
 jobs:
   test:
@@ -38,3 +38,19 @@ jobs:
       # 起步只拦语法错误与未定义名，规则随改造逐步收紧
       - run: uv run ruff check --select E9,F63,F7,F82 app tests scripts migrations
       - run: uv run pytest -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build

@@ -3,6 +3,7 @@
  */
 
 import axios from 'axios';
+import type { TextAnchor } from './anchors';
 
 const TOKEN_KEY = 'readitdeep_token';
 
@@ -183,7 +184,9 @@ export interface Paper {
     filename: string;
     title?: string;
     category?: string;
-    status: 'uploading' | 'parsing' | 'indexing' | 'completed' | 'failed' | 'analyzed';
+    status: 'uploading' | 'parsing' | 'indexing' | 'embedding_done' | 'analyzing' | 'classifying' | 'completed' | 'failed' | 'analyzed';
+    content_ready?: boolean;
+    has_original?: boolean;
     created_at: string;
     updated_at?: string;
     markdown_content?: string;
@@ -214,6 +217,12 @@ export interface LibraryResponse {
 }
 
 // API 方法
+export interface PaperContent {
+    markdown: string;
+    translated: string;
+    revisions: Record<'original' | 'translation', { id: string; content_hash: string; representation: 'original' | 'translation' } | null>;
+}
+
 export const papersApi = {
     upload: async (file: File) => {
         const formData = new FormData();
@@ -229,7 +238,7 @@ export const papersApi = {
         return data;
     },
 
-    getContent: async (id: string) => {
+    getContent: async (id: string): Promise<PaperContent> => {
         const { data } = await api.get(`/papers/${id}/content`);
         return data;
     },
@@ -420,6 +429,7 @@ export interface TextLocation {
     start_line: number;
     end_line: number;
     text_snippet: string;
+    anchor?: TextAnchor;
 }
 
 export interface MethodItem {
@@ -1431,6 +1441,9 @@ export interface AnnotationUser {
 }
 
 export interface Annotation {
+    anchor?: TextAnchor | null;
+    is_evidence?: boolean;
+    research_question?: string;
     id: string;
     paper_id: string;
     team_id?: string;
@@ -1451,6 +1464,9 @@ export interface Annotation {
 }
 
 export interface CreateAnnotationData {
+    anchor?: TextAnchor | null;
+    is_evidence?: boolean;
+    research_question?: string;
     type?: AnnotationType;
     visibility?: AnnotationVisibility;
     team_id?: string;
@@ -1463,6 +1479,9 @@ export interface CreateAnnotationData {
 }
 
 export interface UpdateAnnotationData {
+    anchor?: TextAnchor | null;
+    is_evidence?: boolean;
+    research_question?: string;
     content?: string;
     color?: string;
     visibility?: AnnotationVisibility;

@@ -6,7 +6,7 @@ Read it DEEP - 团队标注模型
 
 from datetime import datetime
 from typing import Optional, List
-from sqlalchemy import String, DateTime, Integer, Text, ForeignKey, func, Index
+from sqlalchemy import JSON, Boolean, false, String, DateTime, Integer, Text, ForeignKey, func, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 import uuid
 
@@ -105,6 +105,10 @@ class TeamAnnotation(Base):
         comment="选中的原文 (用于验证和显示)"
     )
     
+    anchor: Mapped[Optional[dict]] = mapped_column(JSON)
+    is_evidence: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    research_question: Mapped[Optional[str]] = mapped_column(Text)
+
     # ========== 内容 ==========
     content: Mapped[Optional[str]] = mapped_column(
         Text, 
@@ -172,6 +176,9 @@ class TeamAnnotation(Base):
             "end_offset": self.end_offset,
             "line_number": self.line_number,
             "selected_text": self.selected_text,
+            "anchor": self.anchor,
+            "is_evidence": self.is_evidence,
+            "research_question": self.research_question,
             "content": self.content,
             "color": self.color,
             "parent_id": self.parent_id,

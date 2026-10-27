@@ -4,6 +4,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import {
     Loader2,
@@ -17,7 +18,10 @@ import {
     PanelLeft,
     PanelRightClose,
     PanelRight,
-    Sparkles,
+    NotebookPen,
+    FileText,
+    RotateCcw,
+    X,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -25,11 +29,16 @@ import remarkMath from 'remark-math';
 import rehypeRaw from 'rehype-raw';
 import rehypeKatex from 'rehype-katex';
 import { papersApi, authApi, annotationsApi, authFetch, AuthEventSource } from '../lib/api';
-import type { TextLocation } from '../lib/api';
+import type { Annotation, TextLocation } from '../lib/api';
+import { anchorFromRange, captureAnchor, resolveAnchor } from '../lib/anchors';
+import ResearchPanel from '../components/reader/ResearchPanel';
+import { useReadingWorkspace } from '../components/reader/useReadingWorkspace';
+import { useAnnotationDrafts } from '../components/reader/useAnnotationDrafts';
+import ReadingLeaveGuard from '../components/reader/ReadingLeaveGuard';
+import '../components/reader/reader.css';
 import AnalysisPanel from '../components/AnalysisPanel';
-import StructurePanel from '../components/StructurePanel';
+import DocumentOutline from '../components/reader/DocumentOutline';
 import PaperGraph from '../components/PaperGraph';
-import Workbench from '../components/Workbench';
 import ExploreOverview from '../components/ExploreOverview';
 import SmartSelectionPopup from '../components/SmartSelectionPopup';
 import ShareToTeamModal from '../components/ShareToTeamModal';
@@ -39,6 +48,12 @@ import HighlightOverlay from '../components/HighlightOverlay';
 import 'katex/dist/katex.min.css';
 
 export default function ReaderPage() {
+    const { paperId } = useParams();
+    return <ReaderContent key={paperId} />;
+}
+
+function ReaderContent() {
+    const { user: signedInUser } = useAuth();
     const { paperId } = useParams<{ paperId: string }>();
     const navigate = useNavigate();
     const [isZen, setIsZen] = useState(false);
@@ -50,11 +65,17 @@ export default function ReaderPage() {
     const [translationProgress, setTranslationProgress] = useState<string>('');
     const [showSettings, setShowSettings] = useState(false); // New State for Aa menu
     const [hoveredCitation, setHoveredCitation] = useState<{ id: string, x: number, y: number } | null>(null);
-    const [showLeftSidebar, setShowLeftSidebar] = useState(true); // Left sidebar visibility
-    const [showRightSidebar, setShowRightSidebar] = useState(true); // Right sidebar (Workbench) - auto open
+    const [showLeftSidebar, setShowLeftSidebar] = useState(() => window.innerWidth >= 1280); // Left sidebar visibility
+    const [showRightSidebar, setShowRightSidebar] = useState(() => window.innerWidth >= 1024); // Research panel
     const [sidebarTab, setSidebarTab] = useState<'analysis' | 'graph' | 'structure'>('structure'); // Sidebar tab - 默认显示目录结构
-    const [viewMode, setViewMode] = useState<'overview' | 'read'>('overview'); // Explore vs Read mode
+    const [viewMode, setViewMode] = useState<'overview' | 'read'>('read'); // Explore vs Read mode
     const mainContentRef = useRef<HTMLElement>(null);
+    const documentRef = useRef<HTMLDivElement>(null);
+    const [notice, setNotice] = useState('');
+    const notes = useAnnotationDrafts();
+    const noteDrafts = notes.drafts;
+    const scrollTimer = useRef<ReturnType<typeof setTimeout>>();
+    const restored = useRef(false);
 
     // Smart Selection State
     const [selectedText, setSelectedText] = useState<string>('');
@@ -67,28 +88,146 @@ export default function ReaderPage() {
     const [annotationsRefreshKey, setAnnotationsRefreshKey] = useState(0);
 
     const { data: paper, isLoading: isPaperLoading } = useQuery({
-        queryKey: ['paper', paperId],
+        queryKey: ['paper', signedInUser?.id, paperId],
         queryFn: () => papersApi.get(paperId!),
         enabled: !!paperId,
+        refetchInterval: query => query.state.data?.content_ready ? false : 3000,
     });
 
-    const { data: contentData, isLoading: isContentLoading, error } = useQuery({
-        queryKey: ['paper-content', paperId],
+    const { data: contentData, isLoading: isContentLoading, error, refetch: refetchContent } = useQuery({
+        queryKey: ['paper-content', signedInUser?.id, paperId],
         queryFn: () => papersApi.getContent(paperId!),
-        enabled: !!paperId && (paper?.status === 'completed' || paper?.status === 'analyzed'),
+        enabled: !!paperId && !!(paper?.content_ready || paper?.markdown_content),
     });
 
     // Fetch current user for highlight color assignment
     const { data: currentUser } = useQuery({
-        queryKey: ['current-user'],
+        queryKey: ['current-user', signedInUser?.id],
         queryFn: () => authApi.me(),
         staleTime: 1000 * 60 * 5, // Cache for 5 minutes
     });
 
+    const reading = useReadingWorkspace(paperId!, currentUser?.id);
+    const representation = isTranslated ? 'translation' : 'original';
+    const currentRevision = contentData?.revisions?.[representation];
+
+    useEffect(() => {
+        if (isTranslated && translatedContent) void refetchContent();
+    }, [isTranslated, translatedContent, refetchContent]);
+
+    useEffect(() => {
+        const checkpoint = reading.initial?.checkpoint;
+        if (restored.current || !checkpoint || !currentRevision || !mainContentRef.current) return;
+        if (checkpoint.representation !== representation) {
+            if (checkpoint.representation === 'translation' && paper?.translated_content) {
+                setTranslatedContent(paper.translated_content);
+                setIsTranslated(true);
+            } else if (checkpoint.representation === 'translation') {
+                restored.current = true;
+                setNotice('上次阅读的是译文，当前译文不可用。已保留原文供核对。');
+            }
+            return;
+        }
+        restored.current = true;
+        if (checkpoint.revision_id !== currentRevision.id) {
+            setNotice('正文版本已变化，上次位置未自动套用。旧批注仍保留，请核对来源。');
+            return;
+        }
+        setFontSize(checkpoint.font_size);
+        let touched = false;
+        const stop = () => { touched = true; };
+        const el = mainContentRef.current;
+        const align = () => {
+            if (touched || !el) return;
+            const range = checkpoint.anchor && documentRef.current
+                ? resolveAnchor(documentRef.current, { anchor: checkpoint.anchor }, currentRevision.id) : null;
+            el.style.scrollBehavior = 'auto';
+            if (range) el.scrollTop += range.getBoundingClientRect().top - el.getBoundingClientRect().top - (checkpoint.block_offset || 0);
+            else el.scrollTop = checkpoint.scroll_ratio * Math.max(0, el.scrollHeight - el.clientHeight);
+            el.style.scrollBehavior = '';
+        };
+        el.addEventListener('wheel', stop, { passive: true });
+        el.addEventListener('pointerdown', stop);
+        el.addEventListener('keydown', stop);
+        requestAnimationFrame(align);
+        const observer = new ResizeObserver(align);
+        if (documentRef.current) observer.observe(documentRef.current);
+        const timer = setTimeout(() => observer.disconnect(), 2000);
+        return () => {
+            clearTimeout(timer); observer.disconnect();
+            el.removeEventListener('wheel', stop); el.removeEventListener('pointerdown', stop); el.removeEventListener('keydown', stop);
+        };
+    }, [reading.initial, currentRevision, representation, paper?.translated_content]);
+
+    useEffect(() => () => { if (scrollTimer.current) clearTimeout(scrollTimer.current); }, []);
+
+    const rememberPosition = () => {
+        if (!reading.initial || !currentRevision || !mainContentRef.current) return;
+        const el = mainContentRef.current;
+        const top = el.getBoundingClientRect().top;
+        const block = Array.from(documentRef.current?.querySelectorAll('p, h2, h3, blockquote') || [])
+            .find(node => node.getBoundingClientRect().bottom > top + 24);
+        let positionAnchor = null;
+        if (block && documentRef.current) {
+            const range = document.createRange(); range.selectNodeContents(block);
+            positionAnchor = anchorFromRange(documentRef.current, range, currentRevision.id, representation);
+        }
+        reading.update({ checkpoint: {
+            revision_id: currentRevision.id, representation, font_size: fontSize,
+            anchor: positionAnchor, block_offset: block ? block.getBoundingClientRect().top - top : 0,
+            scroll_ratio: el.scrollTop / Math.max(1, el.scrollHeight - el.clientHeight),
+        } });
+    };
+
+    const jumpToAnnotation = (item: Annotation) => {
+        if (item.anchor && item.anchor.representation !== representation) {
+            setNotice(item.anchor.representation === 'translation' ? '这条材料摘自译文，请切换到对应译文核对。' : '这条批注来自原文，请切回原文核对。');
+            return;
+        }
+        const range = documentRef.current && resolveAnchor(documentRef.current, item, currentRevision?.id);
+        if (!range) {
+            setNotice(item.anchor ? '当前正文与批注位置不一致，未自动跳转。请核对内容版本。' : '旧笔记的原文位置无法唯一确定，请用摘录核对，未自动跳转。');
+            return;
+        }
+        const parent = range.startContainer.parentElement;
+        parent?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        parent?.classList.add('highlight-ref');
+        setTimeout(() => parent?.classList.remove('highlight-ref'), 2000);
+        if (window.innerWidth < 1024) setShowRightSidebar(false);
+    };
+
+    const openOriginal = async () => {
+        const target = window.open('about:blank', '_blank');
+        if (target) target.opener = null;
+        try {
+            const response = await authFetch(`/api/v1/papers/${paperId}/original`);
+            if (!response.ok) throw new Error('unavailable');
+            const url = URL.createObjectURL(await response.blob());
+            if (target) target.location.href = url;
+            else { URL.revokeObjectURL(url); setNotice('浏览器拦截了新窗口，请允许后重新打开原 PDF。'); return; }
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
+        } catch { target?.close(); setNotice('原 PDF 暂时无法打开，请确认文件和登录状态后重试。'); }
+    };
+
+    useEffect(() => {
+        if (Object.keys(noteDrafts).length === 0) return;
+        const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); };
+        window.addEventListener('beforeunload', warn);
+        return () => window.removeEventListener('beforeunload', warn);
+    }, [noteDrafts]);
+
+    const flushReading = async () => {
+        rememberPosition();
+        do {
+            if (!await reading.save() || !await notes.saveAll()) return false;
+        } while (reading.hasUnsaved() || notes.hasUnsaved());
+        return true;
+    };
+
     // Fetch annotations for this paper (used for highlight rendering)
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { data: annotations = [] } = useQuery({
-        queryKey: ['paper-annotations', paperId, annotationsRefreshKey],
+        queryKey: ['paper-annotations', currentUser?.id, paperId, annotationsRefreshKey],
         queryFn: () => annotationsApi.list(paperId!),
         enabled: !!paperId && !!currentUser,
     });
@@ -782,6 +921,8 @@ export default function ReaderPage() {
     // Keyboard Shortcut 'P' for Zen Mode
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            const target = e.target as HTMLElement;
+            if (e.isComposing || e.ctrlKey || e.metaKey || e.altKey || target.closest('input, textarea, [contenteditable=true]')) return;
             if (e.key === 'p' || e.key === 'P') {
                 setIsZen(prev => !prev);
             }
@@ -793,32 +934,9 @@ export default function ReaderPage() {
     // Text Selection Detection for Smart Popup
     useEffect(() => {
         const computeTextLocation = (selection: Selection): TextLocation | null => {
-            if (selection.rangeCount === 0) return null;
-            const range = selection.getRangeAt(0);
-            const container = range.commonAncestorContainer;
-
-            // Try to find context
-            let node: Node | null = container;
-            let startLine = 0;
-            // Traverse up to find context
-            while (node && node !== mainContentRef.current) {
-                if (node instanceof HTMLElement) {
-                    // Check for data-line (if lines are marked)
-                    if (node.hasAttribute('data-line')) {
-                        startLine = parseInt(node.getAttribute('data-line') || '0', 10);
-                    }
-                }
-                node = node.parentNode;
-            }
-
-            // If we didn't find specific line, maybe we can default to something
-            // For now, just return what we found plus the text snippet
-            return {
-                start_line: startLine,
-                end_line: startLine, // Single line for now unless we iterate range
-                text_snippet: selection.toString().substring(0, 100),
-                // We might want to extend TextLocation interface if needed, but for now strict to API types or just pass as snippet
-            };
+            if (!documentRef.current || !currentRevision) return null;
+            const anchor = captureAnchor(documentRef.current, selection, currentRevision.id, representation);
+            return anchor ? { start_line: 0, end_line: 0, text_snippet: anchor.exact.slice(0, 100), anchor } : null;
         };
 
         const handleMouseUp = (e: MouseEvent) => {
@@ -834,13 +952,14 @@ export default function ReaderPage() {
             const selection = window.getSelection();
             const text = selection?.toString().trim();
 
-            if (text && text.length > 10) {
+            if (text && text.length >= 2) {
                 const range = selection?.getRangeAt(0);
                 const rect = range?.getBoundingClientRect();
                 const location = selection ? computeTextLocation(selection) : null;
 
                 if (rect) {
-                    setSelectedText(text);
+                    if (!location?.anchor) return;
+                    setSelectedText(location.anchor.exact);
                     setSelectionPosition({
                         x: rect.left + rect.width / 2,
                         y: rect.top,
@@ -897,7 +1016,7 @@ export default function ReaderPage() {
             document.removeEventListener('dragstart', handleDragStart);
             document.removeEventListener('dragend', handleDragEnd);
         };
-    }, [isDragging, selectionPosition]);
+    }, [isDragging, selectionPosition, currentRevision, representation]);
 
     const isLoading = isPaperLoading || isContentLoading;
 
@@ -927,7 +1046,7 @@ export default function ReaderPage() {
         );
     }
 
-    if (paper.status === 'uploading' || paper.status === 'parsing' || paper.status === 'indexing') {
+    if (!paper.content_ready && !paper.markdown_content && ['uploading', 'parsing', 'indexing'].includes(paper.status)) {
         return (
             <div className="flex flex-col items-center justify-center h-screen bg-slate-50 gap-4">
                 <Loader2 className="w-10 h-10 animate-spin text-indigo-600" />
@@ -940,7 +1059,7 @@ export default function ReaderPage() {
         );
     }
 
-    if (paper.status === 'failed') {
+    if (paper.status === 'failed' && !paper.content_ready && !paper.markdown_content) {
         return (
             <div className="flex flex-col items-center justify-center h-screen bg-slate-50 gap-4">
                 <div className="w-12 h-12 text-red-400 font-bold text-3xl flex items-center justify-center border-2 border-red-200 rounded-full">!</div>
@@ -1038,6 +1157,8 @@ export default function ReaderPage() {
     if (viewMode === 'overview' && paper) {
         return (
             <>
+                <ReadingLeaveGuard hasUnsaved={() => reading.hasUnsaved() || notes.hasUnsaved()} flush={flushReading}
+                    onFailure={() => { setViewMode('read'); setNotice('阅读现场或批注尚未保存，已留在本页。'); }} />
                 <ExploreOverview
                     paperId={paperId!}
                     paperTitle={paper.title || paper.filename}
@@ -1067,27 +1188,32 @@ export default function ReaderPage() {
     }
 
     return (
-        <div className="flex flex-col h-screen bg-background text-content-main font-sans transition-colors duration-500 overflow-hidden relative">
+        <div className="research-reader flex flex-col h-screen bg-background text-content-main font-sans transition-colors duration-500 overflow-hidden relative">
+            <ReadingLeaveGuard hasUnsaved={() => reading.hasUnsaved() || notes.hasUnsaved()} flush={flushReading}
+                onFailure={() => setNotice('阅读现场或批注尚未保存，已留在本页。请重试或处理冲突后再离开。')} />
             {/* Dynamic CSS Injection */}
             <style>{getStyles()}</style>
 
             {/* Top Navigation Toolbar */}
-            <header className={`h-16 border-b border-border bg-surface flex items-center justify-between px-6 z-50 transition-all duration-300 shadow-sm ${isZen ? '-translate-y-full mb-[-64px]' : ''}`}>
+            <header className={`research-toolbar h-16 border-b border-border bg-surface flex items-center justify-between px-6 z-50 transition-all duration-300 shadow-sm ${isZen ? '-translate-y-full mb-[-64px]' : ''}`}>
                 <div className="flex items-center gap-3">
-                    <button onClick={() => navigate('/library')} className="p-2 -ml-2 text-content-muted hover:text-content-main hover:bg-surface-elevated rounded-lg transition-colors">
+                    <button aria-label="返回论文库" onClick={() => { rememberPosition(); navigate('/library'); }} className="p-2 -ml-2 text-content-muted hover:text-content-main hover:bg-surface-elevated rounded-lg transition-colors">
                         <ChevronLeft className="w-5 h-5" />
                     </button>
                     <div className="flex items-center gap-2">
                         <div className="p-1.5 bg-brand rounded-lg text-primary-content shadow-sm shadow-brand/20">
                             <BookOpen className="w-5 h-5" />
                         </div>
-                        <span className="font-bold text-lg tracking-tight text-content-main hidden sm:block">Read it Deep</span>
+                        <div className="min-w-0 hidden sm:block"><span className="block text-[10px] uppercase tracking-widest text-content-muted">Read it DEEP · 精读工作区</span><span className="block text-sm font-medium truncate max-w-[240px]">{paper.title || paper.filename}</span></div>
                     </div>
                 </div>
 
                 <div className="flex items-center gap-3">
+                    <button className="research-text-button reader-overview-link" onClick={() => setViewMode('overview')}>论文速览</button>
+                    {paper.has_original && <button className="research-text-button" onClick={() => void openOriginal()} title="核验原 PDF"><FileText className="w-4 h-4" /><span className="hidden sm:inline">原 PDF</span></button>}
                     {/* Translate Toggle (Secondary) */}
                     <button
+                        aria-label={isTranslated ? '切回原文' : translatedContent ? '查看译文' : '翻译论文'}
                         onClick={handleTranslate}
                         disabled={isTranslating}
                         className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${isTranslated ? 'bg-indigo-50 text-indigo-700' : isTranslating ? 'bg-amber-50 text-amber-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
@@ -1175,25 +1301,28 @@ export default function ReaderPage() {
 
                         {/* Workbench Toggle (Primary) */}
                         <button
-                            onClick={() => setShowRightSidebar(!showRightSidebar)}
+                            onClick={() => { setShowRightSidebar(!showRightSidebar); if (window.innerWidth < 1024) setShowLeftSidebar(false); }}
                             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm ml-2 ${showRightSidebar
-                                ? 'bg-purple-600 text-white shadow-purple-200 hover:bg-purple-700'
+                                ? 'bg-emerald-800 text-white hover:bg-emerald-900'
                                 : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-900'
                                 }`}
-                            title="智能工作台"
+                            title="研究笔记"
                         >
-                            <Sparkles className={`w-4 h-4 ${showRightSidebar ? 'text-purple-100' : 'text-purple-600'}`} />
-                            <span className="hidden sm:inline">工作台</span>
+                            <NotebookPen className={`w-4 h-4 ${showRightSidebar ? 'text-purple-100' : 'text-purple-600'}`} />
+                            <span className="hidden sm:inline">研究笔记</span>
                             {showRightSidebar ? <PanelRightClose className="w-4 h-4 opacity-70" /> : <PanelRight className="w-4 h-4 opacity-70" />}
                         </button>
                     </div>
                 </div>
             </header>
 
+            {notice && <div className="research-notice" role="status"><span className="flex-1">{notice}</span><button aria-label="关闭提示" onClick={() => setNotice('')}><X className="w-4 h-4" /></button></div>}
+            {reading.initial?.checkpoint && !notice && <div className="research-notice"><RotateCcw className="w-3.5 h-3.5" /><span className="flex-1">{reading.initial.next_action || '已恢复上次阅读现场，可以继续阅读。'}</span><span className="hidden sm:inline">阅读问题仅自己可见</span></div>}
             <div className="flex-1 flex overflow-hidden relative">
+                {!isZen && (showLeftSidebar || showRightSidebar) && <button aria-label="收起侧面板" className="lg:hidden absolute inset-0 z-40 bg-black/10" onClick={() => { setShowLeftSidebar(false); setShowRightSidebar(false); }} />}
                 {/* Left Sidebar - Analysis Panel */}
                 {!isZen && (
-                    <aside className={`${showLeftSidebar ? 'w-80' : 'w-0'} border-r border-border bg-surface overflow-y-auto transition-all duration-300 flex-shrink-0`}>
+                    <aside className={`reader-left-panel ${showLeftSidebar ? 'w-64' : 'w-0'} border-r border-border bg-surface overflow-y-auto transition-all duration-300 flex-shrink-0`}>
                         {showLeftSidebar && paperId && (
                             <div className="flex flex-col h-full">
                                 {/* Tab Switcher */}
@@ -1202,19 +1331,19 @@ export default function ReaderPage() {
                                         onClick={() => setSidebarTab('analysis')}
                                         className={`flex-1 py-2 text-xs font-medium rounded-t-lg transition-colors ${sidebarTab === 'analysis' ? 'bg-white text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
                                     >
-                                        📝 内容分析
+                                        内容分析
                                     </button>
                                     <button
                                         onClick={() => setSidebarTab('structure')}
                                         className={`flex-1 py-2 text-xs font-medium rounded-t-lg transition-colors ${sidebarTab === 'structure' ? 'bg-white text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
                                     >
-                                        📑 目录结构
+                                        目录
                                     </button>
                                     <button
                                         onClick={() => setSidebarTab('graph')}
                                         className={`flex-1 py-2 text-xs font-medium rounded-t-lg transition-colors ${sidebarTab === 'graph' ? 'bg-white text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
                                     >
-                                        🔗 关系图
+                                        关联论文
                                     </button>
                                 </div>
 
@@ -1227,10 +1356,13 @@ export default function ReaderPage() {
                                         />
                                     )}
                                     {sidebarTab === 'structure' && (
-                                        <StructurePanel
-                                            paperId={paperId}
-                                            onJumpToLine={handleJumpToLine}
-                                        />
+                                        <DocumentOutline markdown={content} onJump={(title, occurrence) => {
+                                            const heading = Array.from(documentRef.current?.querySelectorAll('h2,h3,h4,h5,h6') || [])
+                                                .filter(node => node.textContent?.trim() === title)[occurrence];
+                                            const target = heading || (/^(abstract|摘要)$/i.test(title) ? documentRef.current?.querySelector('.abstract-box') : null);
+                                            target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                            if (window.innerWidth < 1024) setShowLeftSidebar(false);
+                                        }} />
                                     )}
                                     {sidebarTab === 'graph' && (
                                         <div className="p-2">
@@ -1246,9 +1378,9 @@ export default function ReaderPage() {
                 {/* Sidebar Toggle Button */}
                 {!isZen && (
                     <button
-                        onClick={() => setShowLeftSidebar(prev => !prev)}
+                        onClick={() => { setShowLeftSidebar(prev => !prev); if (window.innerWidth < 1024) setShowRightSidebar(false); }}
                         className="absolute left-0 top-4 z-40 p-1.5 bg-white border border-slate-200 rounded-r-lg shadow-sm text-slate-400 hover:text-slate-600 transition-colors"
-                        style={{ left: showLeftSidebar ? '288px' : '0' }}
+                        style={{ left: showLeftSidebar ? '256px' : '0' }}
                         title={showLeftSidebar ? '隐藏分析面板' : '显示分析面板'}
                     >
                         {showLeftSidebar ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeft className="w-4 h-4" />}
@@ -1256,15 +1388,15 @@ export default function ReaderPage() {
                 )}
 
                 {/* Main Scrollable Area */}
-                <main ref={mainContentRef} className={`flex-1 overflow-y-auto scroll-smooth ${isZen ? 'bg-background' : 'bg-background'}`}>
+                <main ref={mainContentRef} onScroll={() => { if (scrollTimer.current) clearTimeout(scrollTimer.current); scrollTimer.current = setTimeout(rememberPosition, 350); }} className={`flex-1 overflow-y-auto scroll-smooth ${isZen ? 'bg-background' : 'bg-background'}`}>
                     {/* Paper Card Container */}
-                    <div className={`mx-auto transition-all duration-500 bg-surface shadow-sm border border-border ${isZen ? 'max-w-[900px] my-0 sm:my-8 min-h-screen sm:rounded-xl shadow-lg' : 'max-w-[850px] my-8 min-h-[calc(100vh-8rem)] rounded-xl'}`}
+                    <div className={`paper-sheet mx-auto transition-all duration-500 bg-surface shadow-sm border border-border ${isZen ? 'max-w-[900px] my-0 sm:my-8 min-h-screen sm:rounded-xl shadow-lg' : 'max-w-[850px] my-8 min-h-[calc(100vh-8rem)] rounded-xl'}`}
                         onMouseOver={handleMouseOver}
                         onMouseOut={handleMouseOut}
                     >
 
                         {/* Content Wrapper */}
-                        <div className="px-12 py-16 sm:px-16 sm:py-20 md:px-20">
+                        <div className="paper-padding px-10 py-12 sm:px-12 sm:py-14">
                             {/* Paper Metadata Header */}
                             <div className="mb-14 border-b border-slate-100 pb-10 text-center paper-header">
                                 {/* Title */}
@@ -1328,19 +1460,11 @@ export default function ReaderPage() {
                                     </>
                                 ) : (
                                     <>
-                                        {/* Mock Fallback */}
-                                        <div className="font-serif text-slate-700 text-xl leading-relaxed mb-6 author-line">
-                                            John Doe<sup className="text-xs font-sans text-slate-500 ml-0.5">1</sup>,
-                                            Jane Smith<sup className="text-xs font-sans text-slate-500 ml-0.5">2</sup>
-                                        </div>
-                                        <div className="text-[0.95rem] text-slate-500 font-serif italic space-y-1 affil-line">
-                                            <div>1. Department of Computer Science</div>
-                                            <div>2. School of Engineering</div>
-                                        </div>
                                     </>
                                 )}
                             </div>
 
+                            <div ref={documentRef}>
                             {/* Abstract */}
                             {finalAbstract && (
                                 <div className="mb-14 px-4 sm:px-8 abstract-box">
@@ -1379,6 +1503,7 @@ export default function ReaderPage() {
                                     {processedContent}
                                 </ReactMarkdown>
                             </article>
+                            </div>
                         </div>
                     </div>
 
@@ -1386,50 +1511,17 @@ export default function ReaderPage() {
                     <div className="h-32"></div>
                 </main>
 
-                {/* Right Sidebar - Workbench */}
                 {!isZen && (
-                    <aside className={`${showRightSidebar ? 'w-80' : 'w-0'} border-l border-slate-200/60 bg-slate-50 overflow-hidden transition-all duration-300 flex-shrink-0`}>
-                        {showRightSidebar && paperId && paper && (
-                            <Workbench
-                                paperId={paperId}
-                                paperTitle={paper.title || '论文'}
-                                onClose={() => setShowRightSidebar(false)}
-                                onJumpToLocation={handleJumpToLine}
-                                onJumpToHighlight={(selectedText) => {
-                                    // Scroll to highlight by finding the text in the content
-                                    const contentEl = mainContentRef.current;
-                                    if (!contentEl || !selectedText) return;
-
-                                    // Use TreeWalker to find the text node
-                                    const treeWalker = document.createTreeWalker(
-                                        contentEl,
-                                        NodeFilter.SHOW_TEXT,
-                                        null
-                                    );
-
-                                    const searchText = selectedText.substring(0, 50).toLowerCase();
-                                    let node: Node | null;
-                                    while ((node = treeWalker.nextNode())) {
-                                        if (node.textContent?.toLowerCase().includes(searchText)) {
-                                            // Found - scroll to it
-                                            const parent = node.parentElement;
-                                            if (parent) {
-                                                parent.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                                // Flash effect
-                                                parent.style.transition = 'background-color 0.3s';
-                                                parent.style.backgroundColor = 'rgba(255, 224, 130, 0.5)';
-                                                setTimeout(() => {
-                                                    parent.style.backgroundColor = '';
-                                                }, 2000);
-                                            }
-                                            break;
-                                        }
-                                    }
-                                }}
-                                refreshKey={workbenchRefreshKey}
-                                annotations={annotations}
-                            />
-                        )}
+                    <aside className={`reader-right-panel ${showRightSidebar ? 'w-[360px]' : 'w-0'} border-l border-border overflow-hidden flex-shrink-0`}>
+                        {showRightSidebar && paperId && <ResearchPanel
+                            paperId={paperId} ownerId={signedInUser?.id} paperTitle={paper.title || paper.filename} annotations={annotations}
+                            reading={reading} noteDrafts={noteDrafts}
+                            onDraftChange={notes.update} onSaveNote={notes.saveOne}
+                            onDraftDrop={notes.drop} onDraftError={message => setNotice(message)}
+                            onChange={() => setAnnotationsRefreshKey(k => k + 1)}
+                            onJump={jumpToAnnotation} onJumpToLocation={handleJumpToLine}
+                            onClose={() => setShowRightSidebar(false)} refreshKey={workbenchRefreshKey}
+                        />}
                     </aside>
                 )}
             </div>
@@ -1473,13 +1565,14 @@ export default function ReaderPage() {
                     paperTitle={paper?.title || paper?.filename || ''}
                     fullContent={contentData?.markdown || ''}
                     location={selectionLocation}
+                    researchQuestion={reading.workspace.focus}
                     onClose={() => {
                         setSelectedText('');
                         setSelectionPosition(null);
                         setSelectionLocation(null);
                     }}
                     onNoteAdded={() => setWorkbenchRefreshKey(k => k + 1)}
-                    onHighlightCreated={() => setAnnotationsRefreshKey(k => k + 1)}
+                    onHighlightCreated={() => { setAnnotationsRefreshKey(k => k + 1); setShowRightSidebar(true); }}
                     userId={currentUser?.id}
                 />
             )}
@@ -1487,7 +1580,8 @@ export default function ReaderPage() {
             {/* Highlight Overlay */}
             <HighlightOverlay
                 annotations={annotations}
-                contentRef={mainContentRef}
+                contentRef={documentRef}
+                revisionId={currentRevision?.id}
                 currentUserId={currentUser?.id}
                 paperId={paperId}
                 onDeleteAnnotation={async (id) => {
