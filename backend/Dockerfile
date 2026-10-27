@@ -16,14 +16,20 @@ RUN if [ -n "$APT_MIRROR" ]; then sed -i "s|deb.debian.org|${APT_MIRROR}|g" /etc
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# PIP_INDEX_URL（可选）：PyPI 镜像，如 https://pypi.tuna.tsinghua.edu.cn/simple；为空时用官方 PyPI。
+# pip 直接读这个环境变量；poetry 通过在构建副本的 pyproject 里加一个主源来使用它
+ARG PIP_INDEX_URL=
+ENV PIP_DEFAULT_TIMEOUT=60
+
 # Install Poetry
-RUN pip install poetry
+RUN pip install --retries 5 poetry
 
 # Copy dependency files
 COPY pyproject.toml ./
 
 # Install dependencies
 RUN poetry config virtualenvs.create false \
+    && if [ -n "$PIP_INDEX_URL" ]; then poetry source add --priority=primary mirror "$PIP_INDEX_URL"; fi \
     && poetry install --no-interaction --no-ansi --no-root
 
 # Copy application code
