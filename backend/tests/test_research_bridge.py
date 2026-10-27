@@ -618,3 +618,46 @@ async def test_late_pdf_read_cannot_replace_registered_markdown(client, users, b
         and paper["oa_pdf_url"] == "https://arxiv.org/pdf/1"
         and paper["publication_date"] == "2025-01-01"
     )
+
+
+async def test_research_login_gated_until_enabled(monkeypatch):
+    """主站未开放研究权限时，「连接研究权限」不发起必然被拒的授权；开放后带上全部研究 scope（含合集与综述导入）"""
+    import httpx
+    from urllib.parse import parse_qs, urlparse
+
+    from app.config import get_settings
+    from app.main import app
+
+    s = get_settings()
+    for k, v in {"rid_mode": "linked", "public_base_url": "https://read.test", "paperdaily_web_url": "https://pd.test"}.items():
+        monkeypatch.setattr(s, k, v)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="https://testserver") as c:
+        r = await c.get("/api/auth/paperdaily/login", params={"research": "true"})
+        assert r.status_code == 302 and r.headers["location"].startswith("/login?error=")
+        monkeypatch.setattr(s, "paperdaily_research_enabled", True)
+        r = await c.get("/api/auth/paperdaily/login", params={"research": "true"})
+        scope = parse_qs(urlparse(r.headers["location"]).query)["scope"][0].split()
+        assert {"read:paper", "read:resources", "read:contrib", "read:history", "read:reading", "write:reading"} == set(scope)
+        r = await c.get("/api/auth/paperdaily/login")
+        assert "scope" not in parse_qs(urlparse(r.headers["location"]).query)
+
+
+async def test_imported_fulltext_can_be_translated(client, monkeypatch):
+    """直接导入主站全文的论文（content_ready）可以触发翻译；只有题录的仍然 400"""
+    from app.api.v1 import translate
+    from app.core.store import store
+    from tests.conftest import register
+
+    started = []
+
+    async def fake_start(paper_id, user_id=None):
+        started.append(paper_id)
+        return {"success": True, "status": "translating", "message": "ok"}
+
+    monkeypatch.setattr(translate, "start_translation_task", fake_start)
+    u = await register(client, "t@example.com")
+    for pid, status, md in (("p-ready", "content_ready", "# Title\nbody"), ("p-meta", "metadata", None)):
+        store.set(pid, {"id": pid, "user_id": u["id"], "filename": pid, "status": status, "markdown_content": md})
+    assert (await client.post("/api/v1/papers/p-ready/translate", headers=u["headers"])).status_code == 200
+    assert (await client.post("/api/v1/papers/p-meta/translate", headers=u["headers"])).status_code == 400
+    assert started == ["p-ready"]

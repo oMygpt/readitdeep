@@ -14,7 +14,8 @@ from app.api.v1.auth import decode_token
 from app.models.user import User
 from app.services.paperdaily import client, sessions
 
-SCOPES = "read:paper read:resources read:reading write:reading"
+# 研究权限一次申请：题录与全文、收藏/个人库/合集（R6 合集导入）、综述历史（R6 综述导入）、研究问题与阅读记忆
+SCOPES = "read:paper read:resources read:contrib read:history read:reading write:reading"
 MAX_BYTES = 32 * 1024 * 1024
 CHUNK = 1024 * 1024
 

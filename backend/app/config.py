@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     paperdaily_webhook_secret: str = ""  # 主站目前只提供拉取接口；配置后才接受推送
     # 委托 key 加密密钥：逗号分隔的 "版本:base64(32 字节)"，第一个用于加密，其余仅用于解密（轮换）
     paperdaily_token_keys: str = ""
+    # 主站为 read 开放研究权限（scope）后再打开：「连接研究权限」才会真正发起带 scope 的授权
+    paperdaily_research_enabled: bool = False
     paperdaily_scopes: str = ""  # Default identity only; research scopes require an explicit consent flow.
     # 关联模式下的本地 JWT 有效期（分钟），设计上限 15
     linked_jwt_minutes: int = 15
@@ -58,6 +60,9 @@ class Settings(BaseSettings):
     read_billing: Literal["off", "paperdaily"] = "off"
     read_free_paper_limit: int = 5  # 注册（非 Pro/机构）用户每周期可处理的 PDF 篇数
     read_free_paper_period: Literal["month", "lifetime"] = "month"
+    # 主站授权里还没有「读取权益」时（主站 2.21.0 之前）按此档位处理；只在 READ_BILLING=off 时生效。
+    # 只有当主站白名单里全是该档位的用户时才可以设置（例如白名单 = 机构成员 → institution）；为空则 503
+    read_tier_fallback: Literal["", "registered", "pro", "institution"] = ""
     read_chat_daily_limit_free: int = 50  # 问答、划词翻译等交互 AI 的每日次数
     read_chat_daily_limit_paid: int = 300
     # 主站 read-jobs 受信 runner 身份与 client assertion 密钥（只放保险库）

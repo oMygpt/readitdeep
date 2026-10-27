@@ -111,7 +111,16 @@ async def tier_of(user: User, sid: Optional[str]) -> str:
 
     try:
         tier = tier_from_entitlements(await api.entitlements((await delegation(sid, user)).token))
-    except (PaperDailyUnavailable, PaperDailyError) as e:
+    except PaperDailyError as e:
+        # 主站授权里还没有「读取权益」这项操作（旧版主站 / 旧授权）：只在不计费时按部署配置的档位处理
+        fallback = get_settings().read_tier_fallback
+        if e.status in (401, 403) and fallback and billing_mode() == "off":
+            logger.info("entitlements not delegated for %s (%s); using READ_TIER_FALLBACK=%s", user.id, e.status, fallback)
+            tier = fallback
+        else:
+            logger.warning("entitlements unavailable for %s: %s", user.id, e)
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "暂时无法确认 PaperDaily 权益，请稍后重试") from e
+    except PaperDailyUnavailable as e:
         logger.warning("entitlements unavailable for %s: %s", user.id, e)
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "暂时无法确认 PaperDaily 权益，请稍后重试") from e
     _tier_cache[user.id] = (time.monotonic() + TIER_CACHE_SECONDS, tier)

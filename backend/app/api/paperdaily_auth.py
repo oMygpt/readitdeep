@@ -52,6 +52,11 @@ def _login_error(message: str) -> RedirectResponse:
 @router.get("/login")
 async def login(return_to: Optional[str] = None, research: bool = False):
     _require_linked()
+    from app.config import get_settings
+
+    if research and not get_settings().paperdaily_research_enabled:
+        # 主站尚未为 read 开放研究权限：不发起必然被拒的授权请求
+        return _login_error("PaperDaily 研究权限尚未开放，阅读、批注和上传 PDF 不受影响")
     url, browser_nonce = await sessions.begin_login(return_to, research=research)
     response = RedirectResponse(url, status_code=302)
     response.set_cookie(STATE_COOKIE, browser_nonce, max_age=600, path=COOKIE_PATH,

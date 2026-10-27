@@ -430,3 +430,27 @@ async def test_admission_http_failure_keeps_pdf_retryable(pd, https_client, fake
     monkeypatch.setattr(billing, 'admit', original)
     retry = await c.post(f'/api/v1/papers/{pid}/process', headers=h, json={'confirm_price': PRICE})
     assert retry.status_code == 200, retry.text
+
+
+async def test_tier_fallback_only_when_entitlements_not_delegated(pd, https_client, monkeypatch):
+    """旧版主站：授权里没有读取权益 → 不计费时按 READ_TIER_FALLBACK；计费时或主站不可达仍 503"""
+    s = get_settings()
+    monkeypatch.setattr(s, "read_billing", "off")
+    original = pd.handler
+
+    def no_entitlements(request):
+        if request.url.path == "/api/v1/me/entitlements":
+            return httpx.Response(403, json={"detail": "operation outside delegation"})
+        return original(request)
+
+    pd.handler = no_entitlements
+    c = https_client
+    h, uid = await _session(c, pd)
+    assert (await c.get("/api/v1/billing/status", headers=h)).status_code == 503
+    monkeypatch.setattr(s, "read_tier_fallback", "institution")
+    billing._tier_cache.clear()
+    st = (await c.get("/api/v1/billing/status", headers=h)).json()
+    assert st["tier"] == "institution" and st["papers_limit"] is None
+    monkeypatch.setattr(s, "read_billing", "paperdaily")
+    billing._tier_cache.clear()
+    assert (await c.get("/api/v1/billing/status", headers=h)).status_code == 503
