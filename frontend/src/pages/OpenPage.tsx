@@ -6,7 +6,9 @@
  *   /open?review=<主站综述历史 id>
  *
  * 未登录时由 ProtectedRoute 送去 PaperDaily 登录并带回本页。导入题录免费；
- * 单篇且已可读时直接打开阅读器，否则列出题录，由用户上传或获取开放获取 PDF（此时才按篇计费）。
+ * 单篇且已可读时直接打开阅读器；否则自动抓取开放获取 PDF（主站要求确认价格时弹窗，取消则不再继续），
+ * 然后直接进知识库并高亮这些论文。非开放获取的论文在知识库里给出版商数据库链接。
+ * 综述（review）导入仍停在本页，因为要展示综述正文；授权或导入失败也停在本页。
  * 链接里的标题只用作标签名，题录一律由服务端以用户授权回主站获取。
  */
 
@@ -16,7 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, BookOpen, CheckCircle, Loader2 } from 'lucide-react';
 import { isLinkedMode, libraryApi, type Paper } from '../lib/api';
-import { errorMessage, seriesApi, type ImportItem } from '../lib/series';
+import { errorMessage, seriesApi, withPriceConfirm, type ImportItem } from '../lib/series';
 import { researchApi, researchError, researchLogin } from '../lib/research';
 import BillingBadge from '../components/BillingBadge';
 import PaperIntakeActions from '../components/PaperIntakeActions';
@@ -37,6 +39,8 @@ export default function OpenPage() {
     const [result, setResult] = useState<Imported | null>(null);
     const [error, setError] = useState<string | null>(null);
     const started = useRef(false);
+    const active = useRef(false);
+    const [fetchErrors, setFetchErrors] = useState<Record<string, string>>({});
     const [manualId, setManualId] = useState('');
     const [resourceBusy, setResourceBusy] = useState<string | null>(null);
     const [resourceMessages, setResourceMessages] = useState<Record<string, string>>({});
@@ -46,34 +50,75 @@ export default function OpenPage() {
     const review = params.get('review');
     const title = params.get('title')?.slice(0, 100) || undefined;
 
+    const [stage, setStage] = useState<'importing' | 'fetching'>('importing');
+
+    // 逐篇抓开放获取 PDF；免费额度内直接处理，要扣积分时弹窗确认，用户取消一次就不再继续问
+    const fetchOpenAccess = async (items: ImportItem[]): Promise<boolean> => {
+        for (const item of items) {
+            if (!active.current) return false;
+            if (!item.paper_id || item.status !== 'metadata' || !item.oa_available) continue;
+            try {
+                await withPriceConfirm((price) => seriesApi.fetchPdf(item.paper_id!, price), undefined, () => active.current);
+            } catch (e) {
+                if (!active.current) return false;
+                if (e instanceof Error && e.message.startsWith('已取消')) return true;
+                setFetchErrors(previous => ({ ...previous, [item.source_id]: errorMessage(e) }));
+                return false;
+            }
+        }
+        return active.current;
+    };
+
     useEffect(() => {
-        if (started.current) return;
+        active.current = true;
+        const stop = () => { active.current = false; };
+        if (started.current) return stop;
         started.current = true;
         if (!isLinkedMode()) {
             setError(t('open.notLinked'));
-            return;
+            return stop;
         }
         (async () => {
             try {
                 if (review && /^\d+$/.test(review)) {
-                    setResult(await seriesApi.importReview(Number(review)));
-                } else if (collection) {
-                    setResult(await seriesApi.importCollection(collection));
-                } else if (paperIds.length) {
-                    const r = await seriesApi.importPapers(paperIds, paperIds.length > 1 ? title : undefined);
+                    const r = await seriesApi.importReview(Number(review));
+                    if (!active.current) return;
+                    setResult(r);
+                    if (!r.items.some(item => item.status === 'error')) await fetchOpenAccess(r.items);
+                    if (active.current) void refetch();
+                } else if (collection || paperIds.length) {
+                    const r = collection
+                        ? await seriesApi.importCollection(collection)
+                        : await seriesApi.importPapers(paperIds, paperIds.length > 1 ? title : undefined);
+                    if (!active.current) return;
+                    if (r.items.some(item => item.status === 'error')) {
+                        setResult(r);
+                        return;
+                    }
                     const only = r.items.length === 1 ? r.items[0] : null;
                     if (only?.paper_id && READY.includes(only.status)) {
                         navigate(`/read/${only.paper_id}`, { replace: true });
                         return;
                     }
-                    setResult({ title, items: r.items });
+                    const imported = r.items.map((i) => i.paper_id).filter(Boolean) as string[];
+                    if (!imported.length) {
+                        setResult({ title: (r as { title?: string }).title ?? title, items: r.items });
+                        return;
+                    }
+                    setStage('fetching');
+                    if (!await fetchOpenAccess(r.items)) {
+                        if (active.current) setResult(r);
+                        return;
+                    }
+                    navigate(`/library?focus=${imported.map(encodeURIComponent).join(',')}`, { replace: true });
                 } else {
                     setError(t('open.empty'));
                 }
             } catch (e) {
-                setError(errorMessage(e));
+                if (active.current) setError(errorMessage(e));
             }
         })();
+        return stop;
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -127,7 +172,7 @@ export default function OpenPage() {
                 )}
                 {!error && !result && (
                     <div className="flex items-center gap-2 text-content-muted py-8 justify-center">
-                        <Loader2 className="w-5 h-5 animate-spin" />{t('open.importing')}
+                        <Loader2 className="w-5 h-5 animate-spin" />{stage === 'fetching' ? t('open.fetchingOa') : t('open.importing')}
                     </div>
                 )}
 
@@ -149,6 +194,7 @@ export default function OpenPage() {
                                     <li key={item.source_id} className="py-3 flex items-start justify-between gap-3">
                                         <div className="min-w-0">
                                             <p className="font-medium text-content-main truncate">{paper?.title || paper?.filename || item.source_id}</p>
+                                            {fetchErrors[item.source_id] && <p role="alert" className="text-xs text-error">{fetchErrors[item.source_id]}</p>}
                                             {item.status === 'error' && <p className="text-xs text-error">{item.error || t('open.notFound')}</p>}
                                             {paper && !ready && !['metadata', 'pdf_pending', 'failed'].includes(paper.status) && (
                                                 <p className="text-xs text-warning flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />{t('open.processing')}</p>

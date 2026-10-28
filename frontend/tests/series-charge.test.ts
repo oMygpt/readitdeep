@@ -33,3 +33,12 @@ describe('per-PDF charge confirmation', () => {
         expect(confirm).not.toHaveBeenCalled();
     });
 });
+
+it('does not start processing when the landing flow is no longer active after confirmation', async () => {
+    let active = true;
+    const run = vi.fn().mockRejectedValue(blocked({ error: 'price_confirmation_required', message: 'm', price: 25, paper_id: 'p1' }));
+    vi.spyOn(window, 'confirm').mockImplementation(() => { active = false; return true; });
+    const post = vi.spyOn(api, 'post');
+    await expect(withPriceConfirm(run, undefined, () => active)).rejects.toThrow('已取消');
+    expect(post).not.toHaveBeenCalled();
+});
