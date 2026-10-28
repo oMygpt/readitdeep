@@ -69,7 +69,7 @@
 - [x] R6.4 `/open` 深链（paper 可重复 / collection / review）与「从 PaperDaily 导入」面板（等主站 P1）
 - [x] R6.5 前端计费体验：价格、余额、n/5 篇、题录卡片、待确认/余额不足（昵称待主站 P8 决定）
 - [x] R6.6a 主站 P1–P10 对齐：主站 2.21.0 上线（read client 开放已验证账号、档位字段、key_id、25 分/篇），RiD #19、#21 对齐
-- [ ] R6.6b 主站 P11：`source=read` 不计入全站/个人合成预算（alonegg/new_paperdaily#176）
+- [x] R6.6b 主站 P11：`source=read` 不计入全站/个人合成预算（主站 #197/#198，v2.22.6；2026-10-28 生产配置与回滚事务计数验收通过，真实PDF全链路仍见R6.7）
 - [ ] R6.6c ask A1–A3 深链入口（alonegg/paperdaily-ask#16），待 ask PR 落地后联调
 - [ ] R6.7 生产验收：注册与 Pro 测试账号全链路 + 主站 ledger 对账
 
