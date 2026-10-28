@@ -106,19 +106,24 @@ export function errorMessage(err: any): string {
 /**
  * 执行一次可能计费的操作：主站要求确认价格时弹窗确认，确认后对已保存的 PDF 调 /process。
  * 返回结果；用户取消或被拦下（积分不足、达到篇数等）时抛出带中文消息的 Error。
+ * 自动落地流程可提供 shouldContinue，在页面离开后阻止确认与处理。
  */
 export async function withPriceConfirm(
     run: (confirmPrice?: number) => Promise<ProcessResult>,
     knownPrice?: number | null,
+    shouldContinue: () => boolean = () => true,
 ): Promise<ProcessResult> {
+    if (!shouldContinue()) throw new Error('已取消，页面已离开');
     try {
         return await run(knownPrice ?? undefined);
     } catch (err) {
         const block = chargeBlockOf(err);
         if (block?.error === 'price_confirmation_required' && block.paper_id && typeof block.price === 'number') {
+            if (!shouldContinue()) throw new Error('已取消，页面已离开');
             if (!window.confirm(`处理这篇 PDF 将消耗 ${block.price} 积分（OCR/解析、全文翻译与分析都包含在内，同一篇不重复扣）。确认？`)) {
                 throw new Error('已取消，PDF 已保存，可稍后在知识库继续处理');
             }
+            if (!shouldContinue()) throw new Error('已取消，页面已离开');
             try {
                 return await seriesApi.process(block.paper_id, block.price);
             } catch (err2) {

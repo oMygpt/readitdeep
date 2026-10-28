@@ -69,7 +69,7 @@ export default function PaperIntakeActions({ paper, compact = false, onDone }: P
                     )}
                     {!canFetch && paper.access_links?.map((link) => (
                         <a key={link.url} className={btn} href={link.url} target="_blank" rel="noopener noreferrer"
-                            title="非开放获取：到数据库下载 PDF 后用「上传 PDF」入库">
+                            title="来源链接提示，以落地页为准。下载 PDF 后可用「上传 PDF」入库">
                             <ExternalLink className="w-3 h-3" />{link.label}
                         </a>
                     ))}

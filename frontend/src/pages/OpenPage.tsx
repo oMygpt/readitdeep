@@ -39,6 +39,8 @@ export default function OpenPage() {
     const [result, setResult] = useState<Imported | null>(null);
     const [error, setError] = useState<string | null>(null);
     const started = useRef(false);
+    const active = useRef(false);
+    const [fetchErrors, setFetchErrors] = useState<Record<string, string>>({});
     const [manualId, setManualId] = useState('');
     const [resourceBusy, setResourceBusy] = useState<string | null>(null);
     const [resourceMessages, setResourceMessages] = useState<Record<string, string>>({});
@@ -51,35 +53,48 @@ export default function OpenPage() {
     const [stage, setStage] = useState<'importing' | 'fetching'>('importing');
 
     // 逐篇抓开放获取 PDF；免费额度内直接处理，要扣积分时弹窗确认，用户取消一次就不再继续问
-    const fetchOpenAccess = async (items: ImportItem[]) => {
+    const fetchOpenAccess = async (items: ImportItem[]): Promise<boolean> => {
         for (const item of items) {
+            if (!active.current) return false;
             if (!item.paper_id || item.status !== 'metadata' || !item.oa_available) continue;
             try {
-                await withPriceConfirm((price) => seriesApi.fetchPdf(item.paper_id!, price));
+                await withPriceConfirm((price) => seriesApi.fetchPdf(item.paper_id!, price), undefined, () => active.current);
             } catch (e) {
-                if (e instanceof Error && e.message.startsWith('已取消')) return;
+                if (!active.current) return false;
+                if (e instanceof Error && e.message.startsWith('已取消')) return true;
+                setFetchErrors(previous => ({ ...previous, [item.source_id]: errorMessage(e) }));
+                return false;
             }
         }
+        return active.current;
     };
 
     useEffect(() => {
-        if (started.current) return;
+        active.current = true;
+        const stop = () => { active.current = false; };
+        if (started.current) return stop;
         started.current = true;
         if (!isLinkedMode()) {
             setError(t('open.notLinked'));
-            return;
+            return stop;
         }
         (async () => {
             try {
                 if (review && /^\d+$/.test(review)) {
                     const r = await seriesApi.importReview(Number(review));
+                    if (!active.current) return;
                     setResult(r);
-                    await fetchOpenAccess(r.items);
-                    void refetch();
+                    if (!r.items.some(item => item.status === 'error')) await fetchOpenAccess(r.items);
+                    if (active.current) void refetch();
                 } else if (collection || paperIds.length) {
                     const r = collection
                         ? await seriesApi.importCollection(collection)
                         : await seriesApi.importPapers(paperIds, paperIds.length > 1 ? title : undefined);
+                    if (!active.current) return;
+                    if (r.items.some(item => item.status === 'error')) {
+                        setResult(r);
+                        return;
+                    }
                     const only = r.items.length === 1 ? r.items[0] : null;
                     if (only?.paper_id && READY.includes(only.status)) {
                         navigate(`/read/${only.paper_id}`, { replace: true });
@@ -91,15 +106,19 @@ export default function OpenPage() {
                         return;
                     }
                     setStage('fetching');
-                    await fetchOpenAccess(r.items);
+                    if (!await fetchOpenAccess(r.items)) {
+                        if (active.current) setResult(r);
+                        return;
+                    }
                     navigate(`/library?focus=${imported.map(encodeURIComponent).join(',')}`, { replace: true });
                 } else {
                     setError(t('open.empty'));
                 }
             } catch (e) {
-                setError(errorMessage(e));
+                if (active.current) setError(errorMessage(e));
             }
         })();
+        return stop;
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -175,6 +194,7 @@ export default function OpenPage() {
                                     <li key={item.source_id} className="py-3 flex items-start justify-between gap-3">
                                         <div className="min-w-0">
                                             <p className="font-medium text-content-main truncate">{paper?.title || paper?.filename || item.source_id}</p>
+                                            {fetchErrors[item.source_id] && <p role="alert" className="text-xs text-error">{fetchErrors[item.source_id]}</p>}
                                             {item.status === 'error' && <p className="text-xs text-error">{item.error || t('open.notFound')}</p>}
                                             {paper && !ready && !['metadata', 'pdf_pending', 'failed'].includes(paper.status) && (
                                                 <p className="text-xs text-warning flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />{t('open.processing')}</p>
