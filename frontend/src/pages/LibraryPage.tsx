@@ -4,7 +4,7 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
     Search,
@@ -43,6 +43,9 @@ import ShareToTeamModal from '../components/ShareToTeamModal';
 export default function LibraryPage() {
     const { t } = useTranslation();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    // 从 ask / 主站深链导入后带来的论文：排在最前并高亮
+    const focus = useMemo(() => new Set((searchParams.get('focus') || '').split(',').filter(Boolean)), [searchParams]);
     const queryClient = useQueryClient();
     const [search, setSearch] = useState('');
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -158,8 +161,8 @@ export default function LibraryPage() {
                 return false;
             }
             return true;
-        });
-    }, [papers, selectedCategory, selectedTag]);
+        }).sort((a, b) => Number(focus.has(b.id)) - Number(focus.has(a.id)));
+    }, [papers, selectedCategory, selectedTag, focus]);
 
     // Handle Upload
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -590,7 +593,7 @@ export default function LibraryPage() {
                                         key={paper.id}
                                         onClick={() => isCompleted && navigate(`/read/${paper.id}`)}
                                         className={`grid grid-cols-12 gap-4 px-4 py-3 border-b border-border items-center transition-colors ${isProcessing ? 'bg-surface-hover/50 cursor-wait' : 'hover:bg-surface-hover cursor-pointer'
-                                            } ${selectedPaperIds.has(paper.id) ? 'bg-blue-50' : ''}`}
+                                            } ${selectedPaperIds.has(paper.id) ? 'bg-blue-50' : ''} ${focus.has(paper.id) ? 'ring-2 ring-inset ring-primary/60' : ''}`}
                                     >
                                         {/* Checkbox */}
                                         <div className="col-span-1 flex items-center">
@@ -768,7 +771,7 @@ export default function LibraryPage() {
                                         key={paper.id}
                                         onClick={() => isCompleted && navigate(`/read/${paper.id}`)}
                                         className={`bg-surface rounded-xl p-4 shadow-sm border border-border transition-all ${isProcessing ? 'cursor-not-allowed opacity-90' : 'cursor-pointer hover:shadow-lg hover:border-primary/50'
-                                            }`}
+                                            } ${focus.has(paper.id) ? 'ring-2 ring-primary/60' : ''}`}
                                     >
                                         <div className="flex items-start gap-3 mb-3">
                                             <div className={`w-2 h-2 rounded-full mt-2 ${isProcessing ? 'bg-warning animate-pulse' : isFailed ? 'bg-error' : 'bg-success'

@@ -5,7 +5,7 @@
 
 import { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { FileUp, Globe, Loader2, RotateCw } from 'lucide-react';
+import { ExternalLink, FileUp, Globe, Loader2, RotateCw } from 'lucide-react';
 import type { Paper } from '../lib/api';
 import { seriesApi, withPriceConfirm } from '../lib/series';
 import { useBillingStatus } from './BillingBadge';
@@ -44,7 +44,7 @@ export default function PaperIntakeActions({ paper, compact = false, onDone }: P
         if (fileRef.current) fileRef.current.value = '';
     };
 
-    const canFetch = paper.status === 'metadata' && (paper.arxiv_id || paper.external_full_text_url);
+    const canFetch = paper.status === 'metadata' && (paper.oa_available ?? (paper.arxiv_id || paper.external_full_text_url));
     const btn = `inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs hover:bg-surface-hover disabled:opacity-50`;
     const stop = (e: React.MouseEvent) => e.stopPropagation();
 
@@ -67,6 +67,12 @@ export default function PaperIntakeActions({ paper, compact = false, onDone }: P
                             {busy === 'fetch' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Globe className="w-3 h-3" />}获取开放获取 PDF
                         </button>
                     )}
+                    {!canFetch && paper.access_links?.map((link) => (
+                        <a key={link.url} className={btn} href={link.url} target="_blank" rel="noopener noreferrer"
+                            title="非开放获取：到数据库下载 PDF 后用「上传 PDF」入库">
+                            <ExternalLink className="w-3 h-3" />{link.label}
+                        </a>
+                    ))}
                 </>
             )}
             <input ref={fileRef} type="file" accept=".pdf,application/pdf" className="hidden" onChange={onFile} />

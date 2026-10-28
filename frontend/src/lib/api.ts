@@ -204,6 +204,8 @@ export interface Paper {
     error_message?: string;
     external_full_text_url?: string;
     source_provider?: string;
+    oa_available?: boolean;
+    access_links?: { label: string; url: string }[];
     parser?: 'mineru' | 'grobid' | 'paperdaily_markdown' | string;
     // Team sharing info
     shared_teams?: SharedTeamInfo[];

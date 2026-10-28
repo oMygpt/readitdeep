@@ -12,7 +12,7 @@ import hashlib
 import os
 import re
 from typing import Optional
-from urllib.parse import urljoin, urlparse
+from urllib.parse import quote, urljoin, urlparse
 
 import httpx
 
@@ -82,6 +82,36 @@ def oa_candidates(paper: dict) -> list[str]:
         if url and host_allowed(url) and url not in urls:
             urls.append(url)
     return [u for u in urls if host_allowed(u)]
+
+
+# 非开放获取论文：按 DOI 前缀判断出版商数据库，给用户可点击的落地页（不代理、不抓取）
+PUBLISHERS: dict[str, str] = {
+    "10.1016": "ScienceDirect", "10.1007": "SpringerLink", "10.1002": "Wiley", "10.1111": "Wiley",
+    "10.1080": "Taylor & Francis", "10.1177": "SAGE", "10.1109": "IEEE Xplore", "10.1145": "ACM",
+    "10.1093": "Oxford Academic", "10.1017": "Cambridge Core", "10.2307": "JSTOR", "10.1257": "AEA",
+    "10.1086": "Chicago Journals", "10.1287": "INFORMS", "10.1162": "MIT Press", "10.1038": "Nature",
+    "10.1126": "Science", "10.1073": "PNAS", "10.1021": "ACS", "10.1103": "APS", "10.1088": "IOP",
+    "10.1108": "Emerald", "10.1037": "APA PsycNet", "10.1515": "De Gruyter", "10.3982": "Econometric Society",
+    "10.1146": "Annual Reviews", "10.2139": "SSRN", "10.3386": "NBER", "10.1142": "World Scientific",
+}
+DOI = re.compile(r"^(?:https?://(?:dx\.)?doi\.org/|doi:)?(10\.\d{4,9}/\S+)$", re.I)
+CJK = re.compile(r"[\u4e00-\u9fff]")
+
+
+def access_links(paper: dict) -> list[dict]:
+    """论文题录 → 数据库落地页链接 [{label, url}]；DOI 走 doi.org 解析到出版商，中文题名附知网检索。"""
+    links: list[dict] = []
+    m = DOI.match((paper.get("doi") or "").strip())
+    if m:
+        doi = m.group(1)
+        name = PUBLISHERS.get(doi.split("/", 1)[0])
+        links.append({"label": name or "DOI", "url": f"https://doi.org/{quote(doi, safe='/:;()._-')}"})
+    title = (paper.get("title") or "").strip()
+    if title and CJK.search(title):
+        links.append({"label": "知网", "url": f"https://kns.cnki.net/kns8s/defaultresult/index?kw={quote(title[:200])}"})
+    if not links and title:
+        links.append({"label": "Google Scholar", "url": f"https://scholar.google.com/scholar?q={quote(title[:300])}"})
+    return links
 
 
 def http_client() -> httpx.AsyncClient:  # 测试替换

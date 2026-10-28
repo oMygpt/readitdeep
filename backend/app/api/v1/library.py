@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.store import store
+from app.services import pdf_intake
 from app.core.database import get_db
 from app.models.user import User
 from app.models.team import PaperShare, Team
@@ -44,6 +45,16 @@ class PaperSummary(BaseModel):
     arxiv_id: Optional[str] = None
     external_full_text_url: Optional[str] = None
     source_provider: Optional[str] = None
+    # 题录态：是否有开放获取 PDF 可自动抓取；没有时给出版商数据库链接
+    oa_available: bool = False
+    access_links: Optional[List[dict]] = None
+
+
+def _intake_hints(p: dict) -> dict:
+    if p["status"] != "metadata":
+        return {}
+    oa = bool(pdf_intake.oa_candidates(p))
+    return {"oa_available": oa, "access_links": None if oa else pdf_intake.access_links(p)}
 
 
 class LibraryResponse(BaseModel):
@@ -157,6 +168,7 @@ async def list_papers(
             arxiv_id=p.get("arxiv_id"),
             external_full_text_url=p.get("external_full_text_url"),
             source_provider=p.get("source_provider"),
+            **_intake_hints(p),
         ))
     
     return LibraryResponse(

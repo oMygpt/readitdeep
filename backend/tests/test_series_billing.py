@@ -534,3 +534,13 @@ async def test_capacity_rejection_waits_without_repeating_hold(pd, https_client,
     assert attempts == 2 and len(pd.jobs) == 1
     assert pd.balance['pd-u1'] == 100 - PRICE
     assert pd.jobs['rj_1']['status'] == 'succeeded'
+
+
+def test_access_links_by_doi_prefix():
+    links = pdf_intake.access_links({"doi": "https://doi.org/10.1016/j.jfineco.2020.01.001", "title": "Asset pricing"})
+    assert links == [{"label": "ScienceDirect", "url": "https://doi.org/10.1016/j.jfineco.2020.01.001"}]
+    assert pdf_intake.access_links({"doi": "10.9999/x"})[0]["label"] == "DOI"
+    cn = pdf_intake.access_links({"title": "数字金融与企业创新"})
+    assert [l["label"] for l in cn] == ["知网"] and cn[0]["url"].startswith("https://kns.cnki.net/")
+    assert pdf_intake.access_links({"title": "No DOI"})[0]["label"] == "Google Scholar"
+    assert pdf_intake.access_links({"doi": "javascript:alert(1)"}) == []
