@@ -31,7 +31,7 @@
 14. R3a：`get_chat_model` 统一入口，9 处调用改造；多端点故障转移传输层；交互/批量两个并发通道。
 15. R3b：`ParseProvider`（mineru / grobid / paperdaily_markdown 占位），系统配置顺序与回退，`parser` 字段。
 16. R3c：`jobs` 表 + worker（认领、心跳、重试），上传/重新分析/翻译入队；`token_usage` 表。
-17. 用校内 GROBID（10.6.64.6:8070）+ 内部 vLLM（4 台 Qwen3.6-35B-A3B）跑通一篇 arXiv 论文的解析、翻译、方法提炼；记录耗时与并发，供容量评审。
+17. 用校内 GROBID+ 内部 vLLM（4 台 Qwen3.6-35B-A3B）跑通一篇 arXiv 论文的解析、翻译、方法提炼；记录耗时与并发，供容量评审。
 
 验收：无 MinerU Key 时 GROBID 完成解析；一个端点故障时请求自动转移；并发上限生效且交互不被批量挤占；重启后排队与运行中的任务继续；校内实测记录。
 

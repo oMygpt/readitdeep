@@ -10,7 +10,7 @@
 
 - 获取仓库：`oMygpt/readitdeep`，默认分支 `main`。
 - RiD 审计提交：`1915250e0c631f4b94f89f5dc1ab8d8a4d6cae7e`；获取结束时重新查询远端 main，SHA 一致。
-- 本地独立审计目录：`/Users/alone/Desktop/openai/ReaditDeep-review-20261027`。
+- 本地独立审计目录（审计者本机，不在仓库内）。
 - PaperDaily 对照提交：远端 `master` 的 `3ed71be0e545f3457cb50cfb6a8072e85f07635e`，通过 fetch 后的 Git 对象读取，未以陈旧且有其他改动的本地工作树为当前实现依据。
 - 与 Astra（`gpt-6-astra`）进行独立源码审阅和第二轮取舍讨论；本文区分实际代码、历史验收记录与建议。
 - 本轮完成静态流程追踪与 SQLite 测试；没有执行生产环境或真实浏览器的研究阅读任务。仓库已有生产记录只作为历史记录，不升级为本次验收。

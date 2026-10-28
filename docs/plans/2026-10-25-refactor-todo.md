@@ -53,12 +53,12 @@
 - [x] R4a.7a 对齐主站真实实现（subject、拉取 + ack、revoke 204、无邮箱 → 运维脚本绑定、管理员 subject）
 - [x] R4a.7b 与主站生产环境联调（2026-10-27，read.paperdaily.org 切为 linked；主站 read 白名单 1 人）
 - [ ] R4a.8 撤销链路生产验证（退出登录 → 主站 grant.revoked → 本站会话失效）；主站部署 read 推送 worker 后验证推送
-- [ ] R4b `/open` 深链与资源桥接导入、状态机（等主站 E4b）
-- [ ] R4c read-jobs 记账与受信 runner（等主站 E4d）
+- [x] R4b `/open` 深链与资源桥接导入 → 由 R6.4（#14）与研究桥接（#15）实现
+- [x] R4c read-jobs 记账与受信 runner → 由 R6.3（#14）与可靠性修复（#19）实现
 - [ ] R4d context-bundle 左栏、阅读记忆回传（E4e）；个人 PD key 模式
 
 ## R5 部署
-- [x] R5.1 k8s-dslab-1-7 同机部署：独立 RBD 池 readitdeep-rbd（hybird）、独立 pg16 容器、paperdaily 隧道加 read.paperdaily.org（2026-10-26，运维仓库 `just readitdeep-*`）
+- [x] R5.1 与主站同机部署：独立 Ceph RBD 卷、独立 pg16 容器、paperdaily 隧道加 read.paperdaily.org（2026-10-26，运维仓库 `just readitdeep-*`）
 - [x] R5.2 每日备份到 RGW（pg_dump 30 天 + 上传文件同步），恢复演练通过
 - [x] R5.3 生产模型：校内推理 API（Qwen3-VL-32B 解析、Qwen3.6-35B-A3B 翻译/分析），自助注册关闭
 
@@ -68,5 +68,13 @@
 - [x] R6.3 计费（代码与模拟主站测试；生产联调等主站 P1/P3/P9）：`read_charges`（迁移 0004）、篇数与周期、`READ_BILLING`、主站 read-jobs 客户端（assertion/preflight/create/claim/heartbeat/complete/对账）、402/409 状态、问答限速；linked 停用本地 PLAN_LIMITS
 - [x] R6.4 `/open` 深链（paper 可重复 / collection / review）与「从 PaperDaily 导入」面板（等主站 P1）
 - [x] R6.5 前端计费体验：价格、余额、n/5 篇、题录卡片、待确认/余额不足（昵称待主站 P8 决定）
-- [ ] R6.6 主站 issue alonegg/new_paperdaily#176（P1–P10）与 ask issue alonegg/paperdaily-ask#16（A1–A3）已提交；待各自 PR 对齐
+- [x] R6.6a 主站 P1–P10 对齐：主站 2.21.0 上线（read client 开放已验证账号、档位字段、key_id、25 分/篇），RiD #19、#21 对齐
+- [ ] R6.6b 主站 P11：`source=read` 不计入全站/个人合成预算（alonegg/new_paperdaily#176）
+- [ ] R6.6c ask A1–A3 深链入口（alonegg/paperdaily-ask#16），待 ask PR 落地后联调
 - [ ] R6.7 生产验收：注册与 Pro 测试账号全链路 + 主站 ledger 对账
+
+## R7 上线后调整（2026-10-28）
+- [x] R7.1 任务并发可配置 `JOBS_*_CONCURRENCY`（#22）；生产 VLM / 批量并发 4，主站 read.bridge 并发 4、每篇 1 预算单位
+- [ ] R7.2 发布 #21 + #22，生产 env 手改项并入保险库（Codex）
+- [x] R7.3 交接文档 `docs/HANDOFF.md`、`AGENTS.md`；清理已合并分支
+
