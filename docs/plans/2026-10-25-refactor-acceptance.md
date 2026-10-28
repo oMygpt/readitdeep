@@ -98,3 +98,8 @@ R6 测试：后端 SQLite 140 passed + 1 skipped、PostgreSQL 141 passed；前�
 主站 #197 实现校内独立计数，#198 同步生成 manifest，应用 v2.22.6 / `80d340948455113582333d667d0b374b832e951c` 已发布。实际 frontend/API/宿主版本与提交身份相等，63个声明页面齐全，深读入口保留。`synthesis.budget.read_budget_mode=campus_count_only` 已 apply 并读回，其他预算字段不变；25积分/PDF、并发4、全文资源桥接关闭保持。
 
 使用实际 API 镜像与 PostgreSQL，在一个完整回滚的事务内预留/结算read并重放幂等请求：只写 source:read 计数，global/subject保持，重复请求只计一次，回滚后合成请求残留为0，模型调用为0。该证据证明生产代码与配置的预算脱钩，不等于真实PDF/浏览器全链路、压力或历史费用验收。RiD #21/#22 镜像本轮未重发，实际默认scope并集和解析并发4继续核验通过。
+
+
+## 2026-10-28 PR25 深链入库发布
+
+#25与上线前修复、#27缓存修复均已合并。最终生产525ab52，schema0007、backend/frontend镜像及服务bundle指纹已核验；42项有效环境已回存SOPS。27项前端测试和完整build、170项后端测试（另1skip）、远端双数据库和制品CI通过。合成真实浏览器与生产只读验证分别记录于docs/plans/2026-10-28-pr25-review.md，保留ESLint配置/真实PDF全链路/压力边界。本次未改主站、积分、授权或P11配置。
