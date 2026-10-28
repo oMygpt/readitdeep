@@ -45,7 +45,7 @@ RiD 只使用 `read.parse` 一个操作，每个 PDF 一个作业。自动翻译
   - `concurrency` 建议 4；`max_pages` 建议 80（与 RiD 的 `VLM_MAX_PAGES` 一致）；`max_bytes` 为 50 MB；
   - `max_seconds` 建议 3600：一篇 80 页的论文，VLM 逐页 OCR 加全文翻译可能要几十分钟；
   - `max_output_bytes` 建议 20 MB；`resource_units_daily`；
-  - `host: "10.6.64.6"`，`queue: "rid"`，`policy_version`；
+  - `host: "<运行主机>"`，`queue: "rid"`，`policy_version`；
   - `runners.rid`：`{enabled: true, operations: ["read.parse"], secret_env: "PD_READ_RUNNER_RID"}`；
   - `client_assertion`：`{enabled: true, secret_env: "PD_READ_CLIENT_ASSERTION"}`。
 - `synthesis.budget.source_units_daily.read`。

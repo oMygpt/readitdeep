@@ -110,7 +110,7 @@ DEFAULT_SYSTEM_CONFIG = {
     },
     "grobid_url": {
         "value": "",
-        "description": "GROBID 服务地址（如 http://10.6.64.6:8070），用于无 MinerU 时解析 PDF",
+        "description": "GROBID 服务地址（如 http://grobid:8070），用于无 MinerU 时解析 PDF",
     },
 
     # ==================== 智能分析配置 ====================
