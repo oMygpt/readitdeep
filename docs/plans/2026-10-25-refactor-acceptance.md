@@ -84,3 +84,10 @@ R1 本地测试：`uv run pytest -q` → 53 passed。
 R6 测试：后端 SQLite 140 passed + 1 skipped、PostgreSQL 141 passed；前端 vitest 15 passed、`tsc -b` 通过、Vite 构建通过。
 
 2026-10-27 生产部署 R6（`deploy/r6-20261027` = 395661c，即 #14 + 构建镜像参数，未含 #15）：迁移到 0005；`RID_MODE=linked`、`READ_BILLING=off`、`PAPERDAILY_SCOPES` 为空、`PARSE_PROVIDERS=vlm,grobid`、`ALLOWED_MODELS` 为两个校内模型；公网 `/`、`/open` 200，`/billing/status` 与 `/preferences` 未登录 401。部署主机到 GitHub/PyPI/Debian 官方源不稳定，构建改用 USTC（apt）与 TUNA（PyPI）镜像，代码经本地 git bundle 传送（`RID_SRC=… just readitdeep-deploy`）。
+
+
+## 2026-10-28 交接记录纠正：#21 / #22
+
+核对 GitHub：#21 merge `8f92d06`、#22 merge `3da5e97` 均已进入 main。主站联合发布归档 `docs/ops/website-rid-joint-release-20261027/REPORT.md` 记录 RiD 已运行完整 SHA `3da5e9738eefd5c88e90d33a2a96bddd8612c0f1`，包含默认 scope 并集、content_ready 翻译、解析并发 4，schema 0007、镜像/源码指纹及健康检查通过。有效环境回存加密保险库，运维 PR #1 于 2026-10-27 合并（merge `6a82f9d`）。
+
+上述为已有发布证据的核对，修正 #23 交接文档将其误列为待发布的状态；本次没有生产修改，没有重跑收费 PDF / 模型调用。原 169 passed / 1 skipped 与配置构造验证不等于并发压力、今日进程内状态或全量生产验收。P11 校内预算脱钩仍需主站代码、配置及生产验收分别落地，不能因 #21/#22 已上线而勾为完成。
