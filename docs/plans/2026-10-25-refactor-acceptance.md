@@ -91,3 +91,10 @@ R6 测试：后端 SQLite 140 passed + 1 skipped、PostgreSQL 141 passed；前�
 核对 GitHub：#21 merge `8f92d06`、#22 merge `3da5e97` 均已进入 main。主站联合发布归档 `docs/ops/website-rid-joint-release-20261027/REPORT.md` 记录 RiD 已运行完整 SHA `3da5e9738eefd5c88e90d33a2a96bddd8612c0f1`，包含默认 scope 并集、content_ready 翻译、解析并发 4，schema 0007、镜像/源码指纹及健康检查通过。有效环境回存加密保险库，运维 PR #1 于 2026-10-27 合并（merge `6a82f9d`）。
 
 上述为已有发布证据的核对，修正 #23 交接文档将其误列为待发布的状态；本次没有生产修改，没有重跑收费 PDF / 模型调用。原 169 passed / 1 skipped 与配置构造验证不等于并发压力、今日进程内状态或全量生产验收。P11 校内预算脱钩仍需主站代码、配置及生产验收分别落地，不能因 #21/#22 已上线而勾为完成。
+
+
+## 2026-10-28 主站 P11 生产配置验收
+
+主站 #197 实现校内独立计数，#198 同步生成 manifest，应用 v2.22.6 / `80d340948455113582333d667d0b374b832e951c` 已发布。实际 frontend/API/宿主版本与提交身份相等，63个声明页面齐全，深读入口保留。`synthesis.budget.read_budget_mode=campus_count_only` 已 apply 并读回，其他预算字段不变；25积分/PDF、并发4、全文资源桥接关闭保持。
+
+使用实际 API 镜像与 PostgreSQL，在一个完整回滚的事务内预留/结算read并重放幂等请求：只写 source:read 计数，global/subject保持，重复请求只计一次，回滚后合成请求残留为0，模型调用为0。该证据证明生产代码与配置的预算脱钩，不等于真实PDF/浏览器全链路、压力或历史费用验收。RiD #21/#22 镜像本轮未重发，实际默认scope并集和解析并发4继续核验通过。
