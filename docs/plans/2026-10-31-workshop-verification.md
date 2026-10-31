@@ -10,3 +10,5 @@
 生产papers.py与vlm.py指纹不等于最新主线，intake.py相等。没有覆盖线上源码；后续发布必须先复核并保留线上差异。容器默认Python缺少pymupdf/fitz/pdftotext，比较改在隔离本地环境完成，没有向生产安装依赖。
 
 验证：backend完整174 passed / 1 skipped；新增partial-resume用例后定向workshop回归5 passed；frontend 28 tests passed、生产构建通过。首次测试的store.add夹具错误已改为store.set；持久任务新kind和异步review协议对应旧测试已更新并全量复测。SQLite验证不等同PostgreSQL多进程/重启/真实授权验收；不关闭生产验收缺口。
+
+终态/详情补充：OpenPage原请求page_size=500超过后端上限100，导致导入后详情列表422；改为100并传入导入目标focus（本批<=50）。终态显示成功/失败/计划及原引文数量，避免只凭已结束误读为全部成功。
