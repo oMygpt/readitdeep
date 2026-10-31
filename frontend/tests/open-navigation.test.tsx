@@ -112,3 +112,11 @@ it('polls the existing review task and never starts paid PDF work on resume', as
     expect(fetch).not.toHaveBeenCalled();
     expect(seriesApi.process).not.toHaveBeenCalled();
 });
+
+it('requests a valid library page size with imported targets focused', async () => {
+    vi.spyOn(seriesApi, 'importReview').mockResolvedValue({ job_id: 'job', status: 'done', question: 'Review', answer: '', items: [item('one'), item('two')], total: 2, cited_total: 2 });
+    mount('/open?review=8');
+    await screen.findByText('Review');
+    await waitFor(() => expect(libraryApi.list).toHaveBeenCalledWith(expect.objectContaining({ page_size: 100, focus: 'one,two' })));
+    expect(await screen.findByText(/成功 2，失败 0/)).toBeTruthy();
+});

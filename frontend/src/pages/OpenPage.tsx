@@ -50,6 +50,7 @@ export default function OpenPage() {
     const review = params.get('review');
     const [failedReview, setFailedReview] = useState(false);
     const [progress, setProgress] = useState('');
+    const [reviewSummary, setReviewSummary] = useState('');
     const title = params.get('title')?.slice(0, 100) || undefined;
 
     const [stage, setStage] = useState<'importing' | 'fetching'>('importing');
@@ -91,6 +92,7 @@ export default function OpenPage() {
                         r = await seriesApi.reviewStatus(Number(review));
                     }
                     if (r.status === 'failed') { setFailedReview(true); setError(r.error || '导入未完成，已导入题录已保留'); }
+                    setReviewSummary(`题录任务${r.status === 'failed' ? '中断' : '已结束'}：成功 ${r.items.filter(item => !!item.paper_id).length}，失败 ${r.items.filter(item => !item.paper_id).length}，计划 ${r.total}；原引文 ${r.cited_total}，本批最多 50 篇。`);
                     if (!active.current) return;
                     setResult(r);
                     // Metadata import never automatically starts paid PDF work on resume.
@@ -135,7 +137,7 @@ export default function OpenPage() {
     const ids = new Set((result?.items || []).map((i) => i.paper_id).filter(Boolean) as string[]);
     const { data: library, refetch } = useQuery({
         queryKey: ['library', 'open', [...ids].join(',')],
-        queryFn: () => libraryApi.list({ page_size: 500 }),
+        queryFn: () => libraryApi.list({ page_size: 100, focus: [...ids].join(',') }),
         enabled: ids.size > 0,
         refetchInterval: (q) => (q.state.data?.items.some((p) => ids.has(p.id) && !['metadata', 'pdf_pending', 'failed', ...READY].includes(p.status)) ? 3000 : false),
     });
@@ -188,6 +190,8 @@ export default function OpenPage() {
                         <Loader2 className="w-5 h-5 animate-spin" />{progress || (stage === 'fetching' ? t('open.fetchingOa') : t('open.importing'))}
                     </div>
                 )}
+
+                {reviewSummary && <p role="status" className="text-sm mb-3">{reviewSummary}</p>}
 
                 {result?.answer && (
                     <details className="mb-4 rounded-lg border border-border p-3" open>
