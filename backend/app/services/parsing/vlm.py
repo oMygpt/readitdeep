@@ -69,7 +69,11 @@ async def _transcribe(llm, png: bytes) -> str:
     for _ in range(2):
         try:
             response = await llm.ainvoke([message], max_tokens=4000)
+            if (getattr(response, "response_metadata", {}) or {}).get("finish_reason") in {"length", "max_tokens"}:
+                raise ValueError("VLM page output truncated at token limit")
             return _clean(response.content)
+        except ValueError:
+            raise
         except Exception as e:  # 单页重试一次
             last = e
     raise last  # type: ignore[misc]

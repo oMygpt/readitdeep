@@ -156,5 +156,5 @@ def test_job_concurrency_configurable(monkeypatch):
 
     assert jobs.kind_concurrency() == jobs.KIND_CONCURRENCY
     monkeypatch.setattr(get_settings(), "jobs_parse_concurrency", 4)
-    assert jobs.kind_concurrency() == {"parse": 4, "analyze": 2, "translate": 1}
+    assert jobs.kind_concurrency() == {"parse": 4, "analyze": 2, "translate": 1, "import_review": 1}
     assert jobs.Worker().limits["parse"] == 4

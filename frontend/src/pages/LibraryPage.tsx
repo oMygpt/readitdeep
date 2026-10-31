@@ -48,6 +48,8 @@ export default function LibraryPage() {
     const focus = useMemo(() => new Set((searchParams.get('focus') || '').split(',').filter(Boolean)), [searchParams]);
     const queryClient = useQueryClient();
     const [search, setSearch] = useState('');
+    const [page, setPage] = useState(1);
+    useEffect(() => { setPage(1); }, [search, searchParams]);
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [selectedTag, setSelectedTag] = useState<string | null>(null);
     const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
@@ -70,8 +72,8 @@ export default function LibraryPage() {
 
     // Polling for updates (暂停轮询当编辑弹窗打开时)
     const { data: libraryData, isLoading } = useQuery({
-        queryKey: ['library', search],
-        queryFn: () => libraryApi.list({ search: search || undefined }),
+        queryKey: ['library', search, page, searchParams.get('focus')],
+        queryFn: () => libraryApi.list({ search: search || undefined, page, focus: searchParams.get('focus') || undefined }),
         refetchInterval: (renamingCategory || editingPaper) ? false : 3000,
     });
 
@@ -481,6 +483,11 @@ export default function LibraryPage() {
                         </div>
                     )}
 
+                    <div className="flex items-center gap-3 my-3" aria-label="文库分页">
+                        <button disabled={page <= 1} onClick={() => setPage(value => value - 1)}>上一页</button>
+                        <span>第 {page} 页 · 共 {libraryData?.total ?? 0} 篇</span>
+                        <button disabled={page * 20 >= (libraryData?.total ?? 0)} onClick={() => setPage(value => value + 1)}>下一页</button>
+                    </div>
                     {/* Bulk Action Bar - visible when papers are selected */}
                     {selectedPaperIds.size > 0 && (
                         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between">

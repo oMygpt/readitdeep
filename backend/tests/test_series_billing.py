@@ -240,6 +240,9 @@ async def test_metadata_import_is_free_and_idempotent(pd, https_client):
     r = await c.post("/api/v1/papers/import/paperdaily/collection", json={"collection_id": "c1"}, headers=h)
     assert r.status_code == 200 and r.json()["title"] == "Transformers" and len(r.json()["items"]) == 2
     r = await c.post("/api/v1/papers/import/paperdaily/review", json={"history_id": 7}, headers=h)
+    assert r.json()["status"] == "queued"
+    await jobs.drain(["import_review"])
+    r = await c.get("/api/v1/papers/import/paperdaily/review/7", headers=h)
     assert r.json()["question"] == "What is attention?" and r.json()["items"][0]["paper_id"] == items[0]["paper_id"]
 
 

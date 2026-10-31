@@ -100,3 +100,15 @@ it('fetches eligible OA papers sequentially before focusing the imported batch',
     expect(fetch.mock.calls).toEqual([['one', undefined], ['two', undefined]]);
     expect(router.state.location.search).toBe('?focus=one,two');
 });
+
+it('polls the existing review task and never starts paid PDF work on resume', async () => {
+    const imported = vi.spyOn(seriesApi, 'importReview').mockResolvedValue({ job_id: 'same-job', status: 'queued', question: 'Synthetic review', answer: '', items: [], total: 2, cited_total: 2 });
+    const status = vi.spyOn(seriesApi, 'reviewStatus').mockResolvedValue({ job_id: 'same-job', status: 'done', question: 'Synthetic review', answer: '', items: [item('one', true), item('two', true)], total: 2, cited_total: 2 });
+    const fetch = vi.spyOn(seriesApi, 'fetchPdf');
+    mount('/open?review=7');
+    await waitFor(() => expect(status).toHaveBeenCalledTimes(1), { timeout: 2500 });
+    await screen.findByText('Synthetic review');
+    expect(imported).toHaveBeenCalledTimes(1);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(seriesApi.process).not.toHaveBeenCalled();
+});

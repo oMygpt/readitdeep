@@ -48,6 +48,8 @@ export default function OpenPage() {
     const paperIds = params.getAll('paper').filter(Boolean).slice(0, 50);
     const collection = params.get('collection');
     const review = params.get('review');
+    const [failedReview, setFailedReview] = useState(false);
+    const [progress, setProgress] = useState('');
     const title = params.get('title')?.slice(0, 100) || undefined;
 
     const [stage, setStage] = useState<'importing' | 'fetching'>('importing');
@@ -81,10 +83,17 @@ export default function OpenPage() {
         (async () => {
             try {
                 if (review && /^\d+$/.test(review)) {
-                    const r = await seriesApi.importReview(Number(review));
+                    let r = await seriesApi.importReview(Number(review));
+                    while (active.current && ['queued', 'running'].includes(r.status)) {
+                        setProgress(`题录导入 ${r.items.length}/${r.total}（引文共 ${r.cited_total}，本批最多 50 篇）。可离开后从同一入口继续查看。`);
+                        await new Promise(resolve => setTimeout(resolve, 1500));
+                        if (!active.current) return;
+                        r = await seriesApi.reviewStatus(Number(review));
+                    }
+                    if (r.status === 'failed') { setFailedReview(true); setError(r.error || '导入未完成，已导入题录已保留'); }
                     if (!active.current) return;
                     setResult(r);
-                    if (!r.items.some(item => item.status === 'error')) await fetchOpenAccess(r.items);
+                    // Metadata import never automatically starts paid PDF work on resume.
                     if (active.current) void refetch();
                 } else if (collection || paperIds.length) {
                     const r = collection
@@ -165,6 +174,10 @@ export default function OpenPage() {
                     <input id="manual-paper" className="research-input mt-2" maxLength={512} value={manualId} onChange={event => setManualId(event.target.value)} />
                     <button className="research-primary mt-3" disabled={!!resourceBusy || !manualId.trim()}>导入题录</button>
                 </form>}
+                {failedReview && review && <button onClick={async () => {
+                    try { await seriesApi.importReview(Number(review), true); window.location.reload(); }
+                    catch (e) { setError(errorMessage(e)); }
+                }}>继续导入题录（已成功项会跳过）</button>}
                 {error && (
                     <div className="flex items-start gap-2 p-3 rounded-lg bg-error/10 text-error text-sm mb-4">
                         <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" /><div>{error}{isLinkedMode() && <a className="block underline mt-2" href={researchLogin(location.pathname + location.search)}>连接 PaperDaily 研究权限</a>}</div>
@@ -172,7 +185,7 @@ export default function OpenPage() {
                 )}
                 {!error && !result && (
                     <div className="flex items-center gap-2 text-content-muted py-8 justify-center">
-                        <Loader2 className="w-5 h-5 animate-spin" />{stage === 'fetching' ? t('open.fetchingOa') : t('open.importing')}
+                        <Loader2 className="w-5 h-5 animate-spin" />{progress || (stage === 'fetching' ? t('open.fetchingOa') : t('open.importing'))}
                     </div>
                 )}
 
