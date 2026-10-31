@@ -75,6 +75,7 @@ async def parse_paper_task(paper_id: str, file_path: str, file_content: bytes, f
     from app.services.classification import suggest_tags
     from app.services.classification import suggest_tags
     from app.services.workbench_analysis import analyze_method, analyze_asset, analyze_summary
+    from app.services.analysis_material import analysis_input, material_scope
 
     # 获取配置
     async with async_session_maker() as db:
@@ -186,7 +187,7 @@ async def parse_paper_task(paper_id: str, file_path: str, file_content: bytes, f
             try:
                 # Method Analysis
                 res_method = await analyze_method(
-                    text=markdown_content[:3000],  # Analyze first 3000 chars
+                    text=analysis_input(markdown_content, 3000),
                     paper_id=paper_id,
                     paper_title=filename
                 )
@@ -236,12 +237,15 @@ async def parse_paper_task(paper_id: str, file_path: str, file_content: bytes, f
                 
                 # Summary Analysis (v1.1.0) - 此处覆盖 Method 中提取的简短 summary
                 res_summary = await analyze_summary(
-                    text=markdown_content[:8000],
+                    text=analysis_input(markdown_content, 8000),
                     paper_id=paper_id,
                     paper_title=filename
                 )
                 if res_summary.get("success"):
-                    update_paper({"summary": res_summary.get("summary")})
+                    update_paper({"summary": res_summary.get("summary"), "analysis_material": {
+                        **({"method": material_scope(markdown_content, 3000)} if res_method.get("success") else {}),
+                        "summary": material_scope(markdown_content, 8000),
+                    }})
                 
                 update_paper({"status": "analyzed"})
             except Exception as e:
@@ -441,6 +445,8 @@ async def get_paper_analysis(
 ):
     """获取论文分析结果 (聚合 Workbench 数据)"""
 
+    from app.services.analysis_material import material_status
+
     # 获取论文内容用于定位
     markdown_content = paper.get("markdown_content", "")
     content_lines = markdown_content.split('\n') if markdown_content else []
@@ -576,6 +582,7 @@ async def get_paper_analysis(
         "datasets": datasets,
         "code_refs": code_refs,
         "structure": paper.get("structure"),
+        "material_scope": material_status(paper),
         "error_message": paper.get("error_message")
     }
 
@@ -589,6 +596,7 @@ async def run_analysis_pipeline(paper_id: str, user_id: str):
     import logging
     from app.core.store import store
     from app.services.workbench_analysis import analyze_method, analyze_asset, analyze_summary
+    from app.services.analysis_material import analysis_input, material_scope
     from app.services.classification import suggest_tags
 
     logger = logging.getLogger(__name__)
@@ -619,7 +627,7 @@ async def run_analysis_pipeline(paper_id: str, user_id: str):
     try:
         # 1. Method Analysis
         res_method = await analyze_method(
-            text=markdown_content[:3000],
+            text=analysis_input(markdown_content, 3000),
             paper_id=paper_id,
             paper_title=paper.get("filename", "Untitled")
         )
@@ -667,12 +675,15 @@ async def run_analysis_pipeline(paper_id: str, user_id: str):
 
         # 4. Summary Analysis (v1.1.0)
         res_summary = await analyze_summary(
-            text=markdown_content[:8000],
+            text=analysis_input(markdown_content, 8000),
             paper_id=paper_id,
             paper_title=paper.get("filename", "Untitled")
         )
         if res_summary.get("success"):
-            update_paper({"summary": res_summary.get("summary")})
+            update_paper({"summary": res_summary.get("summary"), "analysis_material": {
+                        **({"method": material_scope(markdown_content, 3000)} if res_method.get("success") else {}),
+                        "summary": material_scope(markdown_content, 8000),
+                    }})
         
         update_paper({"status": "analyzed"})
         

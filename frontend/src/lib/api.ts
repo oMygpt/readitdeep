@@ -261,6 +261,7 @@ export const libraryApi = {
     list: async (params?: {
         page?: number;
         page_size?: number;
+        focus?: string;
         search?: string;
         category?: string;
         status?: string;
@@ -472,6 +473,7 @@ export interface StructureInfo {
 }
 
 export interface AnalysisResult {
+    material_scope?: { state: string; tasks?: Record<string, { start: number; end: number; source_chars: number; truncated: boolean }> };
     paper_id: string;
     status: 'pending' | 'analyzing' | 'completed' | 'failed';
     summary?: string;

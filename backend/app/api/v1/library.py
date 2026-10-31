@@ -87,6 +87,7 @@ async def list_papers(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     search: Optional[str] = None,
+    focus: Optional[str] = Query(None, max_length=2000),
     category: Optional[str] = None,
     status: Optional[str] = None,
     current_user: User = Depends(get_current_user),
@@ -131,6 +132,8 @@ async def list_papers(
     except Exception:
         pass # Sort best effort
     
+    focus_ids = set((focus or "").split(","))
+    papers.sort(key=lambda paper: paper["id"] not in focus_ids)
     total = len(papers)
     
     # 分页

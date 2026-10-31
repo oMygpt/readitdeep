@@ -162,6 +162,15 @@ export default function AnalysisPanel({ paperId, onJumpToLine }: AnalysisPanelPr
                 expanded={expandedSections.has('summary')}
                 onToggle={() => toggleSection('summary')}
             >
+                <p role="status" className="text-xs text-content-muted mb-3">
+                    {!analysis.material_scope || analysis.material_scope.state === 'unknown'
+                        ? '旧分析的实际材料范围未知，请对照原文核验。'
+                        : analysis.material_scope.state === 'stale'
+                            ? '正文版本已改变，此分析基于旧版本，请对照原文核验。'
+                            : Object.entries(analysis.material_scope.tasks || {}).map(([task, scope]) =>
+                                `${task === 'method' ? '方法' : '摘要'}：正文字符 ${scope.start + 1}–${scope.end}/${scope.source_chars}${scope.truncated ? '（局部输入，未覆盖不代表原文缺失）' : '（完整解析文本，未核验原 PDF 完整性）'}`
+                            ).join('；')}
+                </p>
                 {analysis.summary ? (
                     <CollapsibleMarkdown
                         content={analysis.summary}

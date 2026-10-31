@@ -149,22 +149,96 @@ async def import_collection(body: ImportCollectionRequest, request: Request, use
 
 class ImportReviewRequest(BaseModel):
     history_id: int = Field(ge=1)
+    resume: bool = False
+
+
+def _review_job(user_id: str, history_id: int) -> Optional[dict]:
+    from app.core import jobs
+    key = str(uuid.uuid5(uuid.NAMESPACE_URL, f"rid-review:{user_id}:{history_id}"))
+    return jobs.get(key)
+
+
+def _review_result(job: dict) -> dict:
+    payload = job.get("payload") or {}
+    return {"job_id": job["id"], "status": job["status"],
+            "question": payload.get("question", ""), "answer": payload.get("answer", ""),
+            "items": payload.get("items", []), "total": len(payload.get("ids", [])),
+            "cited_total": payload.get("cited_total", 0),
+            "error": "导入未完成，已导入题录已保留；请重新连接授权后检查。" if job["status"] == "failed" else None}
+
+
+@router.get("/import/paperdaily/review/{history_id}")
+async def review_status(history_id: int, user: User = Depends(get_current_user)) -> dict:
+    _require_linked()
+    job = _review_job(user.id, history_id)
+    if not job or job["user_id"] != user.id:
+        raise HTTPException(404, "导入任务不存在")
+    return _review_result(job)
 
 
 @router.post("/import/paperdaily/review")
 async def import_review(body: ImportReviewRequest, request: Request, user: User = Depends(get_current_user)):
     from app.services.paperdaily import api
+    from app.core import jobs
+    from app.models.job import Job
+    from sqlalchemy.exc import IntegrityError
 
     _require_linked()
+    existing = _review_job(user.id, body.history_id)
+    if existing:
+        if body.resume and existing["status"] == "failed":
+            from sqlalchemy import update
+            await billing.delegation(_sid(request), user)
+            with store.engine.begin() as conn:
+                conn.execute(update(Job).where(Job.id == existing["id"], Job.status == "failed").values(
+                    status="queued", attempts=0, error=None, finished_at=None,
+                    payload={**existing["payload"], "sid": _sid(request)}))
+            if jobs.worker:
+                jobs.worker.wake()
+            existing = jobs.get(existing["id"])
+        return _review_result(existing)
     d = await billing.delegation(_sid(request), user)
     try:
         review = await api.query_history(d.token, body.history_id)
     except (PaperDailyUnavailable, PaperDailyError) as e:
         raise _pd_error(e)
-    question = str(review.get("question") or "")
-    ids = [str(x) for x in (review.get("cited_paper_ids") or [])][:MAX_IMPORT]
-    items = await import_papers(user, _sid(request), ids, f"综述：{question[:40]}" if question else "PaperDaily 综述")
-    return {"question": question, "answer": review.get("answer") or "", "items": items}
+    all_ids = list(dict.fromkeys(str(x) for x in (review.get("cited_paper_ids") or [])))
+    key = str(uuid.uuid5(uuid.NAMESPACE_URL, f"rid-review:{user.id}:{body.history_id}"))
+    payload = {"ids": all_ids[:MAX_IMPORT], "cited_total": len(all_ids),
+               "question": str(review.get("question") or ""), "answer": review.get("answer") or "",
+               "sid": _sid(request), "items": []}
+    try:
+        with store.engine.begin() as conn:
+            conn.execute(Job.__table__.insert().values(id=key, kind="import_review", user_id=user.id,
+                         status="queued", attempts=0, payload=payload, created_at=utcnow()))
+    except IntegrityError:
+        pass  # Concurrent reopen returns the same durable job.
+    if jobs.worker:
+        jobs.worker.wake()
+    return _review_result(jobs.get(key))
+
+
+async def run_review_import(job: dict) -> None:
+    from app.core.database import async_session_maker
+    from app.models.job import Job
+    from sqlalchemy import update
+
+    from app.core import jobs
+
+    payload = dict((jobs.get(job["id"]) or job)["payload"])
+    async with async_session_maker() as db:
+        user = await db.get(User, job["user_id"])
+        if user is None or not user.is_active:
+            raise RuntimeError("Import owner unavailable")
+        done = {item["source_id"] for item in payload["items"]}
+        for source_id in payload["ids"]:
+            if source_id in done:
+                continue
+            items = await import_papers(user, payload.get("sid"), [source_id],
+                                       f"综述：{payload['question'][:40]}" if payload['question'] else "PaperDaily 综述")
+            payload = {**payload, "items": [*payload["items"], *items]}
+            with store.engine.begin() as conn:
+                conn.execute(update(Job).where(Job.id == job["id"]).values(payload=payload))
 
 
 # ---------------- PDF 入库与计费 ----------------

@@ -37,7 +37,7 @@ MAX_ATTEMPTS = 3
 HEARTBEAT_SECONDS = 30
 STALE_AFTER = timedelta(minutes=5)
 # 每个进程每类任务的并发数（解析与翻译会占用外部解析服务和模型批量通道）
-KIND_CONCURRENCY = {"parse": 2, "analyze": 2, "translate": 1}
+KIND_CONCURRENCY = {"parse": 2, "analyze": 2, "translate": 1, "import_review": 1}
 
 
 def kind_concurrency() -> dict[str, int]:
@@ -47,7 +47,7 @@ def kind_concurrency() -> dict[str, int]:
     s = get_settings()
     overrides = {"parse": s.jobs_parse_concurrency, "analyze": s.jobs_analyze_concurrency,
                  "translate": s.jobs_translate_concurrency}
-    return {k: max(1, overrides[k] or n) for k, n in KIND_CONCURRENCY.items()}
+    return {k: max(1, overrides.get(k) or n) for k, n in KIND_CONCURRENCY.items()}
 
 _table = Job.__table__
 
@@ -257,7 +257,14 @@ async def _handle_translate(job: dict) -> None:
     await _translate_paper_background(job["paper_id"], job["user_id"])
 
 
+async def _handle_import_review(job: dict) -> None:
+    from app.api.v1.intake import run_review_import
+
+    await run_review_import(job)
+
+
 HANDLERS: dict[str, Handler] = {
+    "import_review": _handle_import_review,
     "parse": _handle_parse,
     "analyze": _handle_analyze,
     "translate": _handle_translate,

@@ -43,7 +43,10 @@ export interface Preferences {
     auto_translate: boolean;
 }
 
+export interface ReviewImport { job_id: string; status: string; question: string; answer: string; items: ImportItem[]; total: number; cited_total: number; error?: string }
+
 export const seriesApi = {
+    reviewStatus: async (id: number): Promise<ReviewImport> => (await api.get(`/papers/import/paperdaily/review/${id}`)).data,
     billingStatus: async (): Promise<BillingStatus> => (await api.get('/billing/status')).data,
 
     importPapers: async (paperIds: string[], title?: string): Promise<{ items: ImportItem[] }> =>
@@ -52,8 +55,8 @@ export const seriesApi = {
     importCollection: async (collectionId: string): Promise<{ title: string; items: ImportItem[] }> =>
         (await api.post('/papers/import/paperdaily/collection', { collection_id: collectionId })).data,
 
-    importReview: async (historyId: number): Promise<{ question: string; answer: string; items: ImportItem[] }> =>
-        (await api.post('/papers/import/paperdaily/review', { history_id: historyId })).data,
+    importReview: async (historyId: number, resume = false): Promise<ReviewImport> =>
+        (await api.post('/papers/import/paperdaily/review', { history_id: historyId, resume })).data,
 
     upload: async (file: File, confirmPrice?: number): Promise<ProcessResult & { id: string }> => {
         const form = new FormData();
